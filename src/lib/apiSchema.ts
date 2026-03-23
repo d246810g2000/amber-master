@@ -4,9 +4,21 @@ export const RawPlayerSchema = z.object({
   id: z.string(),
   name: z.string(),
   avatar: z.string().optional(),
-  email: z.string().optional(),
+  hasBinding: z.boolean().optional(),
   mu: z.number().optional(),
   sigma: z.number().optional(),
+});
+
+export const PlayerBindingSchema = z.object({
+  isOwner: z.boolean(),
+  isBound: z.boolean(),
+});
+
+export const UserBindingSchema = z.object({
+  isBound: z.boolean(),
+  playerId: z.string().optional(),
+  playerName: z.string().optional(),
+  avatar: z.string().optional(),
 });
 
 export const RawPlayerStatSchema = z.object({

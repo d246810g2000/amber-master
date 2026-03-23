@@ -16,16 +16,28 @@ const CONFIG = {
   }
 };
 
+let _ss;
+function getSs() {
+  if (!_ss) _ss = SpreadsheetApp.getActiveSpreadsheet();
+  return _ss;
+}
+
 /**
  * HTTP GET 進入點 (查詢邏輯)
  */
 function doGet(e) {
-  const action = e.parameter.action;
-  const token = e.parameter.token; // 取得前端傳來的登入 Token
+  const p = e.parameter;
+  const action = p.action;
+  const playerId = p.playerId;
+  const userEmail = p.userEmail;
+  const date = p.date;
+
   const actions = {
-    'getMatches': () => getMatches(e.parameter.date),
+    'getMatches': () => getMatches(date),
     'getPlayerStats': () => getPlayerStats(),
-    'default': () => getPlayers(token)
+    'getPlayerBinding': () => getPlayerBinding(playerId, userEmail),
+    'getUserBinding': () => getUserBinding(userEmail),
+    'default': () => getPlayers()
   };
 
   try {
@@ -50,7 +62,9 @@ function doPost(e) {
       'deletePlayer': () => deletePlayer(data.id),
       'deletePlayersBatch': () => deletePlayersBatch(data.ids),
       'recordMatchAndUpdate': () => recordMatchAndUpdate(data),
-      'batchUpdatePlayers': () => batchUpdatePlayers(data.updates)
+      'batchUpdatePlayers': () => batchUpdatePlayers(data.updates),
+      'bindPlayer': () => bindPlayer(data.playerId, data.userEmail),
+      'unbindPlayer': () => unbindPlayer(data.playerId, data.userEmail)
     };
 
     const fn = actions[action];
@@ -70,7 +84,7 @@ function createResponse(data) {
 
 /** 取得試算表 Helper */
 function getSheet(name) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSs();
   const sheet = ss.getSheetByName(name);
   if (!sheet) throw new Error(`Sheet "${name}" not found`);
   return sheet;
@@ -97,6 +111,10 @@ function formatDate(val, formatStr = "yyyy-MM-dd") {
   return String(val);
 }
 
+function normalizeEmail(email) {
+  return email ? String(email).trim().toLowerCase() : '';
+}
+
 /** 隨機頭像 Helper */
 function getRandomAvatar() {
   const styles = ['avataaars', 'bottts', 'micah', 'identicon', 'lorelei'];
@@ -106,33 +124,15 @@ function getRandomAvatar() {
   return `${style}:${seed}`;
 }
 
-/** 驗證 Google ID Token 取得真實信箱 */
-function verifyGoogleToken(token) {
-  if (!token) return null;
-  try {
-    const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + token;
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return null;
-    return JSON.parse(response.getContentText()).email || null;
-  } catch(e) {
-    return null;
-  }
-}
-
 // ─── 核心功能實作 ───
 
 /** 取得球員名單 (讀取 A-F 欄位) */
-function getPlayers(token) {
-  const userEmail = verifyGoogleToken(token); // 解析出當前登入者的 Email
-
+function getPlayers() {
   const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
   const data = sheet.getDataRange().getValues();
-  // 欄位索引：0:ID, 1:Name, 2:Avatar, 3:Mu, 4:Sigma, 5:Email(新欄位)
+  // 欄位索引：0:ID, 1:Name, 2:Avatar, 3:Mu, 4:Sigma, 5:Email
   const players = data.slice(1).map(row => {
-    const rowEmail = row[5] ? String(row[5]).trim() : '';
-    // 安全機制：若表單有綁定 Email，僅當你用該 Email 登入時才把明碼傳給前端
-    // 否則傳回 "***" 作為已綁定的隱碼記號
-    const safeEmail = rowEmail === '' ? '' : (rowEmail === userEmail ? rowEmail : '***');
+    const rowEmail = normalizeEmail(row[5]);
 
     return {
       id: String(row[0]),
@@ -140,15 +140,133 @@ function getPlayers(token) {
       avatar: row[2] ? String(row[2]) : '',
       mu: Number(row[3]) || CONFIG.INITIAL.MU,
       sigma: Number(row[4]) || CONFIG.INITIAL.SIGMA,
-      email: safeEmail
+      hasBinding: !!rowEmail
     };
   });
   
   return { status: 'success', data: players };
 }
 
+function getPlayerBinding(playerId, userEmail) {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!playerId || !normalizedEmail) {
+    return { status: 'error', code: 'MISSING_PARAMS', message: 'playerId and userEmail are required' };
+  }
+
+  const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
+  const data = sheet.getDataRange().getValues();
+  const rowIndex = data.findIndex((row, i) => i > 0 && String(row[0]) === String(playerId));
+  if (rowIndex === -1) {
+    return { status: 'error', code: 'PLAYER_NOT_FOUND', message: 'Player not found' };
+  }
+
+  const boundEmail = normalizeEmail(data[rowIndex][5]);
+  if (!boundEmail) {
+    return { status: 'success', data: { isOwner: false, isBound: false } };
+  }
+
+  return {
+    status: 'success',
+    data: {
+      isOwner: boundEmail === normalizedEmail,
+      isBound: true
+    }
+  };
+}
+
+function getUserBinding(userEmail) {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!normalizedEmail) {
+    return { status: 'error', code: 'MISSING_PARAMS', message: 'userEmail is required' };
+  }
+
+  const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
+  const data = sheet.getDataRange().getValues();
+  const row = data.find((r, i) => i > 0 && normalizeEmail(r[5]) === normalizedEmail);
+
+  if (!row) {
+    return { status: 'success', data: { isBound: false, playerId: '', playerName: '', avatar: '' } };
+  }
+
+  return {
+    status: 'success',
+    data: {
+      isBound: true,
+      playerId: String(row[0] || ''),
+      playerName: String(row[1] || ''),
+      avatar: row[2] ? String(row[2]) : ''
+    }
+  };
+}
+
+function bindPlayer(playerId, userEmail) {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!playerId || !normalizedEmail) {
+    return { status: 'error', code: 'MISSING_PARAMS', message: 'playerId and userEmail are required' };
+  }
+
+  const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
+  const data = sheet.getDataRange().getValues();
+  const targetRowIndex = data.findIndex((row, i) => i > 0 && String(row[0]) === String(playerId));
+
+  if (targetRowIndex === -1) {
+    return { status: 'error', code: 'PLAYER_NOT_FOUND', message: 'Player not found' };
+  }
+
+  const duplicateRowIndex = data.findIndex((row, i) => {
+    if (i === 0 || String(row[0]) === String(playerId)) return false;
+    return normalizeEmail(row[5]) === normalizedEmail;
+  });
+  if (duplicateRowIndex !== -1) {
+    return {
+      status: 'error',
+      code: 'ALREADY_BOUND_TO_OTHER_PLAYER',
+      message: 'This account is already bound to another player'
+    };
+  }
+
+  const currentBoundEmail = normalizeEmail(data[targetRowIndex][5]);
+  if (currentBoundEmail && currentBoundEmail !== normalizedEmail) {
+    return { status: 'error', code: 'PLAYER_ALREADY_BOUND', message: 'This player is already bound' };
+  }
+
+  if (currentBoundEmail === normalizedEmail) {
+    return { status: 'success', data: { playerId: String(playerId), alreadyBound: true } };
+  }
+
+  sheet.getRange(targetRowIndex + 1, 6).setValue(normalizedEmail);
+  return { status: 'success', data: { playerId: String(playerId), alreadyBound: false } };
+}
+
+function unbindPlayer(playerId, userEmail) {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!playerId || !normalizedEmail) {
+    return { status: 'error', code: 'MISSING_PARAMS', message: 'playerId and userEmail are required' };
+  }
+
+  const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
+  const data = sheet.getDataRange().getValues();
+  const rowIndex = data.findIndex((row, i) => i > 0 && String(row[0]) === String(playerId));
+
+  if (rowIndex === -1) {
+    return { status: 'error', code: 'PLAYER_NOT_FOUND', message: 'Player not found' };
+  }
+
+  const currentBoundEmail = normalizeEmail(data[rowIndex][5]);
+  if (!currentBoundEmail) {
+    return { status: 'success', data: { playerId: String(playerId), alreadyUnbound: true } };
+  }
+
+  if (currentBoundEmail !== normalizedEmail) {
+    return { status: 'error', code: 'NOT_OWNER', message: 'Only owner can unbind' };
+  }
+
+  sheet.getRange(rowIndex + 1, 6).setValue('');
+  return { status: 'success', data: { playerId: String(playerId), alreadyUnbound: false } };
+}
+
 /** 新增球員 */
-function addPlayer(name, avatar = '') {
+function addPlayer(name, avatar) {
   const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
   const id = new Date().getTime().toString();
   const finalAvatar = avatar || getRandomAvatar();
@@ -210,7 +328,7 @@ function deletePlayersBatch(ids) {
   
   sheet.clearContents();
   sheet.getRange(1, 1, newData.length, newData[0].length).setValues(newData);
-  return { status: 'success', message: `Database synced (Removed ${data.length - newData.length} players)` };
+  return { status: 'success', data: { removedCount: data.length - newData.length } };
 }
 
 /** 批次更新球員屬性 (Mu/Sigma) */
@@ -299,7 +417,6 @@ function getPlayerStats() {
 
 /** 紀錄比賽並同步更新所有表單 (核心優化) */
 function recordMatchAndUpdate(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const matchSheet = getSheet(CONFIG.SHEETS.MATCHES);
   const statsSheet = getSheet(CONFIG.SHEETS.STATS);
   const playerSheet = getSheet(CONFIG.SHEETS.PLAYERS);

@@ -7,6 +7,7 @@ export interface Player {
   matchCount?: number;
   avatar?: string;
   email?: string;
+  hasBinding?: boolean;
 }
 
 export interface MatchPlayer {

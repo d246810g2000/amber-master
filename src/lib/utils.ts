@@ -53,9 +53,22 @@ const STYLE_URL_MAP: Record<string, string> = {
   'cartoon-player': 'https://api.dicebear.com/7.x/miniavs/svg?seed={seed}',
 };
 
+/** 儲存於試算表：Google 頭像為 `google|` + 完整圖片網址（網址內可含 `:`） */
+export const GOOGLE_AVATAR_PREFIX = 'google|';
+
+export function isGoogleAvatarString(avatarStr: string | null | undefined): boolean {
+  return !!avatarStr && avatarStr.startsWith(GOOGLE_AVATAR_PREFIX);
+}
+
 export function getAvatarUrl(avatarStr: string | null | undefined, fallbackSeed: string): string {
   const defaultUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fallbackSeed)}`;
   if (!avatarStr) return defaultUrl;
+
+  if (isGoogleAvatarString(avatarStr)) {
+    const url = avatarStr.slice(GOOGLE_AVATAR_PREFIX.length).trim();
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return defaultUrl;
+  }
 
   if (!avatarStr.includes(':')) {
     // legacy format

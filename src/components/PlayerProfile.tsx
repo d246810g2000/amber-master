@@ -1,5 +1,6 @@
 import React, { useState, useMemo, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDialog } from '../context/DialogContext';
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import Trophy from "lucide-react/dist/esm/icons/trophy";
@@ -14,7 +15,7 @@ import Lock from "lucide-react/dist/esm/icons/lock";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
-import { getAvatarUrl } from '../lib/utils';
+import { getAvatarUrl, isGoogleAvatarString } from '../lib/utils';
 import { usePlayerProfile } from '../hooks/usePlayerProfile';
 
 // Sub-components
@@ -32,8 +33,27 @@ interface PlayerProfileProps {
 
 export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, onUpdate }) => {
   // ─── TanStack Query 資料獲取 ───
+  const queryClient = useQueryClient();
   const profileQuery = usePlayerProfile(playerId);
   const { currentUser } = useAuth();
+
+  const syncHeaderUserBinding = () => {
+    queryClient.invalidateQueries({ queryKey: ['userBinding'] });
+    queryClient.invalidateQueries({ queryKey: ['players-base'] });
+    queryClient.invalidateQueries({ queryKey: ['players'] });
+  };
+  const ownerQuery = useQuery({
+    queryKey: ['playerBinding', playerId, currentUser?.email || 'anonymous'],
+    queryFn: () => gasApi.getPlayerBinding(playerId, currentUser!.email),
+    enabled: !!currentUser?.email,
+    staleTime: 60_000,
+  });
+  const userBindingQuery = useQuery({
+    queryKey: ['userBinding', currentUser?.email || 'anonymous'],
+    queryFn: () => gasApi.getUserBinding(currentUser!.email),
+    enabled: !!currentUser?.email,
+    staleTime: 60_000,
+  });
 
   // ─── UI-only 狀態 ───
   const [currentAvatarFull, setCurrentAvatarFull] = useState("");
@@ -45,6 +65,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history'>('trend');
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
+  const [bindingNow, setBindingNow] = useState(false);
   const { showAlert } = useDialog();
 
   // 從 query 中提取
@@ -55,16 +76,19 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const instantMu = profileData?.instantMu ?? null;
   const comprehensiveMu = profileData?.comprehensiveMu ?? null;
 
-  // 初始化頭像
-  const avatarInitialized = React.useRef(false);
+  // 與後端資料同步頭像（含 Google / 自訂）
   React.useEffect(() => {
-    if (data?.player && !avatarInitialized.current) {
-      avatarInitialized.current = true;
-      setCurrentAvatarFull(data.player.avatar || `avataaars:${data.player.name}`);
-      const style = (data.player.avatar || '').split(':')[0] || 'avataaars';
+    if (!data?.player) return;
+    const av = data.player.avatar || '';
+    if (isGoogleAvatarString(av)) {
+      setCurrentAvatarFull(av);
+      setActiveStyle('avataaars');
+    } else {
+      setCurrentAvatarFull(av || `avataaars:${data.player.name}`);
+      const style = (av || '').split(':')[0] || 'avataaars';
       setActiveStyle(style);
     }
-  }, [data?.player]);
+  }, [data?.player?.id, data?.player?.avatar, data?.player?.name]);
 
   // ─── Handlers ───
   const updateAvatar = async (style: string, seed: string) => {
@@ -74,9 +98,32 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       setSaving(true);
       await gasApi.updatePlayer(data.player.id, data.player.name, newAvatar);
       setCurrentAvatarFull(newAvatar);
+      data.player.avatar = newAvatar;
+      syncHeaderUserBinding();
       onUpdate?.();
     } catch (err) {
       showAlert("更新失敗", "無法儲存新的頭像設定。");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUseGoogleAvatar = async () => {
+    if (!data?.player) return;
+    if (!currentUser?.picture) {
+      showAlert('無法取得 Google 頭像', '請先使用 Google 登入。');
+      return;
+    }
+    try {
+      setSaving(true);
+      const googleStr = `google|${currentUser.picture}`;
+      await gasApi.updatePlayer(data.player.id, data.player.name, googleStr);
+      setCurrentAvatarFull(googleStr);
+      data.player.avatar = googleStr;
+      syncHeaderUserBinding();
+      onUpdate?.();
+    } catch (err) {
+      showAlert('更新失敗', '無法儲存 Google 頭像設定。');
     } finally {
       setSaving(false);
     }
@@ -93,6 +140,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       await gasApi.updatePlayer(data.player.id, editName.trim(), currentAvatarFull);
       data.player.name = editName.trim();
       setIsEditingName(false);
+      syncHeaderUserBinding();
       onUpdate?.();
     } catch (err) {
       showAlert("更新姓名失敗", "請確認操作是否正確或網路連線。");
@@ -100,9 +148,6 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       setSaving(false);
     }
   };
-
-  const currentStyle = currentAvatarFull.split(':')[0];
-  const currentSeed = currentAvatarFull.split(':')[1];
 
   // ─── Computed data (useMemo) ───
   const teammateStats = useMemo(() => {
@@ -250,10 +295,55 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   }
 
   const { player, stats } = data;
+
+  const isGoogleAvatar = isGoogleAvatarString(currentAvatarFull);
+  const currentStyle = isGoogleAvatar
+    ? activeStyle
+    : (currentAvatarFull.split(':')[0] || 'avataaars');
+  const currentSeed = isGoogleAvatar
+    ? player.name
+    : (currentAvatarFull.split(':')[1] || player.name);
   
-  // Temporary bypass for empty email columns: If the database hasn't populated emails yet, we grant access if player.email is empty.
-  // Otherwise, strict auth matching is applied.
-  const isOwner = !player.email || (currentUser && currentUser.email === player.email);
+  const isOwner = !!ownerQuery.data?.isOwner;
+  const ownerCheckLoading = !!currentUser?.email && ownerQuery.isLoading;
+  const canQuickBind = !!currentUser?.email && !ownerQuery.data?.isBound && !userBindingQuery.data?.isBound;
+
+  const handleBindAndEnter = async () => {
+    if (!currentUser?.email || !player?.id) {
+      showAlert("請先登入", "請先使用 Google 登入後再進行綁定。");
+      return;
+    }
+    try {
+      setBindingNow(true);
+      await gasApi.bindPlayer(player.id, currentUser.email);
+      await Promise.all([
+        ownerQuery.refetch(),
+        userBindingQuery.refetch(),
+        profileQuery.refetch(),
+      ]);
+      syncHeaderUserBinding();
+      onUpdate?.();
+    } catch (err) {
+      const e = err as Error & { code?: string };
+      if (e.code === 'ALREADY_BOUND_TO_OTHER_PLAYER') {
+        showAlert("綁定失敗", "你的帳號已綁定其他球員，請先解除原綁定。");
+      } else if (e.code === 'PLAYER_ALREADY_BOUND') {
+        showAlert("綁定失敗", "此球員已被其他使用者綁定。");
+      } else {
+        showAlert("綁定失敗", e.message || "無法完成綁定，請稍後再試。");
+      }
+    } finally {
+      setBindingNow(false);
+    }
+  };
+
+  if (ownerCheckLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[65vh] md:min-h-[75vh]">
+        <BadmintonLoader />
+      </div>
+    );
+  }
 
   if (!isOwner) {
     return (
@@ -265,6 +355,15 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
         <p className="text-zinc-400 font-medium mb-8 max-w-sm leading-relaxed">
           基於隱私保護，只有 <span className="text-white font-black">{player.name}</span> 本人登入帳號後，才能解鎖並查看詳細的生涯戰力數據與對戰詳情。
         </p>
+        {canQuickBind && (
+          <button
+            onClick={handleBindAndEnter}
+            disabled={bindingNow}
+            className="mb-4 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black transition-all active:scale-95 border border-emerald-400/20 disabled:opacity-50"
+          >
+            {bindingNow ? '綁定中...' : '綁定此球員並進入'}
+          </button>
+        )}
         <button onClick={onBack} className="px-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black transition-all active:scale-95 border border-zinc-700">
           返回大廳
         </button>
@@ -309,12 +408,42 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-zinc-800 overflow-hidden border-2 border-white/10 shadow-2xl cursor-pointer hover:border-emerald-500/50 transition-all flex items-center justify-center group shrink-0"
           >
             <img
-              src={getAvatarUrl(`${currentStyle}:${currentSeed}`, currentSeed)}
+              src={getAvatarUrl(currentAvatarFull, player.name)}
               alt={player.name}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+              referrerPolicy="no-referrer"
             />
           </div>
         </div>
+      </div>
+
+      {/* 頭像來源：Google / 自訂（僅擁有者） */}
+      <div className="flex flex-wrap items-center gap-2 px-4 md:px-6 -mt-2 mb-2">
+        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">頭像</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleUseGoogleAvatar(); }}
+          disabled={saving || !currentUser?.picture}
+          className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
+            isGoogleAvatar
+              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+              : 'bg-zinc-900/80 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+          } disabled:opacity-40`}
+        >
+          Google 頭像
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setIsEditModalOpen(true); }}
+          disabled={saving}
+          className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
+            !isGoogleAvatar
+              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+              : 'bg-zinc-900/80 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+          } disabled:opacity-40`}
+        >
+          自訂頭像
+        </button>
       </div>
 
       {/* Stats Grid */}

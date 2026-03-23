@@ -4,6 +4,8 @@ import {
   RawPlayerSchema, 
   RawPlayerStatSchema, 
   RawMatchSchema, 
+  PlayerBindingSchema,
+  UserBindingSchema,
   GasResponseSchema,
   type RawPlayer,
   type RawPlayerStat,
@@ -11,14 +13,20 @@ import {
 } from './apiSchema.ts';
 import { z } from 'zod';
 
+interface ApiError extends Error {
+  code?: string;
+}
+
+function createApiError(message: string, code?: string): ApiError {
+  const err = new Error(message) as ApiError;
+  if (code) err.code = code;
+  return err;
+}
+
 async function gasGet<T>(params: Record<string, string> | undefined, schema: z.ZodType<T>): Promise<T> {
   const url = new URL(GAS_URL);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  const token = localStorage.getItem('amber_auth_token');
-  if (token) {
-    url.searchParams.set('token', token);
   }
   const res = await fetch(url.toString());
   const json = await res.json();
@@ -32,17 +40,14 @@ async function gasGet<T>(params: Record<string, string> | undefined, schema: z.Z
   if (parsed.data.status === 'success' && parsed.data.data !== undefined) {
     return parsed.data.data;
   }
-  throw new Error(parsed.data.message || 'API Error');
+  throw createApiError(parsed.data.message || 'API Error', (parsed.data as any).code);
 }
 
 async function gasPost<T>(body: Record<string, unknown>, schema: z.ZodType<T>): Promise<T> {
-  const token = localStorage.getItem('amber_auth_token');
-  const payload = token ? { ...body, token } : body;
-
   const res = await fetch(GAS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
   const json = await res.json();
   const parsed = GasResponseSchema(schema).safeParse(json);
@@ -55,7 +60,7 @@ async function gasPost<T>(body: Record<string, unknown>, schema: z.ZodType<T>): 
   if (parsed.data.status === 'success') {
     return parsed.data.data as T;
   }
-  throw new Error(parsed.data.message || 'API Error');
+  throw createApiError(parsed.data.message || 'API Error', (parsed.data as any).code);
 }
 
 /** 取得球員基本名單 */
@@ -133,6 +138,22 @@ export async function recordMatchAndUpdate(data: {
 /** 批次更新球員屬性 (對應 GAS 的 batchUpdatePlayers) */
 export async function batchUpdatePlayers(updates: { id: string, mu: number, sigma: number }[]) {
   return gasPost({ action: 'batchUpdatePlayers', updates }, z.any());
+}
+
+export async function bindPlayer(playerId: string, userEmail: string) {
+  return gasPost({ action: 'bindPlayer', playerId, userEmail }, z.any());
+}
+
+export async function unbindPlayer(playerId: string, userEmail: string) {
+  return gasPost({ action: 'unbindPlayer', playerId, userEmail }, z.any());
+}
+
+export async function getPlayerBinding(playerId: string, userEmail: string) {
+  return gasGet({ action: 'getPlayerBinding', playerId, userEmail }, PlayerBindingSchema);
+}
+
+export async function getUserBinding(userEmail: string) {
+  return gasGet({ action: 'getUserBinding', userEmail }, UserBindingSchema);
 }
 
 

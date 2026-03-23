@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDialog } from '../context/DialogContext';
 import { Player } from '../types';
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
@@ -14,6 +15,9 @@ import Calculator from "lucide-react/dist/esm/icons/calculator";
 import * as gasApi from '../lib/gasApi';
 import * as matchEngine from '../lib/matchEngine';
 import { getAvatarUrl } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+
+type BindError = Error & { code?: string };
 
 interface ManagePlayersProps {
   players: Player[];
@@ -23,6 +27,7 @@ interface ManagePlayersProps {
 }
 
 export const ManagePlayers: React.FC<ManagePlayersProps> = ({ players, onUpdate, onSelectPlayer, onClose }) => {
+  const queryClient = useQueryClient();
   const [newPlayerNames, setNewPlayerNames] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [editName, setEditName] = useState('');
@@ -30,7 +35,11 @@ export const ManagePlayers: React.FC<ManagePlayersProps> = ({ players, onUpdate,
   const [actionId, setActionId] = useState<string | null>(null); 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [bindingActionId, setBindingActionId] = useState<string | null>(null);
+  const [ownerMap, setOwnerMap] = useState<Record<string, boolean>>({});
+  const [bindingStatusLoading, setBindingStatusLoading] = useState(false);
   const { showAlert, showConfirm } = useDialog();
+  const { currentUser, isAuthenticated } = useAuth();
 
   const handleRecalculate = async () => {
     showConfirm("重新推算綜合戰力", "確定要根據『所有歷史對戰』重新計算戰力嗎？\n這將重置現有的綜合戰力並重新計算。", async () => {
@@ -151,6 +160,94 @@ export const ManagePlayers: React.FC<ManagePlayersProps> = ({ players, onUpdate,
     }
   };
 
+  const getBindErrorMessage = (err: unknown) => {
+    const bindErr = err as BindError;
+    switch (bindErr?.code) {
+      case 'ALREADY_BOUND_TO_OTHER_PLAYER':
+        return '你已綁定其他球員，請先到原球員解除綁定。';
+      case 'PLAYER_ALREADY_BOUND':
+        return '此球員已被其他帳號綁定。';
+      case 'NOT_OWNER':
+        return '你不是此球員的綁定者，無法解除綁定。';
+      case 'PLAYER_NOT_FOUND':
+        return '找不到該球員，請重新整理後再試。';
+      default:
+        return bindErr?.message || '綁定操作失敗，請稍後再試。';
+    }
+  };
+
+  const handleBind = async (playerId: string) => {
+    if (!isAuthenticated || !currentUser?.email) {
+      showAlert('請先登入', '請先使用 Google 登入後再進行綁定。');
+      return;
+    }
+    setBindingActionId(playerId);
+    try {
+      await gasApi.bindPlayer(playerId, currentUser.email);
+      queryClient.invalidateQueries({ queryKey: ['userBinding'] });
+      queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      showAlert('綁定成功', '此球員已綁定到你的帳號。');
+      onUpdate();
+    } catch (err) {
+      showAlert('綁定失敗', getBindErrorMessage(err));
+    } finally {
+      setBindingActionId(null);
+    }
+  };
+
+  const handleUnbind = async (playerId: string) => {
+    if (!isAuthenticated || !currentUser?.email) {
+      showAlert('請先登入', '請先使用 Google 登入後再進行解除綁定。');
+      return;
+    }
+    setBindingActionId(playerId);
+    try {
+      await gasApi.unbindPlayer(playerId, currentUser.email);
+      queryClient.invalidateQueries({ queryKey: ['userBinding'] });
+      queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      showAlert('解除綁定成功', '你已解除此球員綁定。');
+      onUpdate();
+    } catch (err) {
+      showAlert('解除綁定失敗', getBindErrorMessage(err));
+    } finally {
+      setBindingActionId(null);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadBindingStatus = async () => {
+      if (!isAuthenticated || !currentUser?.email || players.length === 0) {
+        setOwnerMap({});
+        return;
+      }
+      setBindingStatusLoading(true);
+      try {
+        const results = await Promise.all(
+          players.map(async (p) => {
+            try {
+              const binding = await gasApi.getPlayerBinding(p.id, currentUser.email);
+              return [p.id, binding.isOwner] as const;
+            } catch {
+              return [p.id, false] as const;
+            }
+          })
+        );
+        if (active) {
+          const next: Record<string, boolean> = {};
+          results.forEach(([id, isOwner]) => { next[id] = isOwner; });
+          setOwnerMap(next);
+        }
+      } finally {
+        if (active) setBindingStatusLoading(false);
+      }
+    };
+    loadBindingStatus();
+    return () => { active = false; };
+  }, [players, isAuthenticated, currentUser?.email]);
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 overscroll-contain">
       <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-8 w-full max-w-lg shadow-2xl border border-white/20 flex flex-col max-h-[90vh]">
@@ -222,6 +319,9 @@ export const ManagePlayers: React.FC<ManagePlayersProps> = ({ players, onUpdate,
             )}
           </div>
         )}
+        <div className="mb-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-100 text-[11px] font-bold text-amber-700">
+          {isAuthenticated ? '目前已登入，可綁定未綁定球員，或解除你自己綁定的球員。' : '請先使用 Google 登入，才能進行球員綁定設定。'}
+        </div>
 
         {/* Player List */}
         <div className="flex-1 space-y-2 overflow-y-auto overscroll-contain custom-scrollbar pr-1 md:pr-2 min-h-0">
@@ -275,7 +375,35 @@ export const ManagePlayers: React.FC<ManagePlayersProps> = ({ players, onUpdate,
                       onClick={() => { onSelectPlayer(player.id); onClose(); }}
                     >
                       <span className="font-black text-slate-700 truncate">{player.name}</span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {player.hasBinding ? '已綁定' : '未綁定'}
+                      </span>
                     </div>
+                    {isAuthenticated && (
+                      <div className="flex items-center gap-1">
+                        {player.hasBinding && ownerMap[player.id] ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUnbind(player.id); }}
+                            disabled={bindingActionId === player.id}
+                            className="px-2.5 py-1 text-[10px] font-black rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+                          >
+                            {bindingActionId === player.id ? '處理中' : '解除綁定'}
+                          </button>
+                        ) : !player.hasBinding ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleBind(player.id); }}
+                            disabled={bindingActionId === player.id}
+                            className="px-2.5 py-1 text-[10px] font-black rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            {bindingActionId === player.id ? '處理中' : '綁定我'}
+                          </button>
+                        ) : (
+                          <span className="px-2.5 py-1 text-[10px] font-black rounded-lg border border-slate-200 text-slate-400 bg-slate-50">
+                            {bindingStatusLoading ? '讀取中' : '他人已綁定'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setEditingPlayer(player); setEditName(player.name); }} 

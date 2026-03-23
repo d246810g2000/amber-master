@@ -1,72 +1,44 @@
-# 安柏排點大師 - 後端隱私驗證設定指南 (GAS)
+# 安柏排點大師 - 簡化綁定驗證說明 (GAS)
 
-為了確保你的資料絕對安全，且無人能透過偽造 Request 取代登入，我們需要在你的 **Google Apps Script (Code.gs)** 裡面加上一小段身分驗證代碼。這段程式碼會拿著前端傳來的 `Token`，去向 Google 官方伺服器確認這是不是偽造的。
+本專案改為「內部社員用」的簡化驗證，不再做 Google ID token 解碼/驗證。  
+核心規則是：**以登入 email + PlayerID 做綁定與比對**，並遵守一對一限制。
 
-## 📍 步驟 1：加入驗證函式
+## 核心規則
 
-請將以下這段程式碼複製並貼到你的 `Code.gs` 的最底部：
+- `Players` 工作表第 6 欄 (`Email`) 作為綁定欄位。
+- 一個 Google 帳號（email）只能綁定一個 `PlayerID`。
+- 已被其他人綁定的球員不可再綁定。
+- 只有綁定者本人可以解除綁定。
+- 前端列表不回傳他人 email，只回傳 `hasBinding`。
 
-```javascript
-/**
- * 驗證前端傳來的 Google ID Token
- * @param {string} token 
- * @returns {string|null} 若驗證成功，回傳使用者的真實 Email；若失敗回傳 null
- */
-function verifyGoogleToken(token) {
-  if (!token) return null;
-  try {
-    const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + token;
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    
-    if (response.getResponseCode() !== 200) {
-      return null;
-    }
-    
-    const tokenInfo = JSON.parse(response.getContentText());
-    
-    // 檢查 aud 是否等於你的 CLIENT_ID (可以選擇性加上這層檢查)
-    // if (tokenInfo.aud !== "你的_CLIENT_ID.apps.googleusercontent.com") return null;
+## 頭像欄位（`Players` 第 3 欄 `Avatar`）
 
-    return tokenInfo.email; // 回傳登入者的真實信箱
-  } catch(e) {
-    return null;
-  }
-}
-```
+- **自訂（Dicebear）**：`風格:種子`，例如 `avataaars:王小明`（與既有邏輯相同）。
+- **Google 頭像**：`google|` + 完整圖片網址，例如 `google|https://lh3.googleusercontent.com/...`  
+  綁定者在球員頁選「Google 頭像」時會寫入目前登入者 OAuth 提供的 `picture` 網址，全站透過 `getAvatarUrl()` 顯示。
 
-## 📍 步驟 2：在 doGet / doPost 加入隱私檢查攔截
+## API 行為
 
-你可以修改你的 `doGet` 或需要保護的 API 行為（例如取得所有球員詳細戰力時），進行身分核對。
+- `bindPlayer(playerId, userEmail)`
+  - email 先做 `trim().toLowerCase()`
+  - 若該 email 已綁定其他球員，回傳 `ALREADY_BOUND_TO_OTHER_PLAYER`
+  - 若該球員已被別人綁定，回傳 `PLAYER_ALREADY_BOUND`
+- `unbindPlayer(playerId, userEmail)`
+  - 僅綁定者可解除，否則回傳 `NOT_OWNER`
+- `getPlayerBinding(playerId, userEmail)`
+  - 回傳 `{ isOwner, isBound }`，不回傳他人 email
+- `getUserBinding(userEmail)`
+  - 若已綁定：回傳 `playerId`、`playerName`、`avatar`（供頂部登入列顯示與導向球員頁）
+  - 未綁定：`isBound: false`，其餘字串可為空
 
-**範例 - 假設你要保護取得所有 `PlayerStats` 或 `Matches` 的行為：**
+## 前端使用流程
 
-```javascript
-function doGet(e) {
-  // 1. 取得前端傳來的 token
-  const token = e.parameter.token;
-  
-  // 2. 決定當前呼叫的 action
-  const action = e.parameter.action;
+1. 使用 Google 登入，取得使用者 email。
+2. 進入「管理球員」進行綁定/解除綁定。
+3. 進入球員頁時呼叫 `getPlayerBinding` 驗證 owner。
+4. 只有 `isOwner=true` 才可檢視私密資料與編輯。
 
-  // 3. 執行特定高私密操作前，進行 Token 防護 (例如：只有登入的人能拿成績)
-  if (action === "getPlayerStats" || action === "getMatches") {
-    const userEmail = verifyGoogleToken(token);
-    
-    if (!userEmail) {
-      // 驗證失敗，直接拒絕回傳資料！
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "error",
-        message: "Error 403: 權限不足或 Token 過期"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // 若你還想檢查該 userEmail 是不是在你授權的表單欄位名單內，你可以在此讀取 Sheet 來判斷。
-  }
+## 風險註記
 
-  // ... 往下繼續你原本的邏輯 ...
-}
-```
-
-## 📍 步驟 3：在 Google Sheet 新增 `Email` 欄位
-回到你的資料庫 (Google Spreadsheet)，在存放 **Players (球員名單)** 的那張表裡面，新增一個名為 `Email` 的欄位。
-接下來，只要你在此欄位填入某位球員的 Gmail，**系統就會認定只有這個 Gmail 帳號登入時，才能解鎖這個球員的詳細履歷！**
+這是「低複雜度、內部使用」方案，不適合公開服務或高安全需求場景。  
+若未來要對外開放，建議升級為完整 token 驗證與伺服器端簽章檢查。
