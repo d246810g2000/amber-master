@@ -90,21 +90,21 @@ export function LoginButton() {
 
   if (currentUser) {
     return (
-      <div className="flex items-center gap-2 md:gap-3 bg-white/80 backdrop-blur-md pl-1 md:pl-1.5 pr-2 md:pr-4 py-1.5 md:py-2 rounded-full border border-slate-200 shadow-sm transition-all hover:bg-white shrink-0 h-fit self-center">
+      <div className="flex items-center gap-2 md:gap-3 bg-white/80 backdrop-blur-md pl-1 md:pl-1.5 pr-2 md:pr-4 rounded-full border border-slate-200 shadow-sm transition-all hover:bg-white shrink-0 h-[26px] md:h-[44px] self-center">
         <img
           src={displayAvatarSrc}
           alt={displayName}
-          className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 shadow-sm shrink-0"
+          className="w-5 h-5 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 shadow-sm shrink-0"
           referrerPolicy="no-referrer"
         />
-        <div className="flex flex-col min-w-0 justify-center">
+        <div className="flex flex-col min-w-0 justify-center h-full">
           <button
             type="button"
             onClick={handleNameClick}
             disabled={!canGoToProfile}
             title={canGoToProfile ? '進入我的球員頁' : '請先綁定球員'}
             className={cn(
-              'text-left text-xs md:text-sm font-black text-slate-800 leading-tight truncate max-w-[120px] md:max-w-[160px]',
+              'text-left text-[10px] md:text-sm font-black text-slate-800 leading-none truncate max-w-[80px] md:max-w-[160px]',
               canGoToProfile && 'cursor-pointer hover:text-emerald-600 hover:underline underline-offset-2',
               !canGoToProfile && 'cursor-default opacity-90'
             )}
@@ -114,19 +114,20 @@ export function LoginButton() {
         </div>
         <button
           onClick={logout}
-          className="ml-0.5 md:ml-1 p-1 md:p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors shrink-0"
+          className="ml-0.5 md:ml-1 p-0.5 md:p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors shrink-0 flex items-center justify-center h-full"
           title="登出"
         >
-          <LogOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
+          <LogOut className="w-3 h-3 md:w-4 md:h-4" />
         </button>
       </div>
     );
   }
 
+  // 自定義按鈕，完全避開 Google 的 iframe 自動選擇樣式
   return (
     <button
       onClick={() => handleCustomLogin()}
-      className="flex items-center gap-2 px-3.5 md:px-5 py-1.5 md:py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 active:scale-95 shrink-0 border border-slate-800"
+      className="flex items-center gap-2 px-3.5 md:px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 active:scale-95 shrink-0 border border-slate-800 h-[26px] md:h-[44px]"
     >
       <div className="w-3.5 h-3.5 md:w-5 md:h-5 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0">
         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 md:w-3.5 md:h-3.5">
@@ -136,7 +137,7 @@ export function LoginButton() {
           <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
         </svg>
       </div>
-      <span className="text-[12px] md:text-sm font-black uppercase tracking-wider block">登入</span>
+      <span className="text-[12px] md:text-sm font-black uppercase tracking-wider block leading-none">登入</span>
     </button>
   );
 }
