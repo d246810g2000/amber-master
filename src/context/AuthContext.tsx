@@ -11,6 +11,7 @@ export interface AuthUser {
 interface AuthContextType {
   currentUser: AuthUser | null;
   login: (token: string) => void;
+  loginWithUser: (user: AuthUser) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -22,24 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize from localStorage on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('amber_auth_token');
-    if (storedToken) {
+    const storedUser = localStorage.getItem('amber_auth_user');
+    if (storedUser) {
       try {
-        const decoded: any = jwtDecode(storedToken);
-        // Check expiry
-        if (decoded.exp * 1000 < Date.now()) {
-          console.warn('Token expired. Logging out.');
-          logout();
-        } else {
-          setCurrentUser({
-            email: decoded.email,
-            name: decoded.name,
-            picture: decoded.picture,
-            token: storedToken,
-          });
-        }
+        setCurrentUser(JSON.parse(storedUser));
       } catch (e) {
-        console.error('Invalid stored token', e);
+        console.error('Invalid stored user', e);
         logout();
       }
     }
@@ -55,19 +44,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token: token,
       };
       setCurrentUser(user);
+      localStorage.setItem('amber_auth_user', JSON.stringify(user));
       localStorage.setItem('amber_auth_token', token);
     } catch (e) {
       console.error('Failed to decode token during login', e);
     }
   };
 
+  const loginWithUser = (user: AuthUser) => {
+    setCurrentUser(user);
+    localStorage.setItem('amber_auth_user', JSON.stringify(user));
+    if (user.token) {
+      localStorage.setItem('amber_auth_token', user.token);
+    }
+  };
+
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('amber_auth_user');
     localStorage.removeItem('amber_auth_token');
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, isAuthenticated: !!currentUser }}>
+    <AuthContext.Provider value={{ currentUser, login, loginWithUser, logout, isAuthenticated: !!currentUser }}>
       {children}
     </AuthContext.Provider>
   );
