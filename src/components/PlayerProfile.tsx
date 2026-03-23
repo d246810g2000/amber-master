@@ -279,7 +279,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   // ─── Loading / Error ───
   if (profileQuery.isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[65vh] md:min-h-[75vh]">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
         <BadmintonLoader />
       </div>
     );
@@ -339,7 +339,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   if (ownerCheckLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[65vh] md:min-h-[75vh]">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
         <BadmintonLoader />
       </div>
     );
