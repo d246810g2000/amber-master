@@ -39,7 +39,7 @@ export function useCourts({
 }: UseCourtsDeps) {
 
   const { currentUser } = useAuth();
-  
+
   // States
   const [courts, setCourts] = useState<ActiveCourt[]>([
     { id: "1", name: "1", players: [null, null, null, null], startTime: null },
@@ -80,7 +80,7 @@ export function useCourts({
   // Sync state from remote when available
   useEffect(() => {
     if (!syncState.state) return;
-    
+
     // 如果版本更新，或者之前球員名單是空的（但現在有了），就重新 rehydrate
     const isNewVersion = syncState.version > lastHydratedVersion.current;
     const isNowPopulated = wasPlayersEmpty.current && players.length > 0;
@@ -88,10 +88,10 @@ export function useCourts({
     if (isNewVersion || isNowPopulated) {
       lastHydratedVersion.current = syncState.version;
       if (players.length > 0) wasPlayersEmpty.current = false;
-      
+
       // Rehydrate players from ID to objects
-       const rehydratePlayers = (playerIds: any[]) => 
-         playerIds.map(id => id ? (players.find(p => p.id === id) || null) : null);
+      const rehydratePlayers = (playerIds: any[]) =>
+        playerIds.map(id => id ? (players.find(p => p.id === id) || null) : null);
 
       if (syncState.state.courts) {
         setCourts(syncState.state.courts.map(c => ({
@@ -100,7 +100,7 @@ export function useCourts({
           players: rehydratePlayers(c.players)
         })));
       }
-      
+
       if (syncState.state.recommendedPlayers) {
         setRecommendedPlayers(rehydratePlayers(syncState.state.recommendedPlayers));
       }
@@ -109,7 +109,7 @@ export function useCourts({
         // 自我修復：確保同步下來的狀態與球場一致
         const incomingStatus = { ...syncState.state.playerStatus } as Record<string, PlayerStatus>;
         const playingIds = new Set<string>();
-        
+
         // 從同步下來的球場資料中找出所有正在打球的人
         if (syncState.state.courts) {
           syncState.state.courts.forEach(c => {
@@ -133,22 +133,22 @@ export function useCourts({
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
-    newCourts: ActiveCourt[], 
-    newRecPlayers: (Player | null)[], 
+    newCourts: ActiveCourt[],
+    newRecPlayers: (Player | null)[],
     newStatusOverrides: Record<string, PlayerStatus> = {},
     affectedCourtIds: string[] = []
   ) => {
     if (isSyncing) return;
-    
+
     // 1. 先處理本地狀態（包含暫時性的 finishing）
     setCourts(newCourts);
     setRecommendedPlayers(newRecPlayers);
-    
+
     // 自我修復：確保當前狀態與球場一致
     // 如果球員狀態是 "playing" 但不在任何球場上，則恢復為 "ready"
     const playingIds = new Set<string>();
     newCourts.forEach(c => c.players.forEach(p => { if (p) playingIds.add(p.id); }));
-    
+
     const mergedStatus = { ...playerStatus, ...newStatusOverrides };
     const fixedStatus: Record<string, PlayerStatus> = {};
     Object.entries(mergedStatus).forEach(([id, status]) => {
@@ -169,7 +169,7 @@ export function useCourts({
       // 如果是 finishing，遠端統統視為 ready
       remoteStatus[id] = status === "finishing" ? "ready" : status;
     });
-    
+
     // 壓縮資料，只存 IDs，減輕網路負擔
     const statePayload = {
       courts: newCourts.map(c => ({
@@ -209,7 +209,7 @@ export function useCourts({
 
   const handleTakeover = async () => {
     if (!currentUser) return;
-    
+
     // 準備目前的狀態進行推送，但帶上 takeover 旗標
     const statePayload = {
       courts: courts.map(c => ({
@@ -235,7 +235,7 @@ export function useCourts({
   const hasControl = !!currentUser && (!syncState.state?.controller || syncState.state?.controller === currentUser?.email);
   const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
   const isLockedByOther = !!syncState.state?.controller && syncState.state?.controller !== currentUser?.email;
-  
+
   // 優先顯示名稱，若無則顯示信箱，最後顯示「無」
   const currentControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
   const isGuest = !currentUser;
@@ -326,7 +326,7 @@ export function useCourts({
         matchHistory,
         ignoreFatigue
       );
-      
+
       if (suggestions.length > 0) {
         const newRecs = [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
         await syncToRemote(courts, newRecs as Player[], {}, ['recommended']);
@@ -385,11 +385,11 @@ export function useCourts({
       await syncToRemote(newCourts, newRecPlayers, newStatus, [courtId]);
       return;
     }
-    
+
     // 原有的邏輯：加入/移除推薦名單
     let newRecs = [...recommendedPlayers];
     const isAlreadySelected = newRecs.some(p => p?.id === playerId);
-    
+
     if (isAlreadySelected) {
       const idx = newRecs.findIndex(p => p?.id === playerId);
       newRecs[idx] = null;
@@ -399,7 +399,7 @@ export function useCourts({
         newRecs[emptyIdx] = player as matchEngine.DerivedPlayer;
       }
     }
-    
+
     await syncToRemote(courts, newRecs, {}, ['recommended']);
   };
 
@@ -414,19 +414,19 @@ export function useCourts({
       setError("沒有空場地可以上場");
       return;
     }
-    
+
     const matchId = Date.now().toString();
     const newCourts = [...courts];
-    newCourts[emptyCourtIndex] = { 
-      ...newCourts[emptyCourtIndex], 
-      players: [...recommendedPlayers] as Player[], 
-      startTime: new Date(), 
-      matchId 
+    newCourts[emptyCourtIndex] = {
+      ...newCourts[emptyCourtIndex],
+      players: [...recommendedPlayers] as Player[],
+      startTime: new Date(),
+      matchId
     };
 
     const newStatus: Record<string, PlayerStatus> = {};
     recommendedPlayers.forEach((p) => { if (p) newStatus[p.id] = "playing"; });
-    
+
     setSelectedCourtSlot(null);
     await syncToRemote(newCourts, [null, null, null, null], newStatus, ['recommended', newCourts[emptyCourtIndex].id]);
   };
@@ -475,10 +475,10 @@ export function useCourts({
       // 2. 更新同步狀態 (清空場地，球員狀態設為 finishing)
       const finStatus: Record<string, PlayerStatus> = {};
       participants.forEach(p => { finStatus[p.id] = "finishing"; });
-      
-      const newCourts = courts.map(c => 
-        c.id === activeCourtForWinner 
-          ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined } 
+
+      const newCourts = courts.map(c =>
+        c.id === activeCourtForWinner
+          ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
           : c
       );
 
@@ -527,9 +527,9 @@ export function useCourts({
     const newStatus: Record<string, PlayerStatus> = {};
     participants.forEach(p => { newStatus[p.id] = "ready"; });
 
-    const newCourts = courts.map(c => 
-      c.id === courtId 
-        ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined } 
+    const newCourts = courts.map(c =>
+      c.id === courtId
+        ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
         : c
     );
 
