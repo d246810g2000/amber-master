@@ -61,7 +61,8 @@ export function DashboardPage() {
 
   const { 
     syncState, 
-    isSyncing: isPolling, 
+    isFetching,
+    isPushing,
     isSyncInitialized,
     pushState, 
     fetchState 
@@ -80,13 +81,13 @@ export function DashboardPage() {
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isGuest,
+    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, isGuest,
     syncToRemote
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
     recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
-    syncState, pushState,
+    syncState, isFetching, isPushing, pushState,
     targetDate: currentFilterDate
   });
 
@@ -201,8 +202,8 @@ export function DashboardPage() {
                       actionText="結束"
                       onAction={() => handleEndMatch(court.id)}
                       startTime={court.startTime}
-                      isLoading={isSyncing || submittingMatch}
-                      isActionDisabled={submittingMatch || isSyncing || !hasControl}
+                      isLoading={isLocalSyncing || submittingMatch}
+                      isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
                       onSlotClick={(idx) => hasControl && handleCourtSlotClick(court.id, idx)}
                       selectedSlotIndex={selectedCourtSlot?.courtId === court.id ? selectedCourtSlot.index : null}
                       hasControl={hasControl}
@@ -218,7 +219,7 @@ export function DashboardPage() {
                     onAction={handleGoToCourt}
                     onSelectPlayers={handleMatchmake}
                     onReset={handleResetRecommended}
-                    isLoading={isMatchmaking || submittingMatch || isSyncing}
+                    isLoading={isMatchmaking || submittingMatch || isLocalSyncing}
                     isActionDisabled={!hasControl}
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
                     selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
@@ -240,7 +241,7 @@ export function DashboardPage() {
               recommendedPlayers={recommendedPlayers}
               fatiguedPlayerIds={fatiguedPlayerIds}
               ignoreFatigue={ignoreFatigue}
-              loading={loading || isSyncing}
+              loading={loading || isLocalSyncing}
               isMatchmaking={isMatchmaking}
               submittingMatch={submittingMatch}
               getPlayerTeamColor={getPlayerTeamColor}

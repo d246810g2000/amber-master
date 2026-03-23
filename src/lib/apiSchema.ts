@@ -5,8 +5,8 @@ export const RawPlayerSchema = z.object({
   name: z.string(),
   avatar: z.string().optional(),
   hasBinding: z.boolean().optional(),
-  mu: z.number().optional(),
-  sigma: z.number().optional(),
+  mu: z.coerce.number().optional(),
+  sigma: z.coerce.number().optional(),
 });
 
 export const PlayerBindingSchema = z.object({
@@ -28,16 +28,16 @@ export const RawPlayerStatSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(val => String(val)).optional(),
   Name: z.string().optional(),
   name: z.string().optional(),
-  Mu: z.number().optional(),
-  mu: z.number().optional(),
-  Sigma: z.number().optional(),
-  sigma: z.number().optional(),
-  MatchCount: z.number().optional(),
-  matchCount: z.number().optional(),
-  WinCount: z.number().optional(),
-  winCount: z.number().optional(),
-  WinRate: z.number().optional(),
-  winRate: z.number().optional(),
+  Mu: z.coerce.number().optional(),
+  mu: z.coerce.number().optional(),
+  Sigma: z.coerce.number().optional(),
+  sigma: z.coerce.number().optional(),
+  MatchCount: z.coerce.number().optional(),
+  matchCount: z.coerce.number().optional(),
+  WinCount: z.coerce.number().optional(),
+  winCount: z.coerce.number().optional(),
+  WinRate: z.coerce.number().optional(),
+  winRate: z.coerce.number().optional(),
 }).transform(val => ({
   date: val.date || val.Date || '',
   id: val.id || val.ID || '',
@@ -53,9 +53,9 @@ export const RawMatchPlayerSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(val => String(val)).optional(),
   name: z.string(),
   avatar: z.string().optional(),
-  muBefore: z.number().optional(),
-  muAfter: z.number().optional(),
-  sigma: z.number().optional(),
+  muBefore: z.coerce.number().optional(),
+  muAfter: z.coerce.number().optional(),
+  sigma: z.coerce.number().optional(),
 });
 
 export const RawMatchSchema = z.object({

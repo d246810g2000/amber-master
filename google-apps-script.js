@@ -609,7 +609,12 @@ function updateCourtState(data) {
     // 尋找今天的列
     var foundRowIndex = -1;
     for (var i = 1; i < allData.length; i++) {
-      if (String(allData[i][0]) === todayStr) {
+      var rowDate = allData[i][0];
+      var rowDateStr = (rowDate instanceof Date) 
+        ? Utilities.formatDate(rowDate, CONFIG.TIMEZONE, 'yyyy-MM-dd')
+        : String(rowDate);
+
+      if (rowDateStr === todayStr) {
         foundRowIndex = i + 1;
         break;
       }
@@ -657,12 +662,28 @@ function updateCourtState(data) {
     var nowStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd HH:mm:ss");
     var finalState = normalizeState_(data.state);
     
+    // 如果是奪取控制權，強行更新
     if (data.takeover) {
       finalState.controller = updatedBy;
-      finalState.controllerName = data.updaterName || updatedBy;
+      finalState.controllerName = (data.updaterName && data.updaterName !== updatedBy) 
+        ? data.updaterName 
+        : (getPlayerNameByEmail_(updatedBy) || updatedBy);
     } else {
+      // 非奪取：保留現有控制者，但如果名稱是空的或是信箱，試著補上最新的名稱
       finalState.controller = currentState ? currentState.controller : updatedBy;
-      finalState.controllerName = currentState ? currentState.controllerName : (data.updaterName || updatedBy);
+      var existingName = currentState ? currentState.controllerName : null;
+      var newName = data.updaterName;
+
+      if (newName && newName !== updatedBy) {
+        // 如果端點傳來了有效的名稱，優先採用
+        finalState.controllerName = newName;
+      } else if (existingName && existingName !== finalState.controller) {
+        // 如果原本就有名稱且不是信箱，保留之
+        finalState.controllerName = existingName;
+      } else {
+        // 否則，試著從球員名單中找出名稱
+        finalState.controllerName = getPlayerNameByEmail_(finalState.controller) || finalState.controller || updatedBy;
+      }
     }
 
     var rowValues = [
@@ -693,4 +714,23 @@ function updateCourtState(data) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** 內部 Helper: 透過信箱尋找球員對應的顯示名稱 */
+function getPlayerNameByEmail_(email) {
+  if (!email) return null;
+  var normalized = normalizeEmail(email);
+  try {
+    var sheet = getSheet(CONFIG.SHEETS.PLAYERS);
+    var data = sheet.getDataRange().getValues();
+    // 欄位索引：1:Name, 5:Email
+    for (var i = 1; i < data.length; i++) {
+      if (normalizeEmail(data[i][5]) === normalized) {
+        return String(data[i][1]);
+      }
+    }
+  } catch (e) {
+    console.error('getPlayerNameByEmail_ error:', e);
+  }
+  return null;
 }

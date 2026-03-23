@@ -26,6 +26,8 @@ interface UseCourtsDeps {
   updateLocalPlayers: (updates: any[]) => void;
   ignoreFatigue: boolean;
   syncState: CourtSyncState;
+  isFetching: boolean;
+  isPushing: boolean;
   pushState: (state: NonNullable<CourtSyncState['state']>, updatedBy?: string, takeover?: boolean, updaterName?: string) => Promise<void>;
   targetDate: string;
 }
@@ -33,16 +35,32 @@ interface UseCourtsDeps {
 export function useCourts({
   players, playerStatus, setMultipleStatus, matchHistory,
   recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
-  syncState, pushState, targetDate
+  syncState, isFetching, isPushing, pushState, targetDate
 }: UseCourtsDeps) {
 
   const { currentUser } = useAuth();
-  // Local state as fallback or before sync
+  
+  // States
   const [courts, setCourts] = useState<ActiveCourt[]>([
     { id: "1", name: "1", players: [null, null, null, null], startTime: null },
     { id: "2", name: "2", players: [null, null, null, null], startTime: null },
   ]);
   const [recommendedPlayers, setRecommendedPlayers] = useState<(Player | null)[]>([null, null, null, null]);
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
+  const [selectedCourtSlot, setSelectedCourtSlot] = useState<{ courtId: string, index: number } | null>(null);
+  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [activeCourtForWinner, setActiveCourtForWinner] = useState<string | null>(null);
+  const [submittingMatch, setSubmittingMatch] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLocalSyncing, setIsLocalSyncing] = useState(false);
+
+  // Derived state
+  // isLocalSyncing: useCourts 的主動同步 (syncToRemote, Takeover)
+  // isPushing: useCourtSync 的主動推送
+  // isSyncing: 用於按鈕與操作鎖定，僅在「推送中」時為 true
+  const isSyncing = isPushing || isLocalSyncing;
+
+  // Refs
   const lastHydratedVersion = useRef(0);
   const wasPlayersEmpty = useRef(true);
 
@@ -118,6 +136,8 @@ export function useCourts({
     newRecPlayers: (Player | null)[], 
     newStatusOverrides: Record<string, PlayerStatus> = {}
   ) => {
+    if (isSyncing) return;
+    
     // 1. 先處理本地狀態（包含暫時性的 finishing）
     setCourts(newCourts);
     setRecommendedPlayers(newRecPlayers);
@@ -162,7 +182,8 @@ export function useCourts({
     };
 
     try {
-      await pushState(statePayload, currentUser?.email || 'unknown');
+      setIsLocalSyncing(true);
+      await pushState(statePayload, currentUser?.email || 'unknown', false, currentUser?.name);
       setError(null);
     } catch (err: any) {
       if (err.message === 'VERSION_CONFLICT') {
@@ -172,8 +193,10 @@ export function useCourts({
       } else {
         setError("同步失敗: " + err.message);
       }
+    } finally {
+      setIsLocalSyncing(false);
     }
-  }, [playerStatus, pushState, setMultipleStatus, currentUser, syncState.state, courts, recommendedPlayers]);
+  }, [playerStatus, pushState, setMultipleStatus, currentUser, syncState.state, courts, recommendedPlayers, isFetching, isPushing, isLocalSyncing]);
 
 
   const handleTakeover = async () => {
@@ -191,32 +214,28 @@ export function useCourts({
     };
 
     try {
-      setIsSyncing(true);
+      setIsLocalSyncing(true);
       await pushState(statePayload, currentUser.email, true, currentUser.name);
       setError(null);
     } catch (err: any) {
       setError("取得控制權失敗: " + err.message);
     } finally {
-      setIsSyncing(false);
+      setIsLocalSyncing(false);
     }
   };
 
   const hasControl = !!currentUser && (!syncState.state?.controller || syncState.state?.controller === currentUser?.email);
   const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
   const isLockedByOther = !!syncState.state?.controller && syncState.state?.controller !== currentUser?.email;
+  
+  // 優先顯示名稱，若無則顯示信箱，最後顯示「無」
   const currentControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
   const isGuest = !currentUser;
 
 
-  const [isMatchmaking, setIsMatchmaking] = useState(false);
-  const [selectedCourtSlot, setSelectedCourtSlot] = useState<{ courtId: string, index: number } | null>(null);
-  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
-  const [activeCourtForWinner, setActiveCourtForWinner] = useState<string | null>(null);
-  const [submittingMatch, setSubmittingMatch] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleCourtSlotClick = (courtId: string, index: number) => {
+  const handleCourtSlotClick = async (courtId: string, index: number) => {
+    if (isSyncing) return;
     if (!selectedCourtSlot) {
       const court = courtId === 'recommended'
         ? { id: 'recommended', players: recommendedPlayers }
@@ -272,7 +291,7 @@ export function useCourts({
     }
 
     setSelectedCourtSlot(null);
-    syncToRemote(newCourts, newRecPlayers);
+    await syncToRemote(newCourts, newRecPlayers);
   };
 
   const handleMatchmake = async () => {
@@ -315,12 +334,14 @@ export function useCourts({
     }
   };
 
-  const handleResetRecommended = () => {
+  const handleResetRecommended = async () => {
+    if (isSyncing) return;
     setSelectedCourtSlot(null);
-    syncToRemote(courts, [null, null, null, null]);
+    await syncToRemote(courts, [null, null, null, null]);
   };
 
-  const toggleManualSelection = (playerId: string) => {
+  const toggleManualSelection = async (playerId: string) => {
+    if (isSyncing) return;
     const player = players.find(p => p.id === playerId);
     if (!player) return;
     
@@ -337,10 +358,10 @@ export function useCourts({
       }
     }
     
-    syncToRemote(courts, newRecs);
+    await syncToRemote(courts, newRecs);
   };
 
-  const handleGoToCourt = () => {
+  const handleGoToCourt = async () => {
     if (!hasControl) {
       setError("您目前沒有控制權，請先取得主動權");
       return;
@@ -365,7 +386,7 @@ export function useCourts({
     recommendedPlayers.forEach((p) => { if (p) newStatus[p.id] = "playing"; });
     
     setSelectedCourtSlot(null);
-    syncToRemote(newCourts, [null, null, null, null], newStatus);
+    await syncToRemote(newCourts, [null, null, null, null], newStatus);
   };
 
   const handleEndMatch = (courtId: string) => {
@@ -466,7 +487,7 @@ export function useCourts({
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isGuest,
+    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, isGuest,
     syncToRemote // Expose for Dashboard to update global player zones
   };
 }

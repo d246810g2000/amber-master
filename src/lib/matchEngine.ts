@@ -55,7 +55,10 @@ export function getDerivedPlayers(
 ): DerivedPlayer[] {
   const today = getTaipeiDateString();
 
-  // 建立快照字典
+  // 0. 先針對 basePlayers 去重（避免 GAS 回傳重複 ID）
+  const uniqueBasePlayers = Array.from(new Map(basePlayers.map(p => [p.id, p])).values());
+
+  // 1. 建立快照字典
   const dailySnapshots: Record<string, {
     mu: number; sigma: number; matchCount: number; winCount: number; winRate: number;
   }> = {};
@@ -64,13 +67,15 @@ export function getDerivedPlayers(
     const statDate = getLocalDateString(stat.date);
     if (statDate === targetDate) {
       const idVal = stat.id;
-      dailySnapshots[idVal] = {
-        mu: stat.mu ?? INITIAL_MU,
-        sigma: stat.sigma ?? INITIAL_SIGMA,
-        matchCount: stat.matchCount ?? 0,
-        winCount: stat.winCount ?? 0,
-        winRate: stat.winRate ?? 0,
-      };
+      if (idVal) {
+        dailySnapshots[idVal] = {
+          mu: stat.mu ?? INITIAL_MU,
+          sigma: stat.sigma ?? INITIAL_SIGMA,
+          matchCount: stat.matchCount ?? 0,
+          winCount: stat.winCount ?? 0,
+          winRate: stat.winRate ?? 0,
+        };
+      }
     }
   });
 
@@ -86,11 +91,11 @@ export function getDerivedPlayers(
   const useSnapshot = targetDate !== today && Object.keys(dailySnapshots).length > 0;
   const dailyState: Record<string, DerivedPlayer> = {};
 
-  basePlayers.forEach((p) => {
+  uniqueBasePlayers.forEach((p) => {
     if (useSnapshot && dailySnapshots[p.id]) {
-      dailyState[p.name] = { ...p, ...dailySnapshots[p.id] };
+      dailyState[p.id] = { ...p, ...dailySnapshots[p.id] };
     } else {
-      dailyState[p.name] = {
+      dailyState[p.id] = {
         ...p,
         mu: INITIAL_MU,
         sigma: INITIAL_SIGMA,
@@ -104,13 +109,10 @@ export function getDerivedPlayers(
   // 今天或沒有快照 → 逐場計算
   if (!useSnapshot) {
     dailyMatches.forEach((match) => {
-      const team1Names = (match.team1 || []).map((p) => p.name);
-      const team2Names = (match.team2 || []).map((p) => p.name);
-
-      const t1p1 = dailyState[team1Names[0]];
-      const t1p2 = dailyState[team1Names[1]];
-      const t2p1 = dailyState[team2Names[0]];
-      const t2p2 = dailyState[team2Names[1]];
+      const t1p1 = dailyState[match.team1?.[0]?.id || ""];
+      const t1p2 = dailyState[match.team1?.[1]?.id || ""];
+      const t2p1 = dailyState[match.team2?.[0]?.id || ""];
+      const t2p2 = dailyState[match.team2?.[1]?.id || ""];
 
       if (t1p1 && t1p2 && t2p1 && t2p2) {
         const team1Ratings = [new Rating(t1p1.mu, t1p1.sigma), new Rating(t1p2.mu, t1p2.sigma)];

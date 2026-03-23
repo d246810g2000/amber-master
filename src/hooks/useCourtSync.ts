@@ -32,7 +32,8 @@ export function useCourtSync({
     updatedAt: '',
     updatedBy: ''
   });
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -53,7 +54,7 @@ export function useCourtSync({
 
   // 定時輪詢 (Polling) 取得最新狀態
   const fetchState = useCallback(async () => {
-    setIsSyncing(true);
+    setIsFetching(true);
     setSyncError(null);
     try {
       // gasApi.getCourtState 透過 gasGet 回傳的是 parsed.data.data
@@ -73,7 +74,7 @@ export function useCourtSync({
       console.error('[Sync] Fetch failed:', err);
       setSyncError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsSyncing(false);
+      setIsFetching(false);
     }
   }, [enabled, targetDate, isInitialized]);
 
@@ -94,7 +95,7 @@ export function useCourtSync({
     takeover: boolean = false,
     updaterName?: string
   ) => {
-    setIsSyncing(true);
+    setIsPushing(true);
     setSyncError(null);
     try {
       let expectedVersion = stateRef.current.version;
@@ -143,13 +144,15 @@ export function useCourtSync({
       setSyncError(err.message || 'Sync failed');
       throw err;
     } finally {
-      setIsSyncing(false);
+      setIsPushing(false);
     }
   }, []);
 
   return {
     syncState,
-    isSyncing,
+    isFetching,
+    isPushing,
+    isSyncing: isFetching || isPushing, // For backward compatibility if needed
     isSyncInitialized: isInitialized,
     syncError,
     fetchState,
