@@ -79,9 +79,9 @@ export function DashboardPage() {
     winnerModalOpen, setWinnerModalOpen, activeCourt,
     submittingMatch, error, setError,
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
-    toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
+    toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, isGuest,
+    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
     syncToRemote
   } = useCourts({
     players: players as DerivedPlayer[],
@@ -201,8 +201,9 @@ export function DashboardPage() {
                       players={court.players}
                       actionText="結束"
                       onAction={() => handleEndMatch(court.id)}
+                      onCancel={() => handleCancelMatch(court.id)}
                       startTime={court.startTime}
-                      isLoading={isLocalSyncing || submittingMatch}
+                      isLoading={syncingCourtIds.includes(court.id) || submittingMatch && activeCourt?.id === court.id}
                       isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
                       onSlotClick={(idx) => hasControl && handleCourtSlotClick(court.id, idx)}
                       selectedSlotIndex={selectedCourtSlot?.courtId === court.id ? selectedCourtSlot.index : null}
@@ -219,7 +220,7 @@ export function DashboardPage() {
                     onAction={handleGoToCourt}
                     onSelectPlayers={handleMatchmake}
                     onReset={handleResetRecommended}
-                    isLoading={isMatchmaking || submittingMatch || isLocalSyncing}
+                    isLoading={isMatchmaking || submittingMatch || syncingCourtIds.includes('recommended')}
                     isActionDisabled={!hasControl}
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
                     selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}

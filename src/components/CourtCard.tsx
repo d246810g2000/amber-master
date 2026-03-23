@@ -16,9 +16,9 @@ interface CourtCardProps {
   isLoading?: boolean;
   isActionDisabled?: boolean;
   onSlotClick?: (index: number) => void;
-  selectedSlotIndex?: number | null;
   onReset?: () => void;
   hasControl?: boolean;
+  onCancel?: () => void;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -93,6 +93,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   selectedSlotIndex,
   onReset,
   hasControl = true,
+  onCancel,
 }) => {
   const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
@@ -240,7 +241,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       <div className="p-2 bg-white flex items-center justify-center h-[52px] shrink-0 border-t border-slate-50/50">
         <div className={cn(
           "w-full px-1",
-          isRecommended ? "grid grid-cols-2 gap-2" : "flex justify-center"
+          (isRecommended || (actionText === "結束" && onCancel && players.some(p => p !== null))) ? "grid grid-cols-2 gap-2" : "flex justify-center"
         )}>
           {isRecommended && onSelectPlayers && (
             <button
@@ -251,19 +252,33 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               選人
             </button>
           )}
+          
+          {players.some(p => p !== null) && (
+            <>
+              {actionText === "結束" && onCancel && (
+                <button
+                  onClick={onCancel}
+                  disabled={isLoading || isActionDisabled}
+                  className="px-4 py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 text-slate-500 hover:bg-slate-200 w-full"
+                >
+                  取消
+                </button>
+              )}
 
-          <button
-            onClick={onAction}
-            disabled={isLoading || isActionDisabled || !players.some(p => p !== null)}
-            className={cn(
-              "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center",
-              actionText === "結束" 
-                ? "bg-red-50 text-red-500 hover:bg-red-600 hover:text-white w-[120px]" 
-                : "bg-slate-900 text-white hover:bg-black w-full"
-            )}
-          >
-            {actionText}
-          </button>
+              <button
+                onClick={onAction}
+                disabled={isLoading || isActionDisabled}
+                className={cn(
+                  "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center",
+                  actionText === "結束" 
+                    ? "bg-red-50 text-red-500 hover:bg-red-600 hover:text-white w-full" 
+                    : "bg-slate-900 text-white hover:bg-black w-full"
+                )}
+              >
+                {actionText}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

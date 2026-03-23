@@ -53,6 +53,7 @@ export function useCourts({
   const [submittingMatch, setSubmittingMatch] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLocalSyncing, setIsLocalSyncing] = useState(false);
+  const [syncingCourtIds, setSyncingCourtIds] = useState<string[]>([]);
 
   // Derived state
   // isLocalSyncing: useCourts 的主動同步 (syncToRemote, Takeover)
@@ -134,7 +135,8 @@ export function useCourts({
   const syncToRemote = useCallback(async (
     newCourts: ActiveCourt[], 
     newRecPlayers: (Player | null)[], 
-    newStatusOverrides: Record<string, PlayerStatus> = {}
+    newStatusOverrides: Record<string, PlayerStatus> = {},
+    affectedCourtIds: string[] = []
   ) => {
     if (isSyncing) return;
     
@@ -183,6 +185,9 @@ export function useCourts({
 
     try {
       setIsLocalSyncing(true);
+      if (affectedCourtIds.length > 0) {
+        setSyncingCourtIds(prev => Array.from(new Set([...prev, ...affectedCourtIds])));
+      }
       await pushState(statePayload, currentUser?.email || 'unknown', false, currentUser?.name);
       setError(null);
     } catch (err: any) {
@@ -195,6 +200,9 @@ export function useCourts({
       }
     } finally {
       setIsLocalSyncing(false);
+      if (affectedCourtIds.length > 0) {
+        setSyncingCourtIds(prev => prev.filter(id => !affectedCourtIds.includes(id)));
+      }
     }
   }, [playerStatus, pushState, setMultipleStatus, currentUser, syncState.state, courts, recommendedPlayers, isFetching, isPushing, isLocalSyncing]);
 
@@ -291,7 +299,7 @@ export function useCourts({
     }
 
     setSelectedCourtSlot(null);
-    await syncToRemote(newCourts, newRecPlayers);
+    await syncToRemote(newCourts, newRecPlayers, {}, [sourceCourtId, courtId]);
   };
 
   const handleMatchmake = async () => {
@@ -321,9 +329,9 @@ export function useCourts({
       
       if (suggestions.length > 0) {
         const newRecs = [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
-        await syncToRemote(courts, newRecs as Player[]);
+        await syncToRemote(courts, newRecs as Player[], {}, ['recommended']);
       } else {
-        await syncToRemote(courts, [null, null, null, null]);
+        await syncToRemote(courts, [null, null, null, null], {}, ['recommended']);
         setError("排點失敗：找不到合適的配對");
       }
       setSelectedCourtSlot(null);
@@ -337,14 +345,48 @@ export function useCourts({
   const handleResetRecommended = async () => {
     if (isSyncing) return;
     setSelectedCourtSlot(null);
-    await syncToRemote(courts, [null, null, null, null]);
+    await syncToRemote(courts, [null, null, null, null], {}, ['recommended']);
   };
 
   const toggleManualSelection = async (playerId: string) => {
     if (isSyncing) return;
     const player = players.find(p => p.id === playerId);
     if (!player) return;
+
+    // 如果有選中場地位置，執行更換（Swap with Ready Zone）
+    if (selectedCourtSlot) {
+      const { courtId, index } = selectedCourtSlot;
+      let newRecPlayers = [...recommendedPlayers];
+      let newCourts = courts.map(c => ({ ...c, players: [...c.players] }));
+      let newStatus: Record<string, PlayerStatus> = {};
+
+      const isRec = courtId === 'recommended';
+      const targetPlayers = isRec ? newRecPlayers : (newCourts.find(c => c.id === courtId)?.players || []);
+      const oldPlayer = targetPlayers[index];
+
+      // 執行替換
+      if (isRec) {
+        newRecPlayers[index] = player as matchEngine.DerivedPlayer;
+      } else {
+        newCourts = newCourts.map(c => {
+          if (c.id === courtId) {
+            const updated = [...c.players];
+            updated[index] = player as matchEngine.DerivedPlayer;
+            return { ...c, players: updated };
+          }
+          return c;
+        });
+        // 狀態變更：新的人上場，舊的人休息
+        newStatus[player.id] = "playing";
+        if (oldPlayer) newStatus[oldPlayer.id] = "ready";
+      }
+
+      setSelectedCourtSlot(null);
+      await syncToRemote(newCourts, newRecPlayers, newStatus, [courtId]);
+      return;
+    }
     
+    // 原有的邏輯：加入/移除推薦名單
     let newRecs = [...recommendedPlayers];
     const isAlreadySelected = newRecs.some(p => p?.id === playerId);
     
@@ -358,7 +400,7 @@ export function useCourts({
       }
     }
     
-    await syncToRemote(courts, newRecs);
+    await syncToRemote(courts, newRecs, {}, ['recommended']);
   };
 
   const handleGoToCourt = async () => {
@@ -386,7 +428,7 @@ export function useCourts({
     recommendedPlayers.forEach((p) => { if (p) newStatus[p.id] = "playing"; });
     
     setSelectedCourtSlot(null);
-    await syncToRemote(newCourts, [null, null, null, null], newStatus);
+    await syncToRemote(newCourts, [null, null, null, null], newStatus, ['recommended', newCourts[emptyCourtIndex].id]);
   };
 
   const handleEndMatch = (courtId: string) => {
@@ -440,7 +482,8 @@ export function useCourts({
           : c
       );
 
-      await syncToRemote(newCourts, recommendedPlayers, finStatus);
+      const affectedCourtIds = [activeCourtForWinner];
+      await syncToRemote(newCourts, recommendedPlayers, finStatus, affectedCourtIds);
       setWinnerModalOpen(false);
 
       // 3. 寫入 GAS 對戰紀錄
@@ -462,7 +505,7 @@ export function useCourts({
       setTimeout(() => {
         const releases: Record<string, PlayerStatus> = {};
         participants.forEach((p) => { releases[p.id] = "ready"; });
-        syncToRemote(newCourts, recommendedPlayers, releases);
+        syncToRemote(newCourts, recommendedPlayers, releases, [activeCourtForWinner]);
       }, 1500);
 
     } catch (err: any) {
@@ -470,6 +513,27 @@ export function useCourts({
     } finally {
       setSubmittingMatch(false);
     }
+  };
+
+  const handleCancelMatch = async (courtId: string) => {
+    if (!hasControl) {
+      setError("您目前沒有控制權，請先取得主動權");
+      return;
+    }
+    const court = courts.find(c => c.id === courtId);
+    if (!court) return;
+
+    const participants = court.players.filter(p => p !== null) as Player[];
+    const newStatus: Record<string, PlayerStatus> = {};
+    participants.forEach(p => { newStatus[p.id] = "ready"; });
+
+    const newCourts = courts.map(c => 
+      c.id === courtId 
+        ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined } 
+        : c
+    );
+
+    await syncToRemote(newCourts, recommendedPlayers, newStatus, [courtId]);
   };
 
   const getPlayerTeamColor = (playerId: string): "red" | "blue" | undefined => {
@@ -485,9 +549,9 @@ export function useCourts({
     winnerModalOpen, setWinnerModalOpen, activeCourtForWinner, activeCourt,
     submittingMatch, error, setError,
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
-    toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
+    toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, isGuest,
+    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
     syncToRemote // Expose for Dashboard to update global player zones
   };
 }
