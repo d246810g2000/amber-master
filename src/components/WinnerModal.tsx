@@ -100,15 +100,15 @@ export function WinnerModal({
           >
             <div className="flex items-center justify-center gap-3 mb-2 group-hover:scale-105 transition-transform">
               {team1.map((p, index) => (
-                <React.Fragment key={p.id}>
+                <React.Fragment key={p?.id || `t1p${index}`}>
                   {index > 0 && <span className="text-rose-300 font-black text-xs shrink-0">&amp;</span>}
                   <div className="flex flex-col items-center gap-1">
                     <img
-                      src={getAvatarUrl(p.avatar, p.name)}
-                      alt={p.name}
+                      src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
+                      alt={p?.name || 'Unknown'}
                       className="w-8 h-8 rounded-full object-cover bg-white shadow-sm border-2 border-rose-100"
                     />
-                    <span className="text-rose-700 font-black text-sm truncate max-w-[70px] leading-none">{p.name}</span>
+                    <span className="text-rose-700 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
                   </div>
                 </React.Fragment>
               ))}
@@ -132,15 +132,15 @@ export function WinnerModal({
           >
             <div className="flex items-center justify-center gap-3 mb-2 group-hover:scale-105 transition-transform">
               {team2.map((p, index) => (
-                <React.Fragment key={p.id}>
+                <React.Fragment key={p?.id || `t2p${index}`}>
                   {index > 0 && <span className="text-blue-300 font-black text-xs shrink-0">&amp;</span>}
                   <div className="flex flex-col items-center gap-1">
                     <img
-                      src={getAvatarUrl(p.avatar, p.name)}
-                      alt={p.name}
+                      src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
+                      alt={p?.name || 'Unknown'}
                       className="w-8 h-8 rounded-full object-cover bg-white shadow-sm border-2 border-blue-100"
                     />
-                    <span className="text-blue-700 font-black text-sm truncate max-w-[70px] leading-none">{p.name}</span>
+                    <span className="text-blue-700 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
                   </div>
                 </React.Fragment>
               ))}

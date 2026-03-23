@@ -81,7 +81,7 @@ export const RawMatchSchema = z.object({
 }));
 
 export const GasResponseSchema = <T extends z.ZodTypeAny>(schema: T) => z.object({
-  status: z.enum(['success', 'error']),
+  status: z.enum(['success', 'error', 'conflict']),
   data: schema.optional(),
   message: z.string().optional(),
 });

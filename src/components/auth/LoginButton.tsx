@@ -105,7 +105,7 @@ export function LoginButton() {
   }
 
   return (
-    <div className="scale-[0.70] md:scale-90 origin-right md:origin-center drop-shadow-sm shrink-0 -ml-6 md:-ml-2">
+    <div className="scale-[0.85] md:scale-95 origin-right md:origin-center drop-shadow-sm shrink-0 -ml-2 md:ml-0">
       <GoogleLogin
         onSuccess={credentialResponse => {
           if (credentialResponse.credential) {
@@ -115,10 +115,10 @@ export function LoginButton() {
         onError={() => {
           console.error('Google Sign-In Failed');
         }}
-        useOneTap
+        ux_mode="redirect"
         shape="pill"
-        theme="filled_black"
-        text="signin"
+        theme="filled_blue"
+        text="signin_with"
       />
     </div>
   );

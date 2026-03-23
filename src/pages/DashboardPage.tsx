@@ -4,6 +4,7 @@ import type { DerivedPlayer } from "../lib/matchEngine";
 import { usePlayers, type PlayerStatus } from "../hooks/usePlayers";
 import { useMatches } from "../hooks/useMatches";
 import { useCourts } from "../hooks/useCourts";
+import { useCourtSync } from "../hooks/useCourtSync";
 import { CourtCard } from "../components/CourtCard";
 import { MatchHistory } from "../components/MatchHistory";
 import { ManagePlayers } from "../components/ManagePlayers";
@@ -11,6 +12,7 @@ import { WinnerModal } from "../components/WinnerModal";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { PlayerZones } from "../components/dashboard/PlayerZones";
 import { useNavigate } from 'react-router-dom';
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -57,6 +59,11 @@ export function DashboardPage() {
     recordMatch, refetch: refetchMatches, addLocalMatch,
   } = useMatches(currentFilterDate);
 
+  const { syncState, isSyncing, pushState, fetchState } = useCourtSync({
+    pollingInterval: 5000, 
+    enabled: currentFilterDate === getTaipeiDateString() // 只有當天需要同步狀態
+  });
+
   const loading = playersLoading || historyLoading || playersFetching || historyFetching;
 
   const {
@@ -66,10 +73,12 @@ export function DashboardPage() {
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
     getPlayerTeamColor,
+    syncToRemote
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
     recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
+    syncState, pushState
   });
 
   const readyPlayers: typeof players = [];
@@ -90,13 +99,20 @@ export function DashboardPage() {
   const handleAllReady = () => {
     const updates: Record<string, PlayerStatus> = {};
     restingPlayers.forEach(p => { updates[p.id] = "ready"; });
-    setMultipleStatus(updates);
+    syncToRemote(courts, recommendedPlayers, updates);
   };
 
   const handleAllResting = () => {
     const updates: Record<string, PlayerStatus> = {};
     readyPlayers.forEach(p => { updates[p.id] = "resting"; });
-    setMultipleStatus(updates);
+    syncToRemote(courts, recommendedPlayers, updates);
+  };
+  
+  const handleTogglePlayerStatus = (id: string) => {
+    const current = playerStatus[id];
+    if (current === "playing" || current === "finishing") return;
+    const newStatus = current === "resting" ? "ready" : "resting";
+    syncToRemote(courts, recommendedPlayers, { [id]: newStatus });
   };
 
   const allMatchDates = useMemo(() => {
@@ -130,9 +146,10 @@ export function DashboardPage() {
         isFullscreen={isFullscreen}
         onToggleBanner={() => setShowBannerEgg(!showBannerEgg)}
         onToggleFullscreen={toggleFullscreen}
-        onRefresh={() => { refetchPlayers(); refetchMatches(); }}
+        onRefresh={() => { refetchPlayers(); refetchMatches(); fetchState(); }}
         onSettings={() => setIsSettingsOpen(true)}
       />
+
 
       {error && (
         <div className="bg-red-500/90 text-white p-4 rounded-xl mb-6 shadow-lg backdrop-blur-sm flex justify-between items-center border border-red-400 shrink-0">
@@ -160,7 +177,7 @@ export function DashboardPage() {
                   actionText="結束"
                   onAction={() => handleEndMatch(court.id)}
                   startTime={court.startTime}
-                  isActionDisabled={submittingMatch}
+                  isActionDisabled={submittingMatch || isSyncing}
                   onSlotClick={(idx) => handleCourtSlotClick(court.id, idx)}
                   selectedSlotIndex={selectedCourtSlot?.courtId === court.id ? selectedCourtSlot.index : null}
                 />
@@ -175,7 +192,7 @@ export function DashboardPage() {
                 onAction={handleGoToCourt}
                 onSelectPlayers={handleMatchmake}
                 onReset={handleResetRecommended}
-                isLoading={isMatchmaking || submittingMatch}
+                isLoading={isMatchmaking || submittingMatch || isSyncing}
                 onSlotClick={(idx) => handleCourtSlotClick('recommended', idx)}
                 selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
               />
@@ -190,12 +207,12 @@ export function DashboardPage() {
             recommendedPlayers={recommendedPlayers}
             fatiguedPlayerIds={fatiguedPlayerIds}
             ignoreFatigue={ignoreFatigue}
-            loading={loading}
+            loading={loading || isSyncing}
             isMatchmaking={isMatchmaking}
             submittingMatch={submittingMatch}
             getPlayerTeamColor={getPlayerTeamColor}
             onToggleManualSelection={toggleManualSelection}
-            onTogglePlayerStatus={togglePlayerStatus}
+            onTogglePlayerStatus={handleTogglePlayerStatus}
             onProfileClick={(id) => navigate(`/players/${id}`)}
             onSetIgnoreFatigue={setIgnoreFatigue}
             onAllReady={handleAllReady}
@@ -236,7 +253,7 @@ export function DashboardPage() {
         />
       )}
 
-      {activeCourt && (
+      {activeCourt && activeCourt.players.every(p => p !== null) && (
         <WinnerModal
           isOpen={winnerModalOpen}
           onClose={() => setWinnerModalOpen(false)}
@@ -249,4 +266,3 @@ export function DashboardPage() {
     </div>
   );
 }
-

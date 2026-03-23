@@ -7,7 +7,8 @@ const CONFIG = {
   SHEETS: {
     PLAYERS: 'Players',
     MATCHES: 'Matches',
-    STATS: 'PlayerStats'
+    STATS: 'PlayerStats',
+    COURT_STATE: 'CourtState'
   },
   TIMEZONE: 'Asia/Taipei',
   INITIAL: {
@@ -37,6 +38,7 @@ function doGet(e) {
     'getPlayerStats': () => getPlayerStats(),
     'getPlayerBinding': () => getPlayerBinding(playerId, userEmail),
     'getUserBinding': () => getUserBinding(userEmail),
+    'getCourtState': () => getCourtState(),
     'default': () => getPlayers()
   };
 
@@ -64,7 +66,8 @@ function doPost(e) {
       'recordMatchAndUpdate': () => recordMatchAndUpdate(data),
       'batchUpdatePlayers': () => batchUpdatePlayers(data.updates),
       'bindPlayer': () => bindPlayer(data.playerId, data.userEmail),
-      'unbindPlayer': () => unbindPlayer(data.playerId, data.userEmail)
+      'unbindPlayer': () => unbindPlayer(data.playerId, data.userEmail),
+      'updateCourtState': () => updateCourtState(data)
     };
 
     const fn = actions[action];
@@ -481,4 +484,126 @@ function recordMatchAndUpdate(data) {
   }
   
   return { status: 'success', matchId };
+}
+
+// ─── 場地狀態同步 (CourtState) ───
+
+/**
+ * 確保 CourtState Sheet 存在並已初始化
+ * 結構：Row 1 = Headers [Version, State, UpdatedAt, UpdatedBy]
+ *        Row 2 = Data    [1, '{...}', '2024-...', 'user']
+ */
+function ensureCourtStateSheet() {
+  const ss = getSs();
+  let sheet = ss.getSheetByName(CONFIG.SHEETS.COURT_STATE);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.COURT_STATE);
+    sheet.appendRow(['Version', 'State', 'UpdatedAt', 'UpdatedBy']);
+    const initialState = JSON.stringify({
+      courts: [
+        { id: '1', name: '1', players: [null, null, null, null], startTime: null },
+        { id: '2', name: '2', players: [null, null, null, null], startTime: null }
+      ],
+      playerStatus: {},
+      recommendedPlayers: [null, null, null, null]
+    });
+    sheet.appendRow([1, initialState, new Date().toISOString(), 'system']);
+  }
+  return sheet;
+}
+
+/** 內部 Helper: 強制修正不該存檔的狀態 (如 finishing) */
+function normalizeState_(state) {
+  if (!state || !state.playerStatus) return state;
+  var statusKeys = Object.keys(state.playerStatus);
+  for (var i = 0; i < statusKeys.length; i++) {
+    var key = statusKeys[i];
+    if (state.playerStatus[key] === 'finishing') {
+      state.playerStatus[key] = 'ready';
+    }
+  }
+  return state;
+}
+
+/** 讀取場地狀態 */
+function getCourtState() {
+  var sheet = ensureCourtStateSheet();
+  var data = sheet.getDataRange().getValues();
+
+  if (data.length < 2) {
+    return { status: 'success', data: { version: 0, state: null } };
+  }
+
+  var row = data[1]; // Row 2
+  var version = Number(row[0]) || 0;
+  var state = null;
+  try {
+    state = JSON.parse(row[1]);
+    state = normalizeState_(state); // 讀取時順便修正舊資料
+  } catch (e) {
+    state = null;
+  }
+
+  return {
+    status: 'success',
+    data: {
+      version: version,
+      state: state,
+      updatedAt: row[2] ? String(row[2]) : '',
+      updatedBy: row[3] ? String(row[3]) : ''
+    }
+  };
+}
+
+/** 更新場地狀態（含樂觀鎖與正規化） */
+function updateCourtState(data) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000); 
+  } catch (e) {
+    return { status: 'error', code: 'LOCK_TIMEOUT', message: 'Server busy, please retry' };
+  }
+
+  try {
+    var sheet = ensureCourtStateSheet();
+    var sheetData = sheet.getDataRange().getValues();
+    var currentVersion = 0;
+    var currentState = null;
+
+    if (sheetData.length >= 2) {
+      currentVersion = Number(sheetData[1][0]) || 0;
+      try { currentState = JSON.parse(sheetData[1][1]); } catch (e) {}
+    }
+
+    var expectedVersion = Number(data.expectedVersion) || 0;
+
+    if (expectedVersion !== currentVersion) {
+      return {
+        status: 'conflict',
+        data: {
+          version: currentVersion,
+          state: normalizeState_(currentState),
+          updatedAt: sheetData[1] && sheetData[1][2] ? String(sheetData[1][2]) : '',
+          updatedBy: sheetData[1] && sheetData[1][3] ? String(sheetData[1][3]) : ''
+        }
+      };
+    }
+
+    // 版本一致：寫入並遞增
+    var newVersion = currentVersion + 1;
+    var nowStr = new Date().toISOString();
+    var updatedBy = data.updatedBy || 'unknown';
+    // 寫入前再次正規化，防止臟資料進入 DB
+    var finalState = normalizeState_(data.state);
+
+    sheet.getRange(2, 1, 1, 4).setValues([
+      [newVersion, JSON.stringify(finalState), nowStr, updatedBy]
+    ]);
+
+    return { status: 'success', data: { version: newVersion } };
+  } catch (e) {
+    return { status: 'error', message: e.toString() };
+  } finally {
+    lock.releaseLock();
+  }
 }

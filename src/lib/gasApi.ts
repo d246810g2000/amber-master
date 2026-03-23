@@ -157,4 +157,31 @@ export async function getUserBinding(userEmail: string) {
 }
 
 
+export async function getCourtState() {
+  return gasGet({ action: 'getCourtState' }, z.any());
+}
+
+export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string }) {
+  // 這裡不使用 gasPost 解析 success/error，因為 conflict 時我們也要拿 data
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'updateCourtState', ...data }),
+  });
+  const json = await res.json();
+  const parsed = GasResponseSchema(z.any()).safeParse(json);
+  
+  if (!parsed.success) {
+    throw new Error('API Response format invalid');
+  }
+  
+  // conflict 也是一種預期的回應，所以直接打包回傳
+  return {
+    status: parsed.data.status,
+    data: parsed.data.data,
+    message: parsed.data.message
+  };
+}
+
+
 export type { RawPlayer, RawPlayerStat, RawMatch };

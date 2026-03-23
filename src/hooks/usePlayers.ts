@@ -8,6 +8,8 @@ import type { DerivedPlayer } from '../lib/matchEngine';
 
 export type PlayerStatus = "ready" | "resting" | "playing" | "finishing";
 
+const EMPTY_PLAYERS: DerivedPlayer[] = [];
+
 export function usePlayers(targetDate: string = getTaipeiDateString()) {
   const queryClient = useQueryClient();
   const [playerStatus, setPlayerStatus] = useState<Record<string, PlayerStatus>>({});
@@ -26,7 +28,7 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
     },
   });
 
-  const players = playersQuery.data || [];
+  const players = playersQuery.data || EMPTY_PLAYERS;
 
   // Initialize player status when players are loaded
   useEffect(() => {
