@@ -14,13 +14,15 @@ interface CustomCalendarProps {
   onChange: (date: string) => void;
   highlightedDates?: string[] | Set<string>; // YYYY-MM-DD strings
   className?: string;
+  variant?: 'light' | 'dark';
 }
 
 export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   value,
   onChange,
   highlightedDates = new Set(),
-  className
+  className,
+  variant = 'dark'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => value ? parseISO(value) : new Date());
@@ -73,7 +75,12 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 cursor-pointer w-full group/trigger"
       >
-        <span className="bg-transparent border-0 p-0 text-[11px] font-black text-zinc-300 group-hover/trigger:text-white transition-colors outline-none flex-1 text-center sm:pr-4">
+        <span className={cn(
+          "bg-transparent border-0 p-0 text-[11px] font-black outline-none flex-1 text-center sm:pr-4 transition-colors",
+          variant === 'light' 
+            ? "text-slate-600 group-hover/trigger:text-slate-900" 
+            : "text-zinc-300 group-hover/trigger:text-white"
+        )}>
           {value || "選擇日期"}
         </span>
       </div>
@@ -81,12 +88,21 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       {/* Popover */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 5, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute left-0 sm:right-0 sm:left-auto top-full z-[100] mt-2 w-[280px] bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-4"
-          >
+          <>
+            {/* Backdrop for mobile */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] sm:hidden"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 5, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="fixed inset-x-4 top-[15%] mx-auto sm:absolute sm:inset-auto sm:left-0 sm:top-full z-[100] mt-2 w-[calc(100%-2rem)] max-w-[280px] sm:w-[280px] bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-4"
+            >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <button 
@@ -159,6 +175,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               </button>
             </div>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

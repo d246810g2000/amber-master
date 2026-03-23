@@ -95,7 +95,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* Controls Group (All inline) */}
         <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
           {/* Controller Status & Takeover */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100 mr-2">
+          <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 rounded-xl border border-slate-100 mr-1 md:mr-2 shrink-0">
             <span className={cn(
               "w-2 h-2 rounded-full",
               isLockedByMe ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
@@ -103,27 +103,27 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               "bg-slate-300"
             )} />
             <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+              <span className="hidden sm:block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">
                 {isLockedByMe ? "您擁有控制權" : isLockedByOther ? "目前控制者" : "自由操作模式"}
               </span>
-              <span className="text-[11px] font-black text-slate-700 leading-tight">
-                {isLockedByMe ? "可正常操作" : isLockedByOther ? currentControllerName : "未鎖定"}
+              <span className="text-[10px] md:text-[11px] font-black text-slate-700 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[60px] sm:max-w-none">
+                {isLockedByMe ? "已取得" : isLockedByOther ? currentControllerName : "未鎖定"}
               </span>
             </div>
             {!isLockedByMe && !isGuest && (
               <button
                 onClick={onTakeover}
                 disabled={isSyncing}
-                className="ml-2 px-2 py-1 bg-[#0f172a] hover:bg-slate-800 text-white text-[10px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50 border border-slate-700"
+                className="ml-1 md:ml-2 px-2 py-1 bg-[#0f172a] hover:bg-slate-800 text-white text-[9px] md:text-[10px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50 border border-slate-700 whitespace-nowrap"
               >
-                {isSyncing ? "切換中..." : "取得控制"}
+                {isSyncing ? "..." : "取得"}
               </button>
             )}
           </div>
 
           <button
             onClick={onToggleFullscreen}
-            className="flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-slate-100 shrink-0"
+            className="hidden sm:flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-slate-100 shrink-0"
             title="全螢幕模式"
           >
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 md:w-5 md:h-5" /> : <Maximize className="w-3.5 h-3.5 md:w-5 md:h-5" />}

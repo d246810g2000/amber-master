@@ -106,6 +106,7 @@ export const MatchHistoryTable: React.FC<MatchHistoryTableProps> = ({
               onChange={(date) => setFilterDate(date)}
               highlightedDates={activeMatchDates}
               className="flex-1"
+              variant="dark"
             />
           </div>
 

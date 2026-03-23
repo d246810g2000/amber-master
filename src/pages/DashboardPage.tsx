@@ -82,7 +82,8 @@ export function DashboardPage() {
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
-    syncToRemote
+    syncToRemote,
+    isAutoMode, setIsAutoMode
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
@@ -225,6 +226,8 @@ export function DashboardPage() {
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
                     selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
                     hasControl={hasControl}
+                    isAutoMode={isAutoMode}
+                    onToggleAuto={() => setIsAutoMode(!isAutoMode)}
                   />
                 </div>
               </>

@@ -145,7 +145,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 key={p.id}
                 player={p}
                 status="resting"
-                isFatigued={!ignoreFatigue && fatiguedPlayerIds.has(p.id)}
+                isFatigued={false}
                 onClick={() => hasControl && onTogglePlayerStatus(p.id)}
                 onProfileClick={() => onProfileClick(p.id)}
                 hasControl={hasControl}

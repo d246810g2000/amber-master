@@ -55,6 +55,19 @@ export function useCourts({
   const [isLocalSyncing, setIsLocalSyncing] = useState(false);
   const [syncingCourtIds, setSyncingCourtIds] = useState<string[]>([]);
 
+  // Auto mode states
+  const [isAutoMode, setIsAutoMode] = useState(false);
+  const [autoActionReady, setAutoActionReady] = useState(true);
+  const autoCooldownTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerCooldown = useCallback(() => {
+    setAutoActionReady(false);
+    if (autoCooldownTimer.current) clearTimeout(autoCooldownTimer.current);
+    autoCooldownTimer.current = setTimeout(() => {
+      setAutoActionReady(true);
+    }, 3000);
+  }, []);
+
   // Derived state
   // isLocalSyncing: useCourts 的主動同步 (syncToRemote, Takeover)
   // isPushing: useCourtSync 的主動推送
@@ -130,6 +143,33 @@ export function useCourts({
       }
     }
   }, [syncState, players]);
+
+  const hasControl = !!currentUser && (!syncState.state?.controller || syncState.state?.controller === currentUser?.email);
+  const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
+  const isLockedByOther = !!syncState.state?.controller && syncState.state?.controller !== currentUser?.email;
+  const currentControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
+  const isGuest = !currentUser;
+
+  // Auto Mode Logic
+  useEffect(() => {
+    if (!isAutoMode || !hasControl || !autoActionReady || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching) return;
+
+    const hasEmptyCourt = courts.some(c => c.players.every(p => p === null));
+    const isRecommendedFull = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p !== null && p !== undefined);
+    const isRecommendedEmpty = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p === null || p === undefined);
+
+    if (hasEmptyCourt && isRecommendedFull) {
+      handleGoToCourt();
+      return;
+    }
+
+    if (isRecommendedEmpty) {
+      const readyCount = Object.values(playerStatus).filter(s => s === "ready").length;
+      if (readyCount >= 4) {
+        handleMatchmake();
+      }
+    }
+  }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching]);
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
@@ -232,14 +272,6 @@ export function useCourts({
     }
   };
 
-  const hasControl = !!currentUser && (!syncState.state?.controller || syncState.state?.controller === currentUser?.email);
-  const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
-  const isLockedByOther = !!syncState.state?.controller && syncState.state?.controller !== currentUser?.email;
-
-  // 優先顯示名稱，若無則顯示信箱，最後顯示「無」
-  const currentControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
-  const isGuest = !currentUser;
-
 
 
   const handleCourtSlotClick = async (courtId: string, index: number) => {
@@ -332,11 +364,13 @@ export function useCourts({
         await syncToRemote(courts, newRecs as Player[], {}, ['recommended']);
       } else {
         await syncToRemote(courts, [null, null, null, null], {}, ['recommended']);
-        setError("排點失敗：找不到合適的配對");
+        setError("排點失敗：找不到合適的配對，已自動關閉自動上場模式");
+        setIsAutoMode(false);
       }
       setSelectedCourtSlot(null);
     } catch (err: any) {
       setError(err.message || "排點失敗");
+      setIsAutoMode(false);
     } finally {
       setIsMatchmaking(false);
     }
@@ -406,12 +440,14 @@ export function useCourts({
   const handleGoToCourt = async () => {
     if (!hasControl) {
       setError("您目前沒有控制權，請先取得主動權");
+      setIsAutoMode(false);
       return;
     }
     if (recommendedPlayers.some((p) => p === null)) return;
     const emptyCourtIndex = courts.findIndex((c) => c.players.every((p) => p === null));
     if (emptyCourtIndex === -1) {
       setError("沒有空場地可以上場");
+      setIsAutoMode(false);
       return;
     }
 
@@ -429,6 +465,8 @@ export function useCourts({
 
     setSelectedCourtSlot(null);
     await syncToRemote(newCourts, [null, null, null, null], newStatus, ['recommended', newCourts[emptyCourtIndex].id]);
+    
+    if (isAutoMode) triggerCooldown();
   };
 
   const handleEndMatch = (courtId: string) => {
@@ -512,6 +550,7 @@ export function useCourts({
       setError(err.message || "記錄比賽失敗");
     } finally {
       setSubmittingMatch(false);
+      triggerCooldown();
     }
   };
 
@@ -552,6 +591,7 @@ export function useCourts({
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
-    syncToRemote // Expose for Dashboard to update global player zones
+    syncToRemote, // Expose for Dashboard to update global player zones
+    isAutoMode, setIsAutoMode
   };
 }

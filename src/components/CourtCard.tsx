@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import Users from "lucide-react/dist/esm/icons/users";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
+import Zap from "lucide-react/dist/esm/icons/zap";
 import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
 
@@ -19,6 +20,8 @@ interface CourtCardProps {
   onReset?: () => void;
   hasControl?: boolean;
   onCancel?: () => void;
+  isAutoMode?: boolean;
+  onToggleAuto?: () => void;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -94,6 +97,8 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onReset,
   hasControl = true,
   onCancel,
+  isAutoMode,
+  onToggleAuto,
 }) => {
   const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
@@ -137,20 +142,40 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           </div>
         )}
         {isRecommended && onReset && (
-          <button 
-            onClick={(e) => {
-              if (!hasControl) return;
-              e.stopPropagation();
-              onReset();
-            }}
-            className={cn(
-              "p-1 transition-colors",
-              hasControl ? "text-slate-300 hover:text-indigo-500" : "text-slate-200 cursor-not-allowed"
-            )}
-            title={hasControl ? "重置名單" : "無控制權"}
-          >
-            <RotateCcw size={12} strokeWidth={3} />
-          </button>
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <button
+               onClick={(e) => {
+                  if (!hasControl) return;
+                  e.stopPropagation();
+                  onToggleAuto?.();
+               }}
+               className={cn(
+                 "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border",
+                 hasControl ? "cursor-pointer active:scale-95" : "cursor-not-allowed opacity-50",
+                 isAutoMode 
+                   ? "bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm shadow-indigo-200/50 animate-pulse-subtle" 
+                   : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+               )}
+               title={hasControl ? (isAutoMode ? "自動模式已開啟" : "開啟自動模式") : "無控制權"}
+            >
+              <Zap size={10} className={isAutoMode ? "fill-indigo-500" : ""} />
+              Auto
+            </button>
+            <button 
+              onClick={(e) => {
+                if (!hasControl) return;
+                e.stopPropagation();
+                onReset();
+              }}
+              className={cn(
+                "p-1 transition-colors",
+                hasControl ? "text-slate-300 hover:text-indigo-500" : "text-slate-200 cursor-not-allowed"
+              )}
+              title={hasControl ? "重置名單" : "無控制權"}
+            >
+              <RotateCcw size={12} strokeWidth={3} />
+            </button>
+          </div>
         )}
       </div>
 

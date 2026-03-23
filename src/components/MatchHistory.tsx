@@ -165,6 +165,7 @@ export function MatchHistory({
               onChange={(date) => onDateChange?.(date)}
               highlightedDates={allMatchDates}
               className="flex-1"
+              variant="light"
             />
           </div>
 
