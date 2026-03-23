@@ -4,6 +4,8 @@ import Maximize from "lucide-react/dist/esm/icons/maximize";
 import Minimize from "lucide-react/dist/esm/icons/minimize";
 import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
+import { cn } from '../../lib/utils';
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 
 const BadmintonIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
   <svg
@@ -49,11 +51,20 @@ interface DashboardHeaderProps {
   onToggleFullscreen: () => void;
   onRefresh: () => void;
   onSettings: () => void;
+  hasControl: boolean;
+  currentControllerName: string;
+  onTakeover: () => void;
+  isSyncing: boolean;
+  isGuest: boolean;
+  isLockedByMe: boolean;
+  isLockedByOther: boolean;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
-  onToggleBanner, onToggleFullscreen, onRefresh, onSettings
+  onToggleBanner, onToggleFullscreen, onRefresh, onSettings,
+  hasControl, currentControllerName, onTakeover, isSyncing, isGuest,
+  isLockedByMe, isLockedByOther
 }) => {
   return (
     <header className="flex flex-col mb-4 md:mb-6 bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white shrink-0 overflow-hidden">
@@ -83,6 +94,33 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Controls Group (All inline) */}
         <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
+          {/* Controller Status & Takeover */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100 mr-2">
+            <span className={cn(
+              "w-2 h-2 rounded-full",
+              isLockedByMe ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
+              isLockedByOther ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : 
+              "bg-slate-300"
+            )} />
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+                {isLockedByMe ? "您擁有控制權" : isLockedByOther ? "目前控制者" : "自由操作模式"}
+              </span>
+              <span className="text-[11px] font-black text-slate-700 leading-tight">
+                {isLockedByMe ? "可正常操作" : isLockedByOther ? currentControllerName : "未鎖定"}
+              </span>
+            </div>
+            {!isLockedByMe && !isGuest && (
+              <button
+                onClick={onTakeover}
+                disabled={isSyncing}
+                className="ml-2 px-2 py-1 bg-[#0f172a] hover:bg-slate-800 text-white text-[10px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50 border border-slate-700"
+              >
+                {isSyncing ? "切換中..." : "取得控制"}
+              </button>
+            )}
+          </div>
+
           <button
             onClick={onToggleFullscreen}
             className="flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-slate-100 shrink-0"

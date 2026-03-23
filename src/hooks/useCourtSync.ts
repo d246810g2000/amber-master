@@ -7,6 +7,8 @@ export interface CourtSyncState {
     courts: any[];
     playerStatus: Record<string, string>;
     recommendedPlayers: any[];
+    controller?: string | null;
+    controllerName?: string | null;
   } | null;
   updatedAt: string;
   updatedBy: string;
@@ -15,11 +17,15 @@ export interface CourtSyncState {
 interface UseCourtSyncOptions {
   pollingInterval?: number; // 預設 5000 毫秒
   enabled?: boolean;
+  targetDate: string;
 }
 
-export function useCourtSync(options: UseCourtSyncOptions = {}) {
-  const { pollingInterval = 10000, enabled = true } = options;
-  
+export function useCourtSync({
+  pollingInterval = 5000,
+  enabled = true,
+  targetDate
+}: UseCourtSyncOptions) {
+
   const [syncState, setSyncState] = useState<CourtSyncState>({
     version: 0,
     state: null,
@@ -27,36 +33,56 @@ export function useCourtSync(options: UseCourtSyncOptions = {}) {
     updatedBy: ''
   });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   // 用 ref 追蹤最新狀態避免 closure 裡的狀態過期
   const stateRef = useRef(syncState);
   stateRef.current = syncState;
 
+  // 當日期切換時，先清空舊的本地狀態，觸發重新抓取
+  useEffect(() => {
+    setSyncState({
+      version: 0,
+      state: null,
+      updatedAt: '',
+      updatedBy: ''
+    });
+    setIsInitialized(false);
+  }, [targetDate]);
+
   // 定時輪詢 (Polling) 取得最新狀態
   const fetchState = useCallback(async () => {
-    if (!enabled) return;
+    setIsSyncing(true);
+    setSyncError(null);
     try {
-      const data = await gasApi.getCourtState();
+      // gasApi.getCourtState 透過 gasGet 回傳的是 parsed.data.data
+      const data = await gasApi.getCourtState(targetDate);
       
       // 只有當遠端版本高於本地版本時，才觸發更新
-      if (data && data.version > stateRef.current.version && data.state) {
-        setSyncState({
-          version: data.version,
-          state: data.state,
-          updatedAt: data.updatedAt,
-          updatedBy: data.updatedBy
-        });
+      // 或者當尚未初次讀取完成時 (state 為 null)
+      const isNewer = data && data.version > stateRef.current.version;
+      const isFirstLoad = !isInitialized;
+
+      if (data && (isNewer || isFirstLoad)) {
+        setSyncState(data);
       }
-      setSyncError(null);
+      setIsInitialized(true);
     } catch (err: any) {
-      console.warn('Sync fetch failed:', err);
+      // 如果是 404 或找不到日期，gasApi 可能會拋出錯誤，這裡捕捉並顯示
+      console.error('[Sync] Fetch failed:', err);
+      setSyncError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSyncing(false);
     }
-  }, [enabled]);
+  }, [enabled, targetDate, isInitialized]);
+
+  useEffect(() => {
+    fetchState(); // 初始化抓取 (無論是否啟用 polling 都抓一次，為了歷史資料)
+  }, [fetchState]);
 
   useEffect(() => {
     if (!enabled) return;
-    fetchState(); // 初始化抓取
     const timer = setInterval(fetchState, pollingInterval);
     return () => clearInterval(timer);
   }, [enabled, pollingInterval, fetchState]);
@@ -64,7 +90,9 @@ export function useCourtSync(options: UseCourtSyncOptions = {}) {
   // 更新狀態到後端 (含樂觀鎖與重試邏輯)
   const pushState = useCallback(async (
     newState: NonNullable<CourtSyncState['state']>,
-    updatedBy: string = 'user'
+    updatedBy: string = 'user',
+    takeover: boolean = false,
+    updaterName?: string
   ) => {
     setIsSyncing(true);
     setSyncError(null);
@@ -76,19 +104,21 @@ export function useCourtSync(options: UseCourtSyncOptions = {}) {
         const response = await gasApi.updateCourtState({
           expectedVersion,
           state: newState,
-          updatedBy
+          updatedBy,
+          takeover,
+          updaterName
         });
 
         if (response.status === 'success') {
-          // 寫入成功，更新本地版本號
+          // 寫入成功，更新本地版本號與狀態 (優先使用伺服器回傳的狀態，確保 controller 等資訊正確)
           setSyncState({
             version: response.data.version,
-            state: newState,
-            updatedAt: new Date().toISOString(),
-            updatedBy
+            state: response.data.state || newState,
+            updatedAt: response.data.updatedAt || new Date().toISOString(),
+            updatedBy: response.data.updatedBy || updatedBy
           });
           break; // 跳出重試迴圈
-        } else if (response.status === 'conflict') {
+        } else if (response.status === 'conflict' || response.status === 'error' && response.message === 'VERSION_CONFLICT') {
           // 發生衝突
           console.warn('Court state conflict! Fetching latest state and retrying...');
           
@@ -100,8 +130,6 @@ export function useCourtSync(options: UseCourtSyncOptions = {}) {
             updatedBy: response.data.updatedBy
           });
           
-          // 此時前端應該要合併狀態，但因為這裡只負責 API 溝通，
-          // 我們會拋出錯誤讓呼叫端 (useCourts / 畫面) 處理狀態合併，或提示使用者
           throw new Error('VERSION_CONFLICT');
         } else {
           throw new Error(response.message || 'Unknown sync error');
@@ -122,6 +150,7 @@ export function useCourtSync(options: UseCourtSyncOptions = {}) {
   return {
     syncState,
     isSyncing,
+    isSyncInitialized: isInitialized,
     syncError,
     fetchState,
     pushState

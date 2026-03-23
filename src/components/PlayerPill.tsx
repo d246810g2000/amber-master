@@ -14,6 +14,7 @@ interface PlayerPillProps {
   teamColor?: "red" | "blue";
   isFatigued?: boolean;
   isGolden?: boolean;
+  hasControl?: boolean;
 }
 
 export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
@@ -26,6 +27,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   teamColor,
   isFatigued,
   isGolden,
+  hasControl = true,
 }) => {
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
@@ -35,10 +37,15 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
       {status === "ready" && onStatusToggle && (
         <button
           onClick={(e) => {
+            if (!hasControl) return;
             e.stopPropagation();
             onStatusToggle();
           }}
-          className="absolute -top-1.5 -left-1.5 z-20 p-1.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-slate-200 hover:text-slate-800 shadow-sm"
+          disabled={!hasControl}
+          className={cn(
+            "absolute -top-1.5 -left-1.5 z-20 p-1.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 transition-all shadow-sm",
+            hasControl ? "opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-800" : "opacity-0 pointer-events-none"
+          )}
           title="回休息區"
         >
           <Moon size={10} fill="currentColor" />
@@ -46,6 +53,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
       )}
       <button
         onClick={(e) => {
+          if (!hasControl) return;
           e.stopPropagation();
           onClick();
         }}
@@ -53,10 +61,10 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           e.preventDefault();
           onProfileClick();
         }}
-        disabled={status === "playing" || status === "finishing"}
+        disabled={status === "playing" || status === "finishing" || !hasControl}
         className={cn(
           "flex flex-col items-center justify-center p-2 rounded-2xl border-2 transition-all duration-300 shadow-sm w-[68px] h-[80px] md:w-20 md:h-24 relative overflow-hidden",
-          status === "playing"
+          (status === "playing" || !hasControl)
             ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-80"
             : status === "ready"
               ? isSelected

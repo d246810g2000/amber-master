@@ -38,7 +38,7 @@ function doGet(e) {
     'getPlayerStats': () => getPlayerStats(),
     'getPlayerBinding': () => getPlayerBinding(playerId, userEmail),
     'getUserBinding': () => getUserBinding(userEmail),
-    'getCourtState': () => getCourtState(),
+    'getCourtState': () => getCourtState(date),
     'default': () => getPlayers()
   };
 
@@ -488,26 +488,33 @@ function recordMatchAndUpdate(data) {
 
 // ─── 場地狀態同步 (CourtState) ───
 
-/**
- * 確保 CourtState Sheet 存在並已初始化
- * 結構：Row 1 = Headers [Version, State, UpdatedAt, UpdatedBy]
- *        Row 2 = Data    [1, '{...}', '2024-...', 'user']
- */
+/** 確保場地狀態工作表存在並初始化格式 */
 function ensureCourtStateSheet() {
-  const ss = getSs();
-  let sheet = ss.getSheetByName(CONFIG.SHEETS.COURT_STATE);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.COURT_STATE);
+  
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.SHEETS.COURT_STATE);
-    sheet.appendRow(['Version', 'State', 'UpdatedAt', 'UpdatedBy']);
+  }
+
+  // 如果是空表格（連標頭都沒有），則初始化
+  if (sheet.getLastRow() === 0) {
+    // 新增 Date 欄位在最前面
+    sheet.appendRow(['Date', 'Version', 'State', 'UpdatedAt', 'UpdatedBy']);
     const initialState = JSON.stringify({
       courts: [
         { id: '1', name: '1', players: [null, null, null, null], startTime: null },
         { id: '2', name: '2', players: [null, null, null, null], startTime: null }
       ],
       playerStatus: {},
-      recommendedPlayers: [null, null, null, null]
+      recommendedPlayers: [null, null, null, null],
+      controller: null,
+      controllerName: null
     });
-    sheet.appendRow([1, initialState, new Date().toISOString(), 'system']);
+    // 預設寫入今天
+    var todayStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    var nowStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+    sheet.appendRow([todayStr, 1, initialState, "'" + nowStr, 'system']);
   }
   return sheet;
 }
@@ -525,34 +532,64 @@ function normalizeState_(state) {
   return state;
 }
 
-/** 讀取場地狀態 */
-function getCourtState() {
-  var sheet = ensureCourtStateSheet();
-  var data = sheet.getDataRange().getValues();
-
-  if (data.length < 2) {
-    return { status: 'success', data: { version: 0, state: null } };
-  }
-
-  var row = data[1]; // Row 2
-  var version = Number(row[0]) || 0;
-  var state = null;
+/** 讀取場地狀態，支援指定日期 */
+function getCourtState(targetDate) {
   try {
-    state = JSON.parse(row[1]);
-    state = normalizeState_(state); // 讀取時順便修正舊資料
-  } catch (e) {
-    state = null;
-  }
-
-  return {
-    status: 'success',
-    data: {
-      version: version,
-      state: state,
-      updatedAt: row[2] ? String(row[2]) : '',
-      updatedBy: row[3] ? String(row[3]) : ''
+    var sheet = ensureCourtStateSheet();
+    var data = sheet.getDataRange().getValues();
+    
+    // 如果只有標頭或完全沒資料
+    if (data.length < 2) {
+      return { status: 'success', data: { version: 0, state: null, targetDate: targetDate } };
     }
-  };
+    
+    // 如果沒有指定日期，預設抓今天
+    var target = targetDate || Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    
+    // 尋找對應日期的列 (由後往前找最新的)
+    var foundRow = -1;
+    for (var i = data.length - 1; i >= 1; i--) {
+       var rowDate = data[i][0];
+       var rowDateStr = (rowDate instanceof Date) 
+         ? Utilities.formatDate(rowDate, CONFIG.TIMEZONE, 'yyyy-MM-dd')
+         : String(rowDate);
+
+       if (rowDateStr === target) {
+         foundRow = i;
+         break;
+       }
+    }
+
+    if (foundRow === -1) {
+      // 沒找到對應日期：若是未來/過去沒紀錄，回傳空狀態
+      return { status: 'success', data: { version: 0, state: null, targetDate: target } };
+    }
+
+    var row = data[foundRow];
+    var version = Number(row[1]) || 0;
+    var state = null;
+    try {
+      state = JSON.parse(row[2]);
+      state = normalizeState_(state);
+    } catch (e) {
+      console.error('JSON Parse error for state:', e);
+      state = null;
+    }
+
+    return {
+      status: 'success',
+      data: {
+        version: version,
+        state: state,
+        updatedAt: row[3] ? String(row[3]) : '',
+        updatedBy: row[4] ? String(row[4]) : '',
+        targetDate: target
+      }
+    };
+  } catch (err) {
+    console.error('getCourtState failure:', err);
+    return { status: 'error', message: 'getCourtState: ' + err.toString() };
+  }
 }
 
 /** 更新場地狀態（含樂觀鎖與正規化） */
@@ -566,41 +603,91 @@ function updateCourtState(data) {
 
   try {
     var sheet = ensureCourtStateSheet();
-    var sheetData = sheet.getDataRange().getValues();
-    var currentVersion = 0;
-    var currentState = null;
+    var allData = sheet.getDataRange().getValues();
+    var todayStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    
+    // 尋找今天的列
+    var foundRowIndex = -1;
+    for (var i = 1; i < allData.length; i++) {
+      if (String(allData[i][0]) === todayStr) {
+        foundRowIndex = i + 1;
+        break;
+      }
+    }
 
-    if (sheetData.length >= 2) {
-      currentVersion = Number(sheetData[1][0]) || 0;
-      try { currentState = JSON.parse(sheetData[1][1]); } catch (e) {}
+    var currentStateRow = (foundRowIndex !== -1) ? allData[foundRowIndex - 1] : null;
+    var currentVersion = currentStateRow ? Number(currentStateRow[1]) : 0;
+    var currentRawState = currentStateRow ? currentStateRow[2] : null;
+    var currentState = null;
+    if (currentRawState) {
+      try { currentState = JSON.parse(currentRawState); } catch (e) {}
     }
 
     var expectedVersion = Number(data.expectedVersion) || 0;
+    var updatedBy = data.updatedBy || 'unknown';
 
     if (expectedVersion !== currentVersion) {
       return {
-        status: 'conflict',
-        data: {
-          version: currentVersion,
-          state: normalizeState_(currentState),
-          updatedAt: sheetData[1] && sheetData[1][2] ? String(sheetData[1][2]) : '',
-          updatedBy: sheetData[1] && sheetData[1][3] ? String(sheetData[1][3]) : ''
+        status: 'error',
+        message: 'VERSION_CONFLICT',
+        data: { 
+          version: currentVersion, 
+          state: currentState,
+          updatedAt: currentStateRow ? String(currentStateRow[3]) : '',
+          updatedBy: currentStateRow ? String(currentStateRow[4]) : ''
         }
       };
     }
 
+    // 檢查控制權
+    if (!data.takeover) {
+      var currentController = currentState ? currentState.controller : null;
+      if (currentController && currentController !== updatedBy) {
+        return {
+          status: 'error',
+          code: 'NOT_CONTROLLER',
+          message: '目前由 ' + (currentState.controllerName || currentController) + ' 控制中',
+          data: { controller: currentController, controllerName: currentState.controllerName }
+        };
+      }
+    }
+
     // 版本一致：寫入並遞增
     var newVersion = currentVersion + 1;
-    var nowStr = new Date().toISOString();
-    var updatedBy = data.updatedBy || 'unknown';
-    // 寫入前再次正規化，防止臟資料進入 DB
+    var nowStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "yyyy-MM-dd HH:mm:ss");
     var finalState = normalizeState_(data.state);
+    
+    if (data.takeover) {
+      finalState.controller = updatedBy;
+      finalState.controllerName = data.updaterName || updatedBy;
+    } else {
+      finalState.controller = currentState ? currentState.controller : updatedBy;
+      finalState.controllerName = currentState ? currentState.controllerName : (data.updaterName || updatedBy);
+    }
 
-    sheet.getRange(2, 1, 1, 4).setValues([
-      [newVersion, JSON.stringify(finalState), nowStr, updatedBy]
-    ]);
+    var rowValues = [
+      todayStr,
+      newVersion,
+      JSON.stringify(finalState),
+      "'" + nowStr,
+      updatedBy
+    ];
 
-    return { status: 'success', data: { version: newVersion } };
+    if (foundRowIndex !== -1) {
+      sheet.getRange(foundRowIndex, 1, 1, 5).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+
+    return { 
+      status: 'success', 
+      data: { 
+        version: newVersion, 
+        state: finalState,
+        updatedAt: nowStr,
+        updatedBy: updatedBy
+      } 
+    };
   } catch (e) {
     return { status: 'error', message: e.toString() };
   } finally {

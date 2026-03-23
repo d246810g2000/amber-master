@@ -6,6 +6,7 @@ import { Player } from '../types';
 import type { PlayerStatus } from './usePlayers';
 import type { MatchRecord } from '../types';
 import type { CourtSyncState } from './useCourtSync';
+import { useAuth } from '../context/AuthContext';
 
 interface ActiveCourt {
   id: string;
@@ -25,15 +26,17 @@ interface UseCourtsDeps {
   updateLocalPlayers: (updates: any[]) => void;
   ignoreFatigue: boolean;
   syncState: CourtSyncState;
-  pushState: (state: NonNullable<CourtSyncState['state']>) => Promise<void>;
+  pushState: (state: NonNullable<CourtSyncState['state']>, updatedBy?: string, takeover?: boolean, updaterName?: string) => Promise<void>;
+  targetDate: string;
 }
 
 export function useCourts({
   players, playerStatus, setMultipleStatus, matchHistory,
   recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
-  syncState, pushState
+  syncState, pushState, targetDate
 }: UseCourtsDeps) {
 
+  const { currentUser } = useAuth();
   // Local state as fallback or before sync
   const [courts, setCourts] = useState<ActiveCourt[]>([
     { id: "1", name: "1", players: [null, null, null, null], startTime: null },
@@ -41,11 +44,31 @@ export function useCourts({
   ]);
   const [recommendedPlayers, setRecommendedPlayers] = useState<(Player | null)[]>([null, null, null, null]);
   const lastHydratedVersion = useRef(0);
+  const wasPlayersEmpty = useRef(true);
+
+  // 當日期切換時，重置追蹤狀態，強制重新從 syncState 同步
+  useEffect(() => {
+    lastHydratedVersion.current = 0;
+    wasPlayersEmpty.current = true;
+    // 重置球場與推薦名單為空白，等待 fetchState 回來
+    setCourts([
+      { id: "1", name: "1", players: [null, null, null, null], startTime: null },
+      { id: "2", name: "2", players: [null, null, null, null], startTime: null },
+    ]);
+    setRecommendedPlayers([null, null, null, null]);
+  }, [targetDate]);
 
   // Sync state from remote when available
   useEffect(() => {
-    if (syncState.state && syncState.version > lastHydratedVersion.current) {
+    if (!syncState.state) return;
+    
+    // 如果版本更新，或者之前球員名單是空的（但現在有了），就重新 rehydrate
+    const isNewVersion = syncState.version > lastHydratedVersion.current;
+    const isNowPopulated = wasPlayersEmpty.current && players.length > 0;
+
+    if (isNewVersion || isNowPopulated) {
       lastHydratedVersion.current = syncState.version;
+      if (players.length > 0) wasPlayersEmpty.current = false;
       
       // Rehydrate players from ID to objects
        const rehydratePlayers = (playerIds: any[]) => 
@@ -64,7 +87,27 @@ export function useCourts({
       }
 
       if (syncState.state.playerStatus) {
-        setMultipleStatus(syncState.state.playerStatus as Record<string, PlayerStatus>);
+        // 自我修復：確保同步下來的狀態與球場一致
+        const incomingStatus = { ...syncState.state.playerStatus } as Record<string, PlayerStatus>;
+        const playingIds = new Set<string>();
+        
+        // 從同步下來的球場資料中找出所有正在打球的人
+        if (syncState.state.courts) {
+          syncState.state.courts.forEach(c => {
+            if (c.players) {
+              c.players.forEach((pid: string) => { if (pid) playingIds.add(pid); });
+            }
+          });
+        }
+
+        // 修正邏輯
+        Object.keys(incomingStatus).forEach(id => {
+          if (incomingStatus[id] === "playing" && !playingIds.has(id)) {
+            incomingStatus[id] = "ready";
+          }
+        });
+
+        setMultipleStatus(incomingStatus);
       }
     }
   }, [syncState, players]);
@@ -78,14 +121,29 @@ export function useCourts({
     // 1. 先處理本地狀態（包含暫時性的 finishing）
     setCourts(newCourts);
     setRecommendedPlayers(newRecPlayers);
-    if (Object.keys(newStatusOverrides).length > 0) {
-      setMultipleStatus(newStatusOverrides);
+    
+    // 自我修復：確保當前狀態與球場一致
+    // 如果球員狀態是 "playing" 但不在任何球場上，則恢復為 "ready"
+    const playingIds = new Set<string>();
+    newCourts.forEach(c => c.players.forEach(p => { if (p) playingIds.add(p.id); }));
+    
+    const mergedStatus = { ...playerStatus, ...newStatusOverrides };
+    const fixedStatus: Record<string, PlayerStatus> = {};
+    Object.entries(mergedStatus).forEach(([id, status]) => {
+      if (status === "playing" && !playingIds.has(id)) {
+        fixedStatus[id] = "ready";
+      } else {
+        fixedStatus[id] = status;
+      }
+    });
+
+    if (Object.keys(fixedStatus).length > 0) {
+      setMultipleStatus(fixedStatus);
     }
 
     // 2. 準備推送給遠端的狀態：排除 finishing 這種短暫的本地狀態
-    const currentStatus = { ...playerStatus, ...newStatusOverrides };
     const remoteStatus: Record<string, PlayerStatus> = {};
-    Object.entries(currentStatus).forEach(([id, status]) => {
+    Object.entries(fixedStatus).forEach(([id, status]) => {
       // 如果是 finishing，遠端統統視為 ready
       remoteStatus[id] = status === "finishing" ? "ready" : status;
     });
@@ -98,20 +156,56 @@ export function useCourts({
         players: c.players.map(p => p?.id || null)
       })),
       recommendedPlayers: newRecPlayers.map(p => p?.id || null),
-      playerStatus: remoteStatus // 推送過濾後的狀態
+      playerStatus: remoteStatus,
+      controller: syncState.state?.controller || currentUser?.email, // 如果未鎖定，預設為當前操作者
+      controllerName: syncState.state?.controllerName || currentUser?.name || currentUser?.email
     };
 
     try {
-      await pushState(statePayload);
+      await pushState(statePayload, currentUser?.email || 'unknown');
       setError(null);
     } catch (err: any) {
       if (err.message === 'VERSION_CONFLICT') {
         setError("狀態已被其他人修改，已為您同步最新狀態，請重新操作");
+      } else if (err.code === 'NOT_CONTROLLER') {
+        setError(err.message || "您目前沒有控制權，請先取得主動權");
       } else {
         setError("同步失敗: " + err.message);
       }
     }
-  }, [playerStatus, pushState, setMultipleStatus]);
+  }, [playerStatus, pushState, setMultipleStatus, currentUser, syncState.state, courts, recommendedPlayers]);
+
+
+  const handleTakeover = async () => {
+    if (!currentUser) return;
+    
+    // 準備目前的狀態進行推送，但帶上 takeover 旗標
+    const statePayload = {
+      courts: courts.map(c => ({
+        ...c,
+        startTime: c.startTime?.toISOString() || null,
+        players: c.players.map(p => p?.id || null)
+      })),
+      recommendedPlayers: recommendedPlayers.map(p => p?.id || null),
+      playerStatus: playerStatus
+    };
+
+    try {
+      setIsSyncing(true);
+      await pushState(statePayload, currentUser.email, true, currentUser.name);
+      setError(null);
+    } catch (err: any) {
+      setError("取得控制權失敗: " + err.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const hasControl = !!currentUser && (!syncState.state?.controller || syncState.state?.controller === currentUser?.email);
+  const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
+  const isLockedByOther = !!syncState.state?.controller && syncState.state?.controller !== currentUser?.email;
+  const currentControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
+  const isGuest = !currentUser;
 
 
   const [isMatchmaking, setIsMatchmaking] = useState(false);
@@ -120,6 +214,7 @@ export function useCourts({
   const [activeCourtForWinner, setActiveCourtForWinner] = useState<string | null>(null);
   const [submittingMatch, setSubmittingMatch] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleCourtSlotClick = (courtId: string, index: number) => {
     if (!selectedCourtSlot) {
@@ -181,6 +276,11 @@ export function useCourts({
   };
 
   const handleMatchmake = async () => {
+    if (!hasControl) {
+      setError("您目前沒有控制權，請先取得主動權");
+      return;
+    }
+
     const readyPlayerIds = Object.entries(playerStatus)
       .filter(([_, status]) => status === "ready")
       .map(([id]) => id);
@@ -241,6 +341,10 @@ export function useCourts({
   };
 
   const handleGoToCourt = () => {
+    if (!hasControl) {
+      setError("您目前沒有控制權，請先取得主動權");
+      return;
+    }
     if (recommendedPlayers.some((p) => p === null)) return;
     const emptyCourtIndex = courts.findIndex((c) => c.players.every((p) => p === null));
     if (emptyCourtIndex === -1) {
@@ -362,6 +466,7 @@ export function useCourts({
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner,
     getPlayerTeamColor,
+    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isGuest,
     syncToRemote // Expose for Dashboard to update global player zones
   };
 }

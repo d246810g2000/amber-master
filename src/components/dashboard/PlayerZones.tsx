@@ -26,6 +26,7 @@ interface PlayerZonesProps {
   onSetIgnoreFatigue: (v: boolean) => void;
   onAllReady: () => void;
   onAllResting: () => void;
+  hasControl: boolean;
 }
 
 const EMPTY_STATE = (
@@ -41,6 +42,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   loading, isMatchmaking, submittingMatch,
   getPlayerTeamColor, onToggleManualSelection, onTogglePlayerStatus,
   onProfileClick, onSetIgnoreFatigue, onAllReady, onAllResting,
+  hasControl,
 }) => {
   return (
     <>
@@ -65,12 +67,13 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onSetIgnoreFatigue(!ignoreFatigue)}
+              onClick={() => hasControl && onSetIgnoreFatigue(!ignoreFatigue)}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
                 ignoreFatigue
                   ? "bg-amber-100 text-amber-700 border-amber-200"
-                  : "bg-slate-50 text-slate-400 border-slate-100"
+                  : "bg-slate-50 text-slate-400 border-slate-100",
+                !hasControl && "opacity-50 cursor-not-allowed"
               )}
               title={ignoreFatigue ? "無視疲勞已開啟 (不再避開連場球員)" : "忽視疲勞已關閉"}
             >
@@ -79,7 +82,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
             </button>
             <button
               onClick={onAllResting}
-              disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking}
+              disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking || !hasControl}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
             >
               全員休息
@@ -96,9 +99,10 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 isSelected={recommendedPlayers.some((rp) => rp?.id === p.id)}
                 isFatigued={!ignoreFatigue && fatiguedPlayerIds.has(p.id)}
                 teamColor={getPlayerTeamColor(p.id)}
-                onClick={() => onToggleManualSelection(p.id)}
-                onStatusToggle={() => onTogglePlayerStatus(p.id)}
+                onClick={() => hasControl && onToggleManualSelection(p.id)}
+                onStatusToggle={() => hasControl && onTogglePlayerStatus(p.id)}
                 onProfileClick={() => onProfileClick(p.id)}
+                hasControl={hasControl}
               />
             ))}
             {playingPlayers.map((p) => (
@@ -109,6 +113,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 teamColor={getPlayerTeamColor(p.id)}
                 onClick={() => {}}
                 onProfileClick={() => onProfileClick(p.id)}
+                hasControl={hasControl}
               />
             ))}
             {readyPlayers.length === 0 && playingPlayers.length === 0 && EMPTY_STATE}
@@ -127,7 +132,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
           </div>
           <button
             onClick={onAllReady}
-            disabled={restingPlayers.length === 0 || submittingMatch || isMatchmaking}
+            disabled={restingPlayers.length === 0 || submittingMatch || isMatchmaking || !hasControl}
             className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
           >
             全員備戰
@@ -141,8 +146,9 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 player={p}
                 status="resting"
                 isFatigued={!ignoreFatigue && fatiguedPlayerIds.has(p.id)}
-                onClick={() => onTogglePlayerStatus(p.id)}
+                onClick={() => hasControl && onTogglePlayerStatus(p.id)}
                 onProfileClick={() => onProfileClick(p.id)}
+                hasControl={hasControl}
               />
             ))}
           </div>
@@ -151,3 +157,33 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
     </>
   );
 };
+
+export const PlayerZonesSkeleton: React.FC = () => (
+  <div className="flex flex-col gap-4 md:gap-6 animate-pulse-heavy">
+    {/* Ready Zone Skeleton */}
+    <div className="bg-white rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col min-h-[300px] md:min-h-[400px]">
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-6 w-24 bg-slate-100 rounded-lg" />
+        <div className="h-6 w-32 bg-slate-100 rounded-lg" />
+      </div>
+      <div className="flex flex-wrap gap-3 p-2">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+          <div key={i} className="h-8 w-20 bg-slate-100 rounded-full" />
+        ))}
+      </div>
+    </div>
+
+    {/* Resting Zone Skeleton */}
+    <div className="bg-white rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col min-h-[150px] md:min-h-[250px]">
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-5 w-20 bg-slate-100 rounded-lg" />
+        <div className="h-6 w-24 bg-slate-100 rounded-lg" />
+      </div>
+      <div className="flex flex-wrap gap-3 p-2">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="h-8 w-20 bg-slate-100 rounded-full" />
+        ))}
+      </div>
+    </div>
+  </div>
+);

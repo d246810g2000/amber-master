@@ -11,6 +11,12 @@
   }
   --animate-pulse-subtle: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
+  @keyframes pulse-heavy {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  --animate-pulse-heavy: pulse-heavy 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
   @keyframes bounce-stat {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }

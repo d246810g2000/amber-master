@@ -18,6 +18,7 @@ interface CourtCardProps {
   onSlotClick?: (index: number) => void;
   selectedSlotIndex?: number | null;
   onReset?: () => void;
+  hasControl?: boolean;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -91,6 +92,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onSlotClick,
   selectedSlotIndex,
   onReset,
+  hasControl = true,
 }) => {
   const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
@@ -136,11 +138,15 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
         {isRecommended && onReset && (
           <button 
             onClick={(e) => {
+              if (!hasControl) return;
               e.stopPropagation();
               onReset();
             }}
-            className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
-            title="重置名單"
+            className={cn(
+              "p-1 transition-colors",
+              hasControl ? "text-slate-300 hover:text-indigo-500" : "text-slate-200 cursor-not-allowed"
+            )}
+            title={hasControl ? "重置名單" : "無控制權"}
           >
             <RotateCcw size={12} strokeWidth={3} />
           </button>
@@ -239,8 +245,8 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           {isRecommended && onSelectPlayers && (
             <button
               onClick={onSelectPlayers}
-              disabled={isLoading}
-              className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 border border-indigo-100 hover:bg-black hover:text-white hover:border-black rounded-xl transition-all active:scale-95 bg-indigo-50/30 flex items-center justify-center"
+              disabled={isLoading || !hasControl}
+              className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 border border-indigo-100 hover:bg-black hover:text-white hover:border-black rounded-xl transition-all active:scale-95 bg-indigo-50/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
             </button>
@@ -263,3 +269,42 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
     </div>
   );
 });
+
+export const CourtCardSkeleton: React.FC = () => (
+  <div className="bg-white rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 w-full max-w-[340px] md:max-w-[220px] mx-auto animate-pulse-heavy">
+    {/* Skeleton Header */}
+    <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-50 h-[42px]">
+      <div className="flex items-center gap-1.5">
+        <div className="w-1.5 h-1.5 rounded-full bg-slate-200" />
+        <div className="h-2 w-16 bg-slate-200 rounded" />
+      </div>
+      <div className="h-4 w-10 bg-slate-200 rounded" />
+    </div>
+
+    {/* Skeleton Court Floor */}
+    <div className="relative bg-slate-100 h-[220px] md:h-[300px]">
+      <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/40" />
+      <div className="absolute inset-x-0 top-[35.3%] h-0 border-t-[1.5px] border-white/60" />
+      <div className="absolute inset-x-0 bottom-[35.3%] h-0 border-t-[1.5px] border-white/60" />
+      
+      {/* Skeleton Player Slots */}
+      {[0, 1, 2, 3].map((i) => (
+        <div 
+          key={i}
+          className={cn(
+            "absolute bg-white/30 rounded-xl",
+            i === 0 && "left-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]",
+            i === 1 && "right-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]",
+            i === 2 && "left-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]",
+            i === 3 && "right-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
+          )}
+        />
+      ))}
+    </div>
+
+    {/* Skeleton Footer */}
+    <div className="p-2 h-[52px] border-t border-slate-50/50 flex items-center justify-center">
+      <div className="h-8 w-3/4 bg-slate-100 rounded-xl" />
+    </div>
+  </div>
+);

@@ -157,11 +157,13 @@ export async function getUserBinding(userEmail: string) {
 }
 
 
-export async function getCourtState() {
-  return gasGet({ action: 'getCourtState' }, z.any());
+export async function getCourtState(date?: string) {
+  const params: Record<string, any> = { action: 'getCourtState' };
+  if (date) params.date = date;
+  return gasGet(params, z.any());
 }
 
-export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string }) {
+export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string; takeover?: boolean; updaterName?: string }) {
   // 這裡不使用 gasPost 解析 success/error，因為 conflict 時我們也要拿 data
   const res = await fetch(GAS_URL, {
     method: 'POST',

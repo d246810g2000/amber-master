@@ -331,3 +331,32 @@ export function MatchHistory({
     </div>
   );
 }
+
+export const MatchHistorySkeleton: React.FC = () => (
+  <div className="space-y-3 px-1 animate-pulse-heavy">
+    {[1, 2, 3, 4, 5].map(i => (
+      <div key={i} className="bg-white rounded-[1.2rem] flex items-stretch h-[88px] border border-slate-100 shadow-sm relative overflow-hidden">
+        <div className="w-2 bg-slate-100/50 shrink-0" />
+        <div className="flex-1 py-3 px-2 flex flex-row items-center justify-between gap-2">
+          {/* Team 1 Skeleton */}
+          <div className="flex flex-col gap-2 flex-1">
+            <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-12 bg-slate-100 rounded" /></div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
+          </div>
+          {/* VS Skeleton */}
+          <div className="flex flex-col items-center justify-center gap-1 w-[24%] border-x border-slate-50/60">
+            <div className="h-2 w-8 bg-slate-100 rounded" />
+            <div className="h-4 w-12 bg-slate-100 rounded-full" />
+            <div className="h-2 w-6 bg-slate-100 rounded" />
+          </div>
+          {/* Team 2 Skeleton */}
+          <div className="flex flex-col gap-2 flex-1 items-end">
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-12 bg-slate-100 rounded" /></div>
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
+          </div>
+        </div>
+        <div className="w-2 bg-slate-100/50 shrink-0" />
+      </div>
+    ))}
+  </div>
+);
