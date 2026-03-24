@@ -4,6 +4,24 @@
 //   推播目標 to（擇一即可，優先序由上到下）：
 //   LINE_PUSH_TO — 手動指定群組／聊天室 ID
 //   LINE_LAST_PUSH_TO_CANDIDATE — Webhook 自動寫入（見 02_Api.logLineWebhookIds_），免再複製
+// 除錯（推播後自動寫入，無須看執行記錄）：LINE_PUSH_DIAG_STATUS、LINE_PUSH_DIAG_MESSAGE、LINE_PUSH_DIAG_AT
+
+/** 將推播結果寫入指令碼屬性，執行項目若看不到記錄可改看「專案設定 → 指令碼屬性」。 */
+function recordLinePushDiagnostic_(status, detail) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const at = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    let msg = detail != null ? String(detail) : '';
+    if (msg.length > 4000) {
+      msg = msg.substring(0, 4000) + '…';
+    }
+    props.setProperty('LINE_PUSH_DIAG_STATUS', status);
+    props.setProperty('LINE_PUSH_DIAG_MESSAGE', msg);
+    props.setProperty('LINE_PUSH_DIAG_AT', at);
+  } catch (e) {
+    console.error('recordLinePushDiagnostic_:', e);
+  }
+}
 
 /** @returns {{ token: string|null, to: string|null }} */
 function getLinePushConfig_() {
@@ -316,7 +334,19 @@ function buildLineFlexBubbleForCourt_(court, nameMap, instantMuMap) {
 
 function pushLineMessages_(messages) {
   const cfg = getLinePushConfig_();
-  if (!cfg.token || !cfg.to || !messages || !messages.length) {
+  if (!messages || !messages.length) {
+    return;
+  }
+  if (!cfg.token) {
+    const t = '缺少 LINE_CHANNEL_ACCESS_TOKEN（或已失效，請到 LINE Developers 重貼 token）';
+    console.error('LINE push 略過：' + t);
+    recordLinePushDiagnostic_('skip_no_token', t);
+    return;
+  }
+  if (!cfg.to) {
+    const t = '缺少推播目標：請設 LINE_PUSH_TO，或刪錯誤的 LINE_PUSH_TO 以使用 Webhook 寫入的 LINE_LAST_PUSH_TO_CANDIDATE';
+    console.error('LINE push 略過：' + t);
+    recordLinePushDiagnostic_('skip_no_to', t);
     return;
   }
   try {
@@ -331,11 +361,17 @@ function pushLineMessages_(messages) {
       muteHttpExceptions: true
     });
     const code = res.getResponseCode();
+    const body = res.getContentText();
     if (code < 200 || code >= 300) {
-      console.error('LINE push HTTP ' + code + ': ' + res.getContentText());
+      console.error('LINE push HTTP ' + code + ': ' + body);
+      recordLinePushDiagnostic_('http_' + code, 'HTTP ' + code + ' ' + body);
+    } else {
+      recordLinePushDiagnostic_('ok', 'HTTP ' + code);
     }
   } catch (e) {
+    const errStr = e && e.toString ? e.toString() : String(e);
     console.error('pushLineMessages_ error:', e);
+    recordLinePushDiagnostic_('exception', errStr);
   }
 }
 
