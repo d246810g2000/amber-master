@@ -107,7 +107,7 @@ export function useCourtSync({
     updatedBy: string = 'user',
     takeover: boolean = false,
     updaterName?: string,
-    options?: { silent?: boolean }
+    options?: { silent?: boolean, enableLine?: boolean }
   ) => {
     const silent = options?.silent === true;
     if (!silent) setIsPushing(true);
@@ -119,7 +119,8 @@ export function useCourtSync({
         state: newState,
         updatedBy,
         takeover,
-        updaterName
+        updaterName,
+        enableLine: options?.enableLine
       });
 
       if (response.status === 'success') {

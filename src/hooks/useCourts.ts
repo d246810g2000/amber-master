@@ -59,7 +59,7 @@ interface UseCourtsDeps {
     updatedBy?: string,
     takeover?: boolean,
     updaterName?: string,
-    options?: { silent?: boolean }
+    options?: { silent?: boolean, enableLine?: boolean }
   ) => Promise<void>;
   targetDate: string;
 }
@@ -318,7 +318,10 @@ export function useCourts({
           currentUser?.email || 'unknown',
           false,
           currentUser?.name,
-          { silent: !blocking }
+          { 
+            silent: !blocking,
+            enableLine: localStorage.getItem('lineNotifications') !== 'false' // 預設為 true，除非明確設為 false
+          }
         );
         setError(null);
       } catch (err: any) {
@@ -363,7 +366,9 @@ export function useCourts({
     await enqueueRemoteWrite(async () => {
       setIsLocalSyncing(true);
       try {
-        await pushState(statePayload, currentUser.email, true, currentUser.name);
+        await pushState(statePayload, currentUser.email, true, currentUser.name, {
+          enableLine: localStorage.getItem('lineNotifications') !== 'false'
+        });
         setError(null);
       } catch (err: any) {
         setError("取得控制權失敗: " + err.message);

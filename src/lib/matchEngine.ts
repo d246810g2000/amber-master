@@ -449,7 +449,7 @@ export function getPlayerHistory(
 }
 
 /**
- * 計算綜合戰力 (從歷史第一場到最後一場逐場推算)
+ * 計算生涯戰力 (從歷史第一場到最後一場逐場推算)
  */
 export function calculateComprehensiveMu(
   basePlayers: RawPlayer[],

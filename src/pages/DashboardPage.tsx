@@ -6,7 +6,7 @@ import { useMatches } from "../hooks/useMatches";
 import { useCourts } from "../hooks/useCourts";
 import { useCourtSync } from "../hooks/useCourtSync";
 import { MatchHistory, MatchHistorySkeleton } from "../components/MatchHistory";
-import { ManagePlayers } from "../components/ManagePlayers";
+import { SettingsModal } from "../components/SettingsModal";
 import { WinnerModal } from "../components/WinnerModal";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { PlayerZones, PlayerZonesSkeleton } from "../components/dashboard/PlayerZones";
@@ -298,11 +298,13 @@ export function DashboardPage() {
       </div>
 
       {isSettingsOpen && (
-        <ManagePlayers
+        <SettingsModal
           players={players}
           onUpdate={() => { refetchPlayers(); refetchMatches(); }}
           onSelectPlayer={(id) => navigate(`/players/${id}`)}
           onClose={() => setIsSettingsOpen(false)}
+          ignoreFatigue={ignoreFatigue}
+          onSetIgnoreFatigue={setIgnoreFatigue}
         />
       )}
 

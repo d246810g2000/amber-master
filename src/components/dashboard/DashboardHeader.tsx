@@ -132,7 +132,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <button
             onClick={onSettings}
             className="flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 active:scale-95 shrink-0"
-            title="設定與新增球員"
+            title="主控台"
           >
             <Settings className="w-3.5 h-3.5 md:w-5 md:h-5" />
           </button>

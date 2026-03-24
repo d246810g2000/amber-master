@@ -197,10 +197,12 @@ function updateCourtState(data) {
       sheet.appendRow(rowValues);
     }
 
-    try {
-      notifyLineCourtNewPlayers_(currentState, finalState);
-    } catch (lineErr) {
-      console.error('notifyLineCourtNewPlayers_ error:', lineErr);
+    if (data.enableLine !== false) {
+      try {
+        notifyLineCourtNewPlayers_(currentState, finalState);
+      } catch (lineErr) {
+        console.error('notifyLineCourtNewPlayers_ error:', lineErr);
+      }
     }
 
     return {

@@ -163,7 +163,7 @@ export async function getCourtState(date?: string) {
   return gasGet(params, z.any());
 }
 
-export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string; takeover?: boolean; updaterName?: string }) {
+export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string; takeover?: boolean; updaterName?: string; enableLine?: boolean }) {
   // 這裡不使用 gasPost 解析 success/error，因為 conflict 時我們也要拿 data
   const res = await fetch(GAS_URL, {
     method: 'POST',
