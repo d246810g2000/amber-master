@@ -70,6 +70,17 @@ Push 到 `main` 分支後，GitHub Actions 會自動執行：
 npm run deploy
 ```
 
+### Google Apps Script（後端程式碼同步）
+
+使用 [clasp](https://github.com/google/clasp) 將 `google-apps-script/` 推送至測試／正式專案（需先 `npx clasp login`）。詳見 [google-apps-script/CLASP.md](google-apps-script/CLASP.md)。
+
+```bash
+npm run gas:push:test   # 測試站 scriptId
+npm run gas:push:prod   # 正式站 scriptId
+```
+
+LINE 推播：在「指令碼屬性」設定 `LINE_CHANNEL_ACCESS_TOKEN`；推播目標可設 `LINE_PUSH_TO`，或由 Webhook 寫入的 `LINE_LAST_PUSH_TO_CANDIDATE`（見 `google-apps-script/02_Api.gs`）。
+
 ## 📁 專案結構
 
 ```
@@ -90,7 +101,13 @@ npm run deploy
 │       └── utils.ts             # 工具函式
 ├── public/
 │   └── 404.html                 # SPA routing fallback
-├── google-apps-script.js        # GAS 後端程式碼 (部署於 Google)
+├── google-apps-script/          # GAS 後端（clasp 同步，見 CLASP.md）
+│   ├── appsscript.json
+│   ├── clasp.test.json / clasp.prod.json
+│   ├── 00_Config.gs … 06_Line.gs
+│   └── CLASP.md
+├── scripts/
+│   └── gas-clasp.mjs            # npm run gas:push:test / gas:push:prod
 ├── vite.config.ts
 ├── package.json
 └── .github/workflows/deploy.yml # CI/CD 自動部署

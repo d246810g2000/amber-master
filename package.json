@@ -12,7 +12,13 @@
     "lint": "tsc --noEmit",
     "sim": "npx tsx sim/comprehensiveSim.ts",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "gas:push:test": "node scripts/gas-clasp.mjs push test",
+    "gas:push:prod": "node scripts/gas-clasp.mjs push prod",
+    "gas:pull:test": "node scripts/gas-clasp.mjs pull test",
+    "gas:pull:prod": "node scripts/gas-clasp.mjs pull prod",
+    "gas:open:test": "node scripts/gas-clasp.mjs open test",
+    "gas:open:prod": "node scripts/gas-clasp.mjs open prod"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
@@ -36,6 +42,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@google/clasp": "^3.1.0",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "gh-pages": "^6.3.0",

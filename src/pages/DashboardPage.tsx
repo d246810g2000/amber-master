@@ -82,6 +82,7 @@ export function DashboardPage() {
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
+    isRemoteSyncPending,
     syncToRemote,
     isAutoMode, setIsAutoMode
   } = useCourts({
@@ -93,6 +94,10 @@ export function DashboardPage() {
   });
 
   const isInitialLoading = playersLoading || historyLoading || !isSyncInitialized;
+
+  const isRecommendedFull =
+    recommendedPlayers.length === 4 &&
+    recommendedPlayers.every((p) => p !== null && p !== undefined);
 
   const readyPlayers: typeof players = [];
   const restingPlayers: typeof players = [];
@@ -221,8 +226,13 @@ export function DashboardPage() {
                     onAction={handleGoToCourt}
                     onSelectPlayers={handleMatchmake}
                     onReset={handleResetRecommended}
-                    isLoading={isMatchmaking || submittingMatch || syncingCourtIds.includes('recommended')}
-                    isActionDisabled={!hasControl}
+                    isLoading={
+                      isMatchmaking ||
+                      syncingCourtIds.includes('recommended') ||
+                      (isRecommendedFull && isRemoteSyncPending)
+                    }
+                    isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
+                    isPrimaryActionLocked={isRemoteSyncPending}
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
                     selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
                     hasControl={hasControl}
@@ -245,7 +255,6 @@ export function DashboardPage() {
               recommendedPlayers={recommendedPlayers}
               fatiguedPlayerIds={fatiguedPlayerIds}
               ignoreFatigue={ignoreFatigue}
-              loading={loading || isLocalSyncing}
               isMatchmaking={isMatchmaking}
               submittingMatch={submittingMatch}
               getPlayerTeamColor={getPlayerTeamColor}

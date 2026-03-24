@@ -16,7 +16,6 @@ interface PlayerZonesProps {
   recommendedPlayers: (Player | null)[];
   fatiguedPlayerIds: Set<string>;
   ignoreFatigue: boolean;
-  loading: boolean;
   isMatchmaking: boolean;
   submittingMatch: boolean;
   getPlayerTeamColor: (id: string) => "red" | "blue" | undefined;
@@ -39,7 +38,7 @@ const EMPTY_STATE = (
 export const PlayerZones: React.FC<PlayerZonesProps> = ({
   readyPlayers, restingPlayers, playingPlayers, playerStatus,
   recommendedPlayers, fatiguedPlayerIds, ignoreFatigue,
-  loading, isMatchmaking, submittingMatch,
+  isMatchmaking, submittingMatch,
   getPlayerTeamColor, onToggleManualSelection, onTogglePlayerStatus,
   onProfileClick, onSetIgnoreFatigue, onAllReady, onAllResting,
   hasControl,
@@ -48,12 +47,12 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
     <>
       {/* Ready Zone */}
       <div className="bg-white rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col relative shrink-0 min-h-[300px] md:min-h-[400px]">
-        {(loading || isMatchmaking) && (
+        {isMatchmaking && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-[2rem]">
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin flex"><RefreshCw className="w-8 h-8 text-emerald-500" /></div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                {isMatchmaking ? "配對中..." : "載入中..."}
+                配對中...
               </p>
             </div>
           </div>

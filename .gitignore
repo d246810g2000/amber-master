@@ -6,6 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+# clasp 執行時由 clasp.test.json / clasp.prod.json 產生，勿提交
+google-apps-script/.clasp.json
 .agent/
 .agents/
 skills-lock.json

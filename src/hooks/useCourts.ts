@@ -16,6 +16,32 @@ interface ActiveCourt {
   matchId?: string;
 }
 
+/**
+ * 輪詢或 push 完成會 bump syncState.version，但推薦列在「本地草稿」或「遠端寫入佇列中」時不要用遠端快照覆寫。
+ */
+function canApplyRecommendedFromRemote(
+  pendingRemoteWrites: number,
+  localRecommendedDraftUnsynced: boolean
+): boolean {
+  return pendingRemoteWrites === 0 && !localRecommendedDraftUnsynced;
+}
+
+/** 將球員放入某一格時，同列（同一推薦列或同一球場）其他格不得再出現同一人 */
+function placePlayerUniqueInRow(
+  row: (Player | null)[],
+  index: number,
+  player: Player
+): (Player | null)[] {
+  const out = [...row];
+  for (let i = 0; i < out.length; i++) {
+    if (i !== index && out[i]?.id === player.id) {
+      out[i] = null;
+    }
+  }
+  out[index] = player;
+  return out;
+}
+
 interface UseCourtsDeps {
   players: DerivedPlayer[];
   playerStatus: Record<string, PlayerStatus>;
@@ -28,7 +54,13 @@ interface UseCourtsDeps {
   syncState: CourtSyncState;
   isFetching: boolean;
   isPushing: boolean;
-  pushState: (state: NonNullable<CourtSyncState['state']>, updatedBy?: string, takeover?: boolean, updaterName?: string) => Promise<void>;
+  pushState: (
+    state: NonNullable<CourtSyncState['state']>,
+    updatedBy?: string,
+    takeover?: boolean,
+    updaterName?: string,
+    options?: { silent?: boolean }
+  ) => Promise<void>;
   targetDate: string;
 }
 
@@ -77,10 +109,51 @@ export function useCourts({
   // Refs
   const lastHydratedVersion = useRef(0);
   const wasPlayersEmpty = useRef(true);
+  /** 連點備戰／休息時合併狀態用，避免 closure 內 playerStatus 尚未更新 */
+  const playerStatusRef = useRef(playerStatus);
+  /** 序列化寫入 GAS，避免並發 push 造成版本衝突 */
+  const pushQueueRef = useRef(Promise.resolve());
+  /** 尚未完成的遠端寫入次數（含佇列中）；唯一權威在 state，供 UI 重繪 */
+  const [pendingRemoteSyncCount, setPendingRemoteSyncCount] = useState(0);
+  /** 與上一致，供 effect／handler 同步讀取（避免閉包讀到舊的 pending state） */
+  const pendingRemoteMirrorRef = useRef(0);
+  /**
+   * 備戰區僅本地變更、尚未寫入後端（1～3 人階段 batch 時）。
+   * 為 true 時不要用遠端快照覆寫推薦區。
+   */
+  const localRecommendedUnsyncedRef = useRef(false);
+
+  useEffect(() => {
+    playerStatusRef.current = playerStatus;
+  }, [playerStatus]);
+
+  /** 序列化 pushState、統一 pending 計數（syncToRemote、handleTakeover 共用） */
+  const enqueueRemoteWrite = useCallback(async (run: () => Promise<void>) => {
+    setPendingRemoteSyncCount((c) => {
+      const n = c + 1;
+      pendingRemoteMirrorRef.current = n;
+      return n;
+    });
+    try {
+      const prev = pushQueueRef.current;
+      const next = prev.then(() => run());
+      pushQueueRef.current = next.catch(() => {});
+      await next;
+    } finally {
+      setPendingRemoteSyncCount((c) => {
+        const n = Math.max(0, c - 1);
+        pendingRemoteMirrorRef.current = n;
+        return n;
+      });
+    }
+  }, []);
 
   // 當日期切換時，重置追蹤狀態，強制重新從 syncState 同步
   useEffect(() => {
     lastHydratedVersion.current = 0;
+    pendingRemoteMirrorRef.current = 0;
+    setPendingRemoteSyncCount(0);
+    localRecommendedUnsyncedRef.current = false;
     wasPlayersEmpty.current = true;
     // 重置球場與推薦名單為空白，等待 fetchState 回來
     setCourts([
@@ -114,7 +187,13 @@ export function useCourts({
         })));
       }
 
-      if (syncState.state.recommendedPlayers) {
+      if (
+        syncState.state.recommendedPlayers &&
+        canApplyRecommendedFromRemote(
+          pendingRemoteMirrorRef.current,
+          localRecommendedUnsyncedRef.current
+        )
+      ) {
         setRecommendedPlayers(rehydratePlayers(syncState.state.recommendedPlayers));
       }
 
@@ -152,7 +231,7 @@ export function useCourts({
 
   // Auto Mode Logic
   useEffect(() => {
-    if (!isAutoMode || !hasControl || !autoActionReady || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching) return;
+    if (!isAutoMode || !hasControl || !autoActionReady || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching || pendingRemoteSyncCount > 0) return;
 
     const hasEmptyCourt = courts.some(c => c.players.every(p => p === null));
     const isRecommendedFull = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p !== null && p !== undefined);
@@ -169,7 +248,7 @@ export function useCourts({
         handleMatchmake();
       }
     }
-  }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching]);
+  }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching, pendingRemoteSyncCount]);
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
@@ -178,77 +257,97 @@ export function useCourts({
     newStatusOverrides: Record<string, PlayerStatus> = {},
     affectedCourtIds: string[] = []
   ) => {
-    if (isSyncing) return;
+    localRecommendedUnsyncedRef.current = false;
+    await enqueueRemoteWrite(async () => {
+      /** 有場地／推薦卡 id 時顯示 loading（blocking）；僅改狀態時 silent push，不鎖 isPushing／整頁操作 */
+      const blocking = affectedCourtIds.length > 0;
 
-    // 1. 先處理本地狀態（包含暫時性的 finishing）
-    setCourts(newCourts);
-    setRecommendedPlayers(newRecPlayers);
+      // 1. 先處理本地狀態（包含暫時性的 finishing）
+      setCourts(newCourts);
+      setRecommendedPlayers(newRecPlayers);
 
-    // 自我修復：確保當前狀態與球場一致
-    // 如果球員狀態是 "playing" 但不在任何球場上，則恢復為 "ready"
-    const playingIds = new Set<string>();
-    newCourts.forEach(c => c.players.forEach(p => { if (p) playingIds.add(p.id); }));
+      // 自我修復：確保當前狀態與球場一致
+      // 如果球員狀態是 "playing" 但不在任何球場上，則恢復為 "ready"
+      const playingIds = new Set<string>();
+      newCourts.forEach(c => c.players.forEach(p => { if (p) playingIds.add(p.id); }));
 
-    const mergedStatus = { ...playerStatus, ...newStatusOverrides };
-    const fixedStatus: Record<string, PlayerStatus> = {};
-    Object.entries(mergedStatus).forEach(([id, status]) => {
-      if (status === "playing" && !playingIds.has(id)) {
-        fixedStatus[id] = "ready";
-      } else {
-        fixedStatus[id] = status;
+      const mergedStatus = { ...playerStatusRef.current, ...newStatusOverrides };
+      const fixedStatus: Record<string, PlayerStatus> = {};
+      Object.entries(mergedStatus).forEach(([id, status]) => {
+        if (status === "playing" && !playingIds.has(id)) {
+          fixedStatus[id] = "ready";
+        } else {
+          fixedStatus[id] = status;
+        }
+      });
+
+      if (Object.keys(fixedStatus).length > 0) {
+        playerStatusRef.current = fixedStatus;
+        setMultipleStatus(fixedStatus);
+      }
+
+      // 2. 準備推送給遠端的狀態：排除 finishing 這種短暫的本地狀態
+      const remoteStatus: Record<string, PlayerStatus> = {};
+      Object.entries(fixedStatus).forEach(([id, status]) => {
+        // 如果是 finishing，遠端統統視為 ready
+        remoteStatus[id] = status === "finishing" ? "ready" : status;
+      });
+
+      // 壓縮資料，只存 IDs，減輕網路負擔
+      const statePayload = {
+        courts: newCourts.map(c => ({
+          ...c,
+          startTime: c.startTime?.toISOString() || null,
+          players: c.players.map(p => p?.id || null)
+        })),
+        recommendedPlayers: newRecPlayers.map(p => p?.id || null),
+        playerStatus: remoteStatus,
+        controller: syncState.state?.controller || currentUser?.email, // 如果未鎖定，預設為當前操作者
+        controllerName: syncState.state?.controllerName || currentUser?.name || currentUser?.email
+      };
+
+      if (blocking) {
+        setIsLocalSyncing(true);
+        if (affectedCourtIds.length > 0) {
+          setSyncingCourtIds(prev => Array.from(new Set([...prev, ...affectedCourtIds])));
+        }
+      }
+      try {
+        await pushState(
+          statePayload,
+          currentUser?.email || 'unknown',
+          false,
+          currentUser?.name,
+          { silent: !blocking }
+        );
+        setError(null);
+      } catch (err: any) {
+        if (err.message === 'VERSION_CONFLICT') {
+          setError("狀態已被其他人修改，已為您同步最新狀態，請重新操作");
+        } else if (err.code === 'NOT_CONTROLLER') {
+          setError(err.message || "您目前沒有控制權，請先取得主動權");
+        } else {
+          setError("同步失敗: " + err.message);
+        }
+      } finally {
+        if (blocking) {
+          setIsLocalSyncing(false);
+          if (affectedCourtIds.length > 0) {
+            setSyncingCourtIds(prev => prev.filter(id => !affectedCourtIds.includes(id)));
+          }
+        }
       }
     });
-
-    if (Object.keys(fixedStatus).length > 0) {
-      setMultipleStatus(fixedStatus);
-    }
-
-    // 2. 準備推送給遠端的狀態：排除 finishing 這種短暫的本地狀態
-    const remoteStatus: Record<string, PlayerStatus> = {};
-    Object.entries(fixedStatus).forEach(([id, status]) => {
-      // 如果是 finishing，遠端統統視為 ready
-      remoteStatus[id] = status === "finishing" ? "ready" : status;
-    });
-
-    // 壓縮資料，只存 IDs，減輕網路負擔
-    const statePayload = {
-      courts: newCourts.map(c => ({
-        ...c,
-        startTime: c.startTime?.toISOString() || null,
-        players: c.players.map(p => p?.id || null)
-      })),
-      recommendedPlayers: newRecPlayers.map(p => p?.id || null),
-      playerStatus: remoteStatus,
-      controller: syncState.state?.controller || currentUser?.email, // 如果未鎖定，預設為當前操作者
-      controllerName: syncState.state?.controllerName || currentUser?.name || currentUser?.email
-    };
-
-    try {
-      setIsLocalSyncing(true);
-      if (affectedCourtIds.length > 0) {
-        setSyncingCourtIds(prev => Array.from(new Set([...prev, ...affectedCourtIds])));
-      }
-      await pushState(statePayload, currentUser?.email || 'unknown', false, currentUser?.name);
-      setError(null);
-    } catch (err: any) {
-      if (err.message === 'VERSION_CONFLICT') {
-        setError("狀態已被其他人修改，已為您同步最新狀態，請重新操作");
-      } else if (err.code === 'NOT_CONTROLLER') {
-        setError(err.message || "您目前沒有控制權，請先取得主動權");
-      } else {
-        setError("同步失敗: " + err.message);
-      }
-    } finally {
-      setIsLocalSyncing(false);
-      if (affectedCourtIds.length > 0) {
-        setSyncingCourtIds(prev => prev.filter(id => !affectedCourtIds.includes(id)));
-      }
-    }
-  }, [playerStatus, pushState, setMultipleStatus, currentUser, syncState.state, courts, recommendedPlayers, isFetching, isPushing, isLocalSyncing]);
+  }, [enqueueRemoteWrite, pushState, setMultipleStatus, currentUser, syncState.state]);
 
 
   const handleTakeover = async () => {
     if (!currentUser) return;
+
+    const remoteStatus: Record<string, PlayerStatus> = {};
+    Object.entries(playerStatusRef.current).forEach(([id, status]) => {
+      remoteStatus[id] = status === "finishing" ? "ready" : status;
+    });
 
     // 準備目前的狀態進行推送，但帶上 takeover 旗標
     const statePayload = {
@@ -258,18 +357,20 @@ export function useCourts({
         players: c.players.map(p => p?.id || null)
       })),
       recommendedPlayers: recommendedPlayers.map(p => p?.id || null),
-      playerStatus: playerStatus
+      playerStatus: remoteStatus
     };
 
-    try {
+    await enqueueRemoteWrite(async () => {
       setIsLocalSyncing(true);
-      await pushState(statePayload, currentUser.email, true, currentUser.name);
-      setError(null);
-    } catch (err: any) {
-      setError("取得控制權失敗: " + err.message);
-    } finally {
-      setIsLocalSyncing(false);
-    }
+      try {
+        await pushState(statePayload, currentUser.email, true, currentUser.name);
+        setError(null);
+      } catch (err: any) {
+        setError("取得控制權失敗: " + err.message);
+      } finally {
+        setIsLocalSyncing(false);
+      }
+    });
   };
 
 
@@ -331,7 +432,10 @@ export function useCourts({
     }
 
     setSelectedCourtSlot(null);
-    await syncToRemote(newCourts, newRecPlayers, {}, [sourceCourtId, courtId]);
+    const slotSwapAffected = Array.from(
+      new Set([sourceCourtId, courtId].filter((id) => id !== 'recommended'))
+    );
+    await syncToRemote(newCourts, newRecPlayers, {}, slotSwapAffected);
   };
 
   const handleMatchmake = async () => {
@@ -361,9 +465,10 @@ export function useCourts({
 
       if (suggestions.length > 0) {
         const newRecs = [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
-        await syncToRemote(courts, newRecs as Player[], {}, ['recommended']);
+        // 不配對推薦卡 loading：備戰區已有「配對中...」遮罩
+        await syncToRemote(courts, newRecs as Player[], {}, []);
       } else {
-        await syncToRemote(courts, [null, null, null, null], {}, ['recommended']);
+        await syncToRemote(courts, [null, null, null, null], {}, []);
         setError("排點失敗：找不到合適的配對，已自動關閉自動上場模式");
         setIsAutoMode(false);
       }
@@ -379,7 +484,7 @@ export function useCourts({
   const handleResetRecommended = async () => {
     if (isSyncing) return;
     setSelectedCourtSlot(null);
-    await syncToRemote(courts, [null, null, null, null], {}, ['recommended']);
+    await syncToRemote(courts, [null, null, null, null], {}, []);
   };
 
   const toggleManualSelection = async (playerId: string) => {
@@ -398,15 +503,16 @@ export function useCourts({
       const targetPlayers = isRec ? newRecPlayers : (newCourts.find(c => c.id === courtId)?.players || []);
       const oldPlayer = targetPlayers[index];
 
-      // 執行替換
+      // 執行替換（同列去重，避免同一人佔多格）
       if (isRec) {
-        newRecPlayers[index] = player as matchEngine.DerivedPlayer;
+        newRecPlayers = placePlayerUniqueInRow(newRecPlayers, index, player as Player);
       } else {
         newCourts = newCourts.map(c => {
           if (c.id === courtId) {
-            const updated = [...c.players];
-            updated[index] = player as matchEngine.DerivedPlayer;
-            return { ...c, players: updated };
+            return {
+              ...c,
+              players: placePlayerUniqueInRow(c.players, index, player as Player),
+            };
           }
           return c;
         });
@@ -416,11 +522,13 @@ export function useCourts({
       }
 
       setSelectedCourtSlot(null);
-      await syncToRemote(newCourts, newRecPlayers, newStatus, [courtId]);
+      const swapAffected =
+        courtId === 'recommended' ? [] : [courtId];
+      await syncToRemote(newCourts, newRecPlayers, newStatus, swapAffected);
       return;
     }
 
-    // 原有的邏輯：加入/移除推薦名單
+    // 加入/移除推薦名單：僅在湊滿 4 人時寫入後端，其餘（含從滿員減人）只改本地
     let newRecs = [...recommendedPlayers];
     const isAlreadySelected = newRecs.some(p => p?.id === playerId);
 
@@ -434,13 +542,26 @@ export function useCourts({
       }
     }
 
-    await syncToRemote(courts, newRecs, {}, ['recommended']);
+    const isRowFull = (row: (typeof newRecs)[number][]) =>
+      row.length === 4 && row.every((p) => p !== null && p !== undefined);
+    const isFull = isRowFull(newRecs);
+
+    if (isFull) {
+      await syncToRemote(courts, newRecs, {}, []);
+    } else {
+      setRecommendedPlayers(newRecs);
+      localRecommendedUnsyncedRef.current = true;
+    }
   };
 
   const handleGoToCourt = async () => {
     if (!hasControl) {
       setError("您目前沒有控制權，請先取得主動權");
       setIsAutoMode(false);
+      return;
+    }
+    if (pendingRemoteMirrorRef.current > 0) {
+      setError("推薦名單尚在同步，請稍候再按上場");
       return;
     }
     if (recommendedPlayers.some((p) => p === null)) return;
@@ -543,7 +664,8 @@ export function useCourts({
       setTimeout(() => {
         const releases: Record<string, PlayerStatus> = {};
         participants.forEach((p) => { releases[p.id] = "ready"; });
-        syncToRemote(newCourts, recommendedPlayers, releases, [activeCourtForWinner]);
+        // 只同步狀態，不重複觸發該場地/備戰區的 loading 動畫
+        syncToRemote(newCourts, recommendedPlayers, releases, []);
       }, 1500);
 
     } catch (err: any) {
@@ -591,6 +713,7 @@ export function useCourts({
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
+    isRemoteSyncPending: pendingRemoteSyncCount > 0,
     syncToRemote, // Expose for Dashboard to update global player zones
     isAutoMode, setIsAutoMode
   };

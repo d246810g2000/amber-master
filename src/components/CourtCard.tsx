@@ -16,7 +16,10 @@ interface CourtCardProps {
   startTime?: Date | null;
   isLoading?: boolean;
   isActionDisabled?: boolean;
+  /** 僅鎖定主按鈕（上場／結束），不影響選人；例如推薦名單尚在同步時 */
+  isPrimaryActionLocked?: boolean;
   onSlotClick?: (index: number) => void;
+  selectedSlotIndex?: number | null;
   onReset?: () => void;
   hasControl?: boolean;
   onCancel?: () => void;
@@ -92,6 +95,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   startTime,
   isLoading,
   isActionDisabled,
+  isPrimaryActionLocked,
   onSlotClick,
   selectedSlotIndex,
   onReset,
@@ -271,7 +275,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           {isRecommended && onSelectPlayers && (
             <button
               onClick={onSelectPlayers}
-              disabled={isLoading || !hasControl}
+              disabled={isLoading || isActionDisabled || !hasControl}
               className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 border border-indigo-100 hover:bg-black hover:text-white hover:border-black rounded-xl transition-all active:scale-95 bg-indigo-50/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
@@ -292,7 +296,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
               <button
                 onClick={onAction}
-                disabled={isLoading || isActionDisabled}
+                disabled={isLoading || isActionDisabled || !!isPrimaryActionLocked}
                 className={cn(
                   "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center",
                   actionText === "結束" 
