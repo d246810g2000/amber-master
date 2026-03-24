@@ -14,11 +14,17 @@ import Settings from "lucide-react/dist/esm/icons/settings";
 import Bell from "lucide-react/dist/esm/icons/bell";
 import Users from "lucide-react/dist/esm/icons/users";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Check from "lucide-react/dist/esm/icons/check";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import Link2 from "lucide-react/dist/esm/icons/link-2";
+import Link2Off from "lucide-react/dist/esm/icons/link-2-off";
+import ShieldAlert from "lucide-react/dist/esm/icons/shield-alert";
 
 import Monitor from "lucide-react/dist/esm/icons/monitor";
 import * as gasApi from '../lib/gasApi';
 import * as matchEngine from '../lib/matchEngine';
 import { getAvatarUrl, cn } from '../lib/utils';
+import { AVATAR_STYLES, PRESET_SEEDS } from '../constants/avatar';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -51,6 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [ownerMap, setOwnerMap] = useState<Record<string, boolean>>({});
   const { showAlert, showConfirm } = useDialog();
   const { currentUser, isAuthenticated } = useAuth();
+  const [userBinding, setUserBinding] = useState<{ isBound: boolean; playerId?: string } | null>(null);
   const { theme, setTheme } = useTheme();
 
   const [lineEnabled, setLineEnabled] = useState(() => {
@@ -86,9 +93,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const names = newPlayerNames.split(/[\n,，\s]+/).map(n => n.trim()).filter(n => n.length > 0);
     if (names.length === 0) return;
     setLoading(true);
+    
+    // Helper to get random curated avatar
+    const getRandomAvatar = () => {
+      const style = AVATAR_STYLES[Math.floor(Math.random() * AVATAR_STYLES.length)].id;
+      const seed = PRESET_SEEDS[Math.floor(Math.random() * PRESET_SEEDS.length)];
+      return `${style}:${seed}`;
+    };
+
     try {
-      if (names.length === 1) await gasApi.addPlayer(names[0]);
-      else await gasApi.addPlayersBatch(names);
+      if (names.length === 1) {
+        await gasApi.addPlayer(names[0], getRandomAvatar());
+      } else {
+        const playersToAdd = names.map(name => ({
+          name,
+          avatar: getRandomAvatar()
+        }));
+        await gasApi.addPlayersBatch(playersToAdd);
+      }
       setNewPlayerNames('');
       setShowAddForm(false);
       onUpdate();
@@ -130,26 +152,73 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
-  useEffect(() => {
-    const loadBindingStatus = async () => {
-      if (!isAuthenticated || !currentUser?.email || players.length === 0) {
-        setOwnerMap({});
-        return;
+  const handleBind = async (playerId: string, playerName: string) => {
+    if (!currentUser?.email) return;
+    showConfirm("綁定球員", `確定要將您的帳號與「${playerName}」綁定嗎？`, async () => {
+      setBindingActionId(playerId);
+      try {
+        await gasApi.bindPlayer(playerId, currentUser.email!);
+        showAlert("綁定成功", `您的帳號已成功與 ${playerName} 綁定。`);
+        onUpdate();
+        // Refresh local binding status
+        loadBindingStatus();
+      } catch (err: any) {
+        showAlert("綁定失敗", err.message || "請稍後再試。");
+      } finally {
+        setBindingActionId(null);
       }
-      const results = await Promise.all(
-        players.map(async (p) => {
-          try {
-            const b = await gasApi.getPlayerBinding(p.id, currentUser.email!);
-            return [p.id, b.isOwner] as const;
-          } catch {
-            return [p.id, false] as const;
-          }
-        })
-      );
+    });
+  };
+
+  const handleUnbind = async (playerId: string, playerName: string) => {
+    if (!currentUser?.email) return;
+    showConfirm("解除綁定", `確定要解除與「${playerName}」的帳號綁定嗎？`, async () => {
+      setBindingActionId(playerId);
+      try {
+        await gasApi.unbindPlayer(playerId, currentUser.email!);
+        showAlert("解綁成功", `已解除與 ${playerName} 的帳號綁定。`);
+        onUpdate();
+        // Refresh local binding status
+        loadBindingStatus();
+      } catch (err: any) {
+        showAlert("解綁失敗", err.message || "請稍後再試。");
+      } finally {
+        setBindingActionId(null);
+      }
+    });
+  };
+
+  const loadBindingStatus = async () => {
+    if (!isAuthenticated || !currentUser?.email || players.length === 0) {
+      setOwnerMap({});
+      setUserBinding(null);
+      return;
+    }
+    try {
+      const [results, uBinding] = await Promise.all([
+        Promise.all(
+          players.map(async (p) => {
+            try {
+              const b = await gasApi.getPlayerBinding(p.id, currentUser.email!);
+              return [p.id, b.isOwner] as const;
+            } catch {
+              return [p.id, false] as const;
+            }
+          })
+        ),
+        gasApi.getUserBinding(currentUser.email!)
+      ]);
+      
       const next: Record<string, boolean> = {};
       results.forEach(([id, isOwner]) => { next[id] = isOwner; });
       setOwnerMap(next);
-    };
+      setUserBinding(uBinding);
+    } catch (err) {
+      console.error("Failed to load binding status", err);
+    }
+  };
+
+  useEffect(() => {
     loadBindingStatus();
   }, [players, isAuthenticated, currentUser?.email]);
 
@@ -375,12 +444,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
 
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { onSelectPlayer(p.id); onClose(); }}>
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
+                          {p.hasBinding && (
+                             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 rounded-md shrink-0">
+                               <ShieldCheck size={10} className="text-indigo-600 dark:text-indigo-400" />
+                               <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">已綁定</span>
+                             </div>
+                          )}
+                        </div>
                       </div>
 
-                      <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all" title="刪除單一球員">
-                        {actionId === p.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
-                      </button>
+                      {/* Binding Actions */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        {isAuthenticated && currentUser?.email && (
+                          <>
+                            {ownerMap[p.id] ? (
+                              <button
+                                onClick={() => handleUnbind(p.id, p.name)}
+                                disabled={!!bindingActionId}
+                                className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                                title="解除綁定"
+                              >
+                                {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2Off size={16} />}
+                              </button>
+                            ) : !p.hasBinding && !userBinding?.isBound ? (
+                              <button
+                                onClick={() => handleBind(p.id, p.name)}
+                                disabled={!!bindingActionId}
+                                className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                title="立即綁定"
+                              >
+                                {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                        
+                        <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500" title="刪除單一球員">
+                          {actionId === p.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {players.length === 0 && (

@@ -8,13 +8,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export interface DialogConfig {
   isOpen: boolean;
-  type: 'confirm' | 'alert' | 'loading';
+  type: 'confirm' | 'alert' | 'loading' | 'input';
   title: string;
   message: string;
   onConfirm?: () => void;
+  onConfirmWithValue?: (value: string) => void;
   onCancel?: () => void;
   confirmText?: string;
   cancelText?: string;
+  placeholder?: string;
+  defaultValue?: string;
 }
 
 interface CustomDialogProps {
@@ -25,15 +28,28 @@ interface CustomDialogProps {
 export const CustomDialog: React.FC<CustomDialogProps> = ({ config, onClose }) => {
   const { 
     isOpen, type, title, message, 
-    onConfirm, onCancel, 
+    onConfirm, onConfirmWithValue, onCancel, 
     confirmText = "確認", 
-    cancelText = "取消" 
+    cancelText = "取消",
+    placeholder = "請輸入...",
+    defaultValue = ""
   } = config;
+
+  const [inputValue, setInputValue] = React.useState(defaultValue);
+
+  // Reset input when dialog opens
+  React.useEffect(() => {
+    if (isOpen) setInputValue(defaultValue);
+  }, [isOpen, defaultValue]);
 
   if (!isOpen) return null;
 
   const handleConfirm = () => {
-    onConfirm?.();
+    if (type === 'input') {
+      onConfirmWithValue?.(inputValue);
+    } else {
+      onConfirm?.();
+    }
     onClose();
   };
 
@@ -46,6 +62,7 @@ export const CustomDialog: React.FC<CustomDialogProps> = ({ config, onClose }) =
     switch (type) {
       case 'confirm': return <AlertTriangle className="text-amber-500" size={32} />;
       case 'alert': return <Info className="text-emerald-500" size={32} />;
+      case 'input': return <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-500"><Info size={28} /></div>;
       case 'loading': return <div className="animate-spin flex"><Loader2 className="text-emerald-500" size={32} /></div>;
       default: return null;
     }
@@ -53,7 +70,7 @@ export const CustomDialog: React.FC<CustomDialogProps> = ({ config, onClose }) =
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
         {/* Backdrop */}
         <motion.div 
           initial={{ opacity: 0 }}
@@ -78,10 +95,24 @@ export const CustomDialog: React.FC<CustomDialogProps> = ({ config, onClose }) =
           </div>
 
           <h3 className="text-xl font-black text-white mb-2 tracking-tight">{title}</h3>
-          <p className="text-zinc-400 text-sm font-medium leading-relaxed mb-8">{message}</p>
+          <p className="text-zinc-400 text-sm font-medium leading-relaxed mb-6">{message}</p>
+
+          {type === 'input' && (
+            <div className="w-full mb-8">
+              <input
+                autoFocus
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={placeholder}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+                className="w-full px-6 py-4 bg-zinc-950 border border-zinc-800 rounded-2xl text-white text-sm focus:border-emerald-500/50 outline-none transition-all placeholder:text-zinc-600"
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 w-full">
-            {type === 'confirm' && (
+            {(type === 'confirm' || type === 'input') && (
               <button
                 onClick={handleCancel}
                 className="flex-1 px-6 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-black transition-all text-xs"

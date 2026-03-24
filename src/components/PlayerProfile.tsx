@@ -12,11 +12,13 @@ import Crown from "lucide-react/dist/esm/icons/crown";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Lock from "lucide-react/dist/esm/icons/lock";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import UserPlus from "lucide-react/dist/esm/icons/user-plus";
 import Share2 from "lucide-react/dist/esm/icons/share-2";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
-import { getAvatarUrl, isGoogleAvatarString } from '../lib/utils';
+import { getAvatarUrl, isGoogleAvatarString, cn } from '../lib/utils';
 import { usePlayerProfile } from '../hooks/usePlayerProfile';
 
 // Sub-components
@@ -38,16 +40,41 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const queryClient = useQueryClient();
   const profileQuery = usePlayerProfile(playerId);
   const { currentUser } = useAuth();
+  const { showAlert, showInput } = useDialog();
+
+  // ─── 密碼連動 Session ───
+  const [sessionPassword, setSessionPassword] = useState<string | null>(() => {
+    const stored = localStorage.getItem('player_passwords');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return parsed[playerId] || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
 
   const syncHeaderUserBinding = () => {
     queryClient.invalidateQueries({ queryKey: ['userBinding'] });
+    queryClient.invalidateQueries({ queryKey: ['playerBinding', playerId] });
+    queryClient.invalidateQueries({ queryKey: ['passwordBinding', playerId] });
+    queryClient.invalidateQueries({ queryKey: ['playerProfile', playerId] });
     queryClient.invalidateQueries({ queryKey: ['players-base'] });
     queryClient.invalidateQueries({ queryKey: ['players'] });
   };
-  const ownerQuery = useQuery({
+  const googleBindingQuery = useQuery({
     queryKey: ['playerBinding', playerId, currentUser?.email || 'anonymous'],
     queryFn: () => gasApi.getPlayerBinding(playerId, currentUser!.email),
     enabled: !!currentUser?.email,
+    staleTime: 60_000,
+  });
+
+  const passwordBindingQuery = useQuery({
+    queryKey: ['passwordBinding', playerId, sessionPassword || 'none'],
+    queryFn: () => gasApi.getPlayerBinding(playerId, sessionPassword!),
+    enabled: !!sessionPassword,
     staleTime: 60_000,
   });
   const userBindingQuery = useQuery({
@@ -56,6 +83,39 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     enabled: !!currentUser?.email,
     staleTime: 60_000,
   });
+
+  const handleDecrypt = () => {
+    showInput("數據解密", "請輸入此球員的自訂密碼：", async (password) => {
+      if (!password) return;
+      try {
+        setSaving(true);
+        // 這邊直接測試綁定，若密碼正確（或是新設定）則會成功
+        await gasApi.bindPlayer(playerId, password);
+        
+        // 儲存到本地
+        const stored = JSON.parse(localStorage.getItem('player_passwords') || '{}');
+        stored[playerId] = password;
+        localStorage.setItem('player_passwords', JSON.stringify(stored));
+        
+        setSessionPassword(password);
+        await syncHeaderUserBinding();
+        showAlert("解密成功", "已成功解密。您可以查看詳細統計數據了。");
+        onUpdate?.();
+      } catch (err: any) {
+        showAlert("解密失敗", err.message || "密碼錯誤或發生連線問題。");
+      } finally {
+        setSaving(false);
+      }
+    });
+  };
+
+  const handleLogoutSession = () => {
+    const stored = JSON.parse(localStorage.getItem('player_passwords') || '{}');
+    delete stored[playerId];
+    localStorage.setItem('player_passwords', JSON.stringify(stored));
+    setSessionPassword(null);
+    showAlert("已解除授權", "已清除此瀏覽器的解密紀錄。");
+  };
 
   // ─── UI-only 狀態 ───
   const [currentAvatarFull, setCurrentAvatarFull] = useState("");
@@ -69,8 +129,6 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const { showAlert } = useDialog();
-
   // 從 query 中提取
   const profileData = profileQuery.data;
   const data = profileData?.data ?? null;
@@ -307,9 +365,13 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     ? player.name
     : (currentAvatarFull.split(':')[1] || player.name);
   
-  const isOwner = !!ownerQuery.data?.isOwner;
-  const ownerCheckLoading = !!currentUser?.email && ownerQuery.isLoading;
-  const canQuickBind = !!currentUser?.email && !ownerQuery.data?.isBound && !userBindingQuery.data?.isBound;
+  // isOwner if: 
+  // 1. Backend confirms ownership (Google OR Password)
+  const isOwner = !!googleBindingQuery.data?.isOwner || !!passwordBindingQuery.data?.isOwner;
+  const ownerCheckLoading = (!!currentUser?.email && googleBindingQuery.isLoading)
+                         || (!!sessionPassword && passwordBindingQuery.isLoading);
+
+  const canQuickBind = !!currentUser?.email && !googleBindingQuery.data?.isBound && !userBindingQuery.data?.isBound;
 
   const handleBindAndEnter = async () => {
     if (!currentUser?.email || !player?.id) {
@@ -318,9 +380,33 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     }
     try {
       setBindingNow(true);
+      
+      // 如果目前是透過密碼存取 (sessionPassword 為真且非正式 Email)，先嘗試解除目前密碼綁定
+      if (sessionPassword && !player.email?.includes('@')) {
+        try {
+          await gasApi.unbindPlayer(player.id, sessionPassword);
+        } catch (err) {
+          console.warn('Silent unbind failed:', err);
+        }
+      }
+      
       await gasApi.bindPlayer(player.id, currentUser.email);
+      
+      // 綁定成功後，清除本地儲存的此球員密碼 (如果有)
+      try {
+        const stored = JSON.parse(localStorage.getItem('player_passwords') || '{}');
+        if (stored[player.id]) {
+          delete stored[player.id];
+          localStorage.setItem('player_passwords', JSON.stringify(stored));
+        }
+        setSessionPassword(null);
+      } catch (e) {
+        console.warn('Failed to cleanup local password:', e);
+      }
+
       await Promise.all([
-        ownerQuery.refetch(),
+        googleBindingQuery.refetch(),
+        passwordBindingQuery.refetch(),
         userBindingQuery.refetch(),
         profileQuery.refetch(),
       ]);
@@ -348,33 +434,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     );
   }
 
-  if (!isOwner) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[65vh] md:min-h-[75vh] text-center px-6 animate-in fade-in zoom-in duration-500">
-        <div className="w-24 h-24 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center mb-6 shadow-2xl border border-slate-200 dark:border-slate-800">
-          <Lock className="w-10 h-10 text-rose-500" />
-        </div>
-        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">隱私保護</h2>
-        <p className="text-slate-500 dark:text-slate-400 font-medium mb-8 max-w-sm leading-relaxed">
-          基於隱私保護，只有 <span className="text-slate-900 dark:text-white font-black">{player.name}</span> 本人登入帳號後，才能解鎖並查看詳細的生涯戰力數據與對戰詳情。
-        </p>
-        {canQuickBind && (
-          <button
-            onClick={handleBindAndEnter}
-            disabled={bindingNow}
-            className="mb-4 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black transition-all active:scale-95 border border-emerald-400/20 disabled:opacity-50"
-          >
-            {bindingNow ? '綁定中...' : '綁定此球員並進入'}
-          </button>
-        )}
-        <button onClick={onBack} className="px-8 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-2xl font-black transition-all active:scale-95 border border-slate-200 dark:border-slate-700">
-          返回大廳
-        </button>
-      </div>
-    );
-  }
-
   // ─── Render ───
+  const canEdit = isOwner || !player.hasBinding;
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 relative">
       {/* Top Banner Header */}
@@ -383,7 +444,43 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           <button onClick={onBack} className="p-2 md:p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl md:rounded-2xl transition-all text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border border-transparent hover:border-slate-100 dark:hover:border-white/5">
             <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" />
           </button>
-          <h1 className="text-lg md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">球員資訊</h1>
+          <div className="flex flex-col">
+            <h1 className="text-lg md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">球員資訊</h1>
+            {/* 訪客解密小按鈕 */}
+            {!isOwner && !player.email?.includes('@') && (
+              <button
+                onClick={handleDecrypt}
+                className="mt-1 flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors uppercase tracking-widest"
+              >
+                <Lock size={10} />
+                點此解密數據
+              </button>
+            )}
+            {/* 密碼授權狀態小按鈕：含「轉為正式綁定」選項 */}
+            {isOwner && sessionPassword && (
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  onClick={handleLogoutSession}
+                  className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest border-r border-slate-200 dark:border-white/10 pr-2"
+                >
+                  <ShieldCheck size={10} className="text-emerald-500" />
+                  已解密 (登出)
+                </button>
+                {/* 如果目前有 Google 帳號且尚未正式綁定，則可以「升級」 */}
+                {currentUser?.email && !userBindingQuery.data?.isBound && !player.email?.includes('@') && (
+                  <button
+                    onClick={handleBindAndEnter}
+                    disabled={bindingNow}
+                    className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors uppercase tracking-widest pr-2 border-r border-slate-200 dark:border-white/10 last:border-0"
+                    title="將此帳號正式綁定到 Google"
+                  >
+                    <UserPlus size={10} />
+                    {bindingNow ? '綁定中...' : '轉為 Google 正式綁定'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3 md:gap-4">
           <div className="flex items-center min-w-[80px] md:min-w-[120px] justify-end">
@@ -398,24 +495,31 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               />
             ) : (
               <span
-                onClick={() => { setIsEditingName(true); setEditName(player.name); }}
-                className="px-2 text-lg md:text-2xl font-black text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors tracking-tighter"
-                title="點擊修改姓名"
+                onClick={() => { 
+                  if (canEdit) {
+                    setIsEditingName(true); 
+                    setEditName(player.name); 
+                  } else {
+                    showAlert("權限限制", `只有 ${player.name} 本人才能修改姓名。`);
+                  }
+                }}
+                className={`px-2 text-lg md:text-2xl font-black text-slate-700 dark:text-zinc-200 ${canEdit ? 'hover:text-slate-900 dark:hover:text-white cursor-pointer' : 'opacity-80'} transition-colors tracking-tighter`}
+                title={canEdit ? "點擊修改姓名" : "已綁定，無法修改"}
               >
                 {player.name}
               </span>
             )}
           </div>
-          <button
-            onClick={() => setIsShareModalOpen(true)}
-            className="p-2 md:p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl md:rounded-2xl transition-all border border-emerald-500/20 hover:border-emerald-500/40 active:scale-95 flex items-center gap-2"
-          >
-            <Share2 className="w-5 h-5" />
-            <span className="hidden sm:inline text-xs font-black uppercase">分享戰績</span>
-          </button>
           <div
-            onClick={() => setIsEditModalOpen(true)}
-            className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg cursor-pointer hover:border-emerald-500/50 transition-all flex items-center justify-center group shrink-0"
+            onClick={() => {
+              if (canEdit) {
+                setIsEditModalOpen(true);
+              } else {
+                showAlert("權限限制", `只有 ${player.name} 本人才能修改頭像。`);
+              }
+            }}
+            className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg ${canEdit ? 'cursor-pointer hover:border-emerald-500/50' : 'opacity-80'} transition-all flex items-center justify-center group shrink-0`}
+            title={canEdit ? "點擊修改頭像" : "已綁定，無法修改"}
           >
             <img
               src={getAvatarUrl(currentAvatarFull, player.name)}
@@ -424,54 +528,77 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               referrerPolicy="no-referrer"
             />
           </div>
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            disabled={!isOwner}
+            className={cn(
+              "p-2 md:p-3 rounded-xl md:rounded-2xl transition-all border flex items-center gap-2",
+              isOwner 
+                ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40 active:scale-95" 
+                : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-60"
+            )}
+            title={!isOwner ? "僅本人可分享戰績" : "分享戰績"}
+          >
+            <Share2 className="w-5 h-5" />
+            <span className="hidden sm:inline text-xs font-black uppercase">分享戰績</span>
+            {!isOwner && <Lock size={12} className="opacity-60" />}
+          </button>
         </div>
       </div>
 
-      {/* 頭像來源：Google / 自訂（僅擁有者） */}
-      <div className="flex flex-wrap items-center gap-2 px-4 md:px-6 -mt-2 mb-2">
-        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">頭像</span>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); handleUseGoogleAvatar(); }}
-          disabled={saving || !currentUser?.picture}
-          className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
-            isGoogleAvatar
-              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
-              : 'bg-white dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:border-zinc-500'
-          } disabled:opacity-40`}
-        >
-          Google 頭像
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setIsEditModalOpen(true); }}
-          disabled={saving}
-          className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
-            !isGoogleAvatar
-              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
-              : 'bg-white dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:border-zinc-500'
-          } disabled:opacity-40`}
-        >
-          自訂頭像
-        </button>
-      </div>
+
 
       {/* Stats Grid */}
       <div className="flex overflow-x-auto md:grid md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 pb-4 sm:pb-0 scrollbar-hide snap-x snap-mandatory px-6 -mx-6 sm:px-0 sm:mx-0 touch-pan-x">
         <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard icon={<Hash className="text-zinc-600 sm:w-6 sm:h-6 w-5 h-5" />} label="總場次" value={stats.totalMatches} unit="場" subValue={`W:${stats.winCount} / L:${stats.lossCount}`} />
+          <StatCard 
+            icon={<Hash className={`${isOwner ? 'text-zinc-600' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
+            label="總場次" 
+            value={isOwner ? stats.totalMatches : "---"} 
+            unit={isOwner ? "場" : ""} 
+            subValue={isOwner ? `W:${stats.winCount} / L:${stats.lossCount}` : "受保護數據"} 
+            theme={isOwner ? "zinc" : "zinc"}
+          />
         </div>
         <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard icon={<Trophy className="text-emerald-500 sm:w-6 sm:h-6 w-5 h-5" />} label="勝率" value={stats.winRate} unit="%" />
+          <StatCard 
+            icon={<Trophy className={`${isOwner ? 'text-emerald-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
+            label="勝率" 
+            value={isOwner ? stats.winRate : "---"} 
+            unit={isOwner ? "%" : ""} 
+            subValue={!isOwner ? "請先解鎖" : undefined}
+            theme={isOwner ? "emerald" : "zinc"}
+          />
         </div>
         <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard icon={<Activity className="text-amber-500 sm:w-6 sm:h-6 w-5 h-5" />} label="即時戰力" value={currentStats.instant} subValue="當前手感與競技狀態" unit="CP" theme="amber" />
+          <StatCard 
+            icon={<Activity className={`${isOwner ? 'text-amber-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
+            label="即時戰力" 
+            value={isOwner ? currentStats.instant : "---"} 
+            subValue={isOwner ? "當前手感與競技狀態" : "暫無權限查看"} 
+            unit={isOwner ? "CP" : ""} 
+            theme={isOwner ? "amber" : "zinc"} 
+          />
         </div>
         <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard icon={<Sparkles className="text-emerald-500 sm:w-6 sm:h-6 w-5 h-5" />} label="生涯戰力" value={currentStats.career} subValue="長期穩定的技術累積" unit="CP" theme="emerald" />
+          <StatCard 
+            icon={<Sparkles className={`${isOwner ? 'text-emerald-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
+            label="生涯戰力" 
+            value={isOwner ? currentStats.career : "---"} 
+            subValue={isOwner ? "長期穩定的技術累積" : "請先登入帳號以解鎖"} 
+            unit={isOwner ? "CP" : ""}
+            theme={isOwner ? "emerald" : "zinc"} 
+          />
         </div>
         <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard icon={<Crown className="text-amber-400 saturate-150 sm:w-6 sm:h-6 w-5 h-5" />} label="最佳拍檔" value={teammateStats[0]?.name || "無"} subValue={`${teammateStats[0]?.winRate.toFixed(1) || 0}% 共同勝率`} unit="" />
+          <StatCard 
+            icon={<Crown className={`${isOwner ? 'text-amber-400 saturate-150' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
+            label="最佳拍檔" 
+            value={isOwner ? (teammateStats[0]?.name || "無") : "---"} 
+            subValue={isOwner ? `${teammateStats[0]?.winRate.toFixed(1) || 0}% 共同勝率` : "需本人解鎖"} 
+            unit="" 
+            theme={isOwner ? "amber" : "zinc"}
+          />
         </div>
         {/* Mobile scroll spacer */}
         <div className="w-2 sm:hidden shrink-0" />
@@ -512,28 +639,51 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'trend' && (
-            <Suspense fallback={<div className="flex items-center justify-center h-[400px] text-zinc-500 text-sm font-bold">載入趨勢圖...</div>}>
-              <CpTrendChart combinedTrend={combinedTrend} />
-            </Suspense>
-          )}
-          {activeTab === 'partners' && (
-            <PartnerTable
-              teammateStats={teammateStats}
-              playerMap={playerMap}
-              partnerSort={partnerSort}
-              setPartnerSort={setPartnerSort}
-            />
-          )}
-          {activeTab === 'history' && (
-            <MatchHistoryTable
-              playerId={player.id}
-              matchHistory={matchHistory}
-              historySort={historySort}
-              setHistorySort={setHistorySort}
-              players={Object.values(playerMap)}
-              activeMatchDates={activeMatchDates}
-            />
+          {!isOwner ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center px-6 bg-slate-50/50 dark:bg-slate-900/30 rounded-[3rem] border border-slate-200/50 dark:border-white/5 shadow-inner">
+              <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center mb-4 shadow-xl border border-slate-100 dark:border-white/5">
+                <Lock className="w-8 h-8 text-rose-500" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">數據受保護</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-6 max-w-xs leading-relaxed uppercase tracking-wider">
+                只有 <span className="text-slate-900 dark:text-white font-black">{player.name}</span> 本人綁定帳號後<br/>才能查看詳細趨勢圖與對戰紀錄
+              </p>
+              {canQuickBind && (
+                <button
+                  onClick={handleBindAndEnter}
+                  disabled={bindingNow}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all active:scale-95 border border-emerald-400/20 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                >
+                  {bindingNow ? '綁定中...' : '綁定此球員並解鎖'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {activeTab === 'trend' && (
+                <Suspense fallback={<div className="flex items-center justify-center h-[400px] text-zinc-500 text-sm font-bold">載入趨勢圖...</div>}>
+                  <CpTrendChart combinedTrend={combinedTrend} />
+                </Suspense>
+              )}
+              {activeTab === 'partners' && (
+                <PartnerTable
+                  teammateStats={teammateStats}
+                  playerMap={playerMap}
+                  partnerSort={partnerSort}
+                  setPartnerSort={setPartnerSort}
+                />
+              )}
+              {activeTab === 'history' && (
+                <MatchHistoryTable
+                  playerId={player.id}
+                  matchHistory={matchHistory}
+                  historySort={historySort}
+                  setHistorySort={setHistorySort}
+                  players={Object.values(playerMap)}
+                  activeMatchDates={activeMatchDates}
+                />
+              )}
+            </>
           )}
         </motion.div>
       </AnimatePresence>
@@ -547,6 +697,10 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
         currentAvatarFull={currentAvatarFull}
         saving={saving}
         onSave={updateAvatar}
+        isOwner={isOwner}
+        currentUser={currentUser}
+        isGoogleAvatar={isGoogleAvatar}
+        onUseGoogleAvatar={handleUseGoogleAvatar}
       />
 
       {/* Share Modal */}

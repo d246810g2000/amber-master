@@ -15,10 +15,16 @@ interface AvatarEditModalProps {
   currentAvatarFull: string;
   saving: boolean;
   onSave: (style: string, seed: string) => void;
+  // New props for source selection
+  isOwner: boolean;
+  currentUser: any;
+  isGoogleAvatar: boolean;
+  onUseGoogleAvatar: () => void;
 }
 
 export const AvatarEditModal: React.FC<AvatarEditModalProps> = ({
-  isOpen, onClose, activeStyle, setActiveStyle, currentAvatarFull, saving, onSave
+  isOpen, onClose, activeStyle, setActiveStyle, currentAvatarFull, saving, onSave,
+  isOwner, currentUser, isGoogleAvatar, onUseGoogleAvatar
 }) => {
   const [showMoreModal, setShowMoreModal] = useState(false);
 
@@ -52,12 +58,38 @@ export const AvatarEditModal: React.FC<AvatarEditModalProps> = ({
                 <X size={20} />
               </button>
 
-              <div className="mb-10 text-center md:text-left">
-                <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-wider mb-1">形象大廳 / Profile Identity Lab</h3>
-                <p className="text-slate-500 dark:text-zinc-500 text-xs font-bold">為你的個人儀表板挑選一個專屬的數位身分。</p>
+              <div className="mb-8 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-wider mb-1">形象大廳 / Profile Identity Lab</h3>
+                  <p className="text-slate-500 dark:text-zinc-500 text-xs font-bold">為你的個人儀表板挑選一個專屬的數位身分。</p>
+                </div>
+                
+                {/* 來源選擇：Google vs 自訂 */}
+                <div className="flex bg-slate-100 dark:bg-zinc-950 p-1 rounded-xl border border-slate-200 dark:border-zinc-800 w-fit mx-auto md:mx-0">
+                  <button
+                    onClick={onUseGoogleAvatar}
+                    disabled={saving || !currentUser?.picture || !isOwner}
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                      isGoogleAvatar
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                        : 'text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-300'
+                    } disabled:opacity-30`}
+                  >
+                    Google
+                  </button>
+                  <button
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                      !isGoogleAvatar
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                        : 'text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    自訂
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-10">
+              <div className="space-y-8">
                 <div className="flex flex-wrap bg-slate-100 dark:bg-zinc-950 p-1.5 rounded-2xl border border-slate-200 dark:border-zinc-800 w-fit mx-auto md:mx-0 overflow-x-auto max-w-full custom-scrollbar gap-1">
                   {AVATAR_STYLES.map(style => (
                     <button

@@ -4,6 +4,7 @@ import { CustomDialog, DialogConfig } from '../components/CustomDialog';
 interface DialogContextType {
   showAlert: (title: string, message: string) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => void;
+  showInput: (title: string, message: string, onConfirm: (value: string) => void, onCancel?: () => void, placeholder?: string, defaultValue?: string) => void;
   showLoading: (title: string, message: string) => void;
   hideDialog: () => void;
 }
@@ -26,6 +27,10 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setConfig({ isOpen: true, type: 'confirm', title, message, onConfirm, onCancel });
   };
 
+  const showInput = (title: string, message: string, onConfirmWithValue: (value: string) => void, onCancel?: () => void, placeholder?: string, defaultValue?: string) => {
+    setConfig({ isOpen: true, type: 'input', title, message, onConfirmWithValue, onCancel, placeholder, defaultValue });
+  };
+
   const showLoading = (title: string, message: string) => {
     setConfig({ isOpen: true, type: 'loading', title, message });
   };
@@ -35,7 +40,7 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   return (
-    <DialogContext.Provider value={{ showAlert, showConfirm, showLoading, hideDialog }}>
+    <DialogContext.Provider value={{ showAlert, showConfirm, showInput, showLoading, hideDialog }}>
       {children}
       <CustomDialog config={config} onClose={hideDialog} />
     </DialogContext.Provider>

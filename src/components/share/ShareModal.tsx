@@ -159,23 +159,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             </div>
 
             {/* Actions - Fixed at bottom on mobile */}
-            <div className="p-5 sm:p-6 pb-8 sm:pb-6 bg-slate-950 sm:bg-slate-900/80 backdrop-blur-2xl border-t border-white/5 flex flex-col sm:flex-row gap-3">
+            <div className="p-4 sm:p-6 pb-6 sm:pb-6 bg-slate-950 sm:bg-slate-900/80 backdrop-blur-2xl border-t border-white/5 flex flex-row gap-2 sm:gap-3">
               {canShareNative && (
                 <button
                   onClick={handleNativeShare}
                   disabled={isExporting}
-                  className="flex-1 py-4 bg-white text-slate-900 hover:bg-slate-100 disabled:opacity-50 rounded-2xl font-black transition-all active:scale-95 flex items-center justify-center gap-3 shadow-xl"
+                  className="flex-1 py-3.5 bg-white text-slate-900 hover:bg-slate-100 disabled:opacity-50 rounded-2xl font-black text-xs sm:text-base transition-all active:scale-95 flex items-center justify-center gap-2 sm:gap-3 shadow-xl"
                 >
-                  {isExporting ? <Loader2 className="animate-spin" size={20} /> : <Share2 size={20} />}
+                  {isExporting ? <Loader2 className="animate-spin" size={18} /> : <Share2 size={18} className="sm:w-5 sm:h-5" />}
                   直接分享
                 </button>
               )}
               <button
                 onClick={handleDownload}
                 disabled={isExporting}
-                className={`flex-[1.2] py-4 ${canShareNative ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-500 text-white'} hover:bg-emerald-500 hover:text-white disabled:opacity-50 rounded-2xl font-black transition-all active:scale-95 flex items-center justify-center gap-3 shadow-lg`}
+                className={`flex-[1.2] py-3.5 ${canShareNative ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-500 text-white'} hover:bg-emerald-500 hover:text-white disabled:opacity-50 rounded-2xl font-black text-xs sm:text-base transition-all active:scale-95 flex items-center justify-center gap-2 sm:gap-3 shadow-lg`}
               >
-                {isExporting ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                {isExporting ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} className="sm:w-5 sm:h-5" />}
                 儲存圖片 (PNG)
               </button>
             </div>

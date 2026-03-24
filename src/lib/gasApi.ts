@@ -17,8 +17,17 @@ interface ApiError extends Error {
   code?: string;
 }
 
+const ERROR_TRANSLATIONS: Record<string, string> = {
+  'This account is already bound to another player': '此帳號已綁定其他球員',
+  'This player is already bound to another account': '此球員已被其他帳號綁定',
+  'Player not found': '找不到球員',
+  'Invalid parameters': '參數錯誤',
+  'Unauthorized': '未經授權',
+};
+
 function createApiError(message: string, code?: string): ApiError {
-  const err = new Error(message) as ApiError;
+  const translatedMessage = ERROR_TRANSLATIONS[message] || message;
+  const err = new Error(translatedMessage) as ApiError;
   if (code) err.code = code;
   return err;
 }
@@ -91,13 +100,13 @@ export async function fetchMatches(date?: string): Promise<RawMatch[]> {
 }
 
 /** 新增球員 */
-export async function addPlayer(name: string) {
-  return gasPost({ action: 'addPlayer', name }, z.any());
+export async function addPlayer(name: string, avatar?: string) {
+  return gasPost({ action: 'addPlayer', name, avatar }, z.any());
 }
 
 /** 批次新增球員 */
-export async function addPlayersBatch(names: string[]) {
-  return gasPost({ action: 'addPlayersBatch', names }, z.any());
+export async function addPlayersBatch(players: { name: string, avatar?: string }[]) {
+  return gasPost({ action: 'addPlayersBatch', players }, z.any());
 }
 
 /** 更新球員名稱與頭像 */
