@@ -12,6 +12,7 @@ import Crown from "lucide-react/dist/esm/icons/crown";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Lock from "lucide-react/dist/esm/icons/lock";
+import Share2 from "lucide-react/dist/esm/icons/share-2";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,7 @@ const CpTrendChart = React.lazy(() => import('./profile/CpTrendChart').then(m =>
 import { PartnerTable } from './profile/PartnerTable';
 import { MatchHistoryTable } from './profile/MatchHistoryTable';
 import { AvatarEditModal } from './profile/AvatarEditModal';
+import { ShareModal } from './share/ShareModal';
 
 interface PlayerProfileProps {
   playerId: string;
@@ -66,6 +68,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const { showAlert } = useDialog();
 
   // 從 query 中提取
@@ -403,6 +406,13 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               </span>
             )}
           </div>
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="p-2 md:p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl md:rounded-2xl transition-all border border-emerald-500/20 hover:border-emerald-500/40 active:scale-95 flex items-center gap-2"
+          >
+            <Share2 className="w-5 h-5" />
+            <span className="hidden sm:inline text-xs font-black uppercase">分享戰績</span>
+          </button>
           <div
             onClick={() => setIsEditModalOpen(true)}
             className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg cursor-pointer hover:border-emerald-500/50 transition-all flex items-center justify-center group shrink-0"
@@ -537,6 +547,19 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
         currentAvatarFull={currentAvatarFull}
         saving={saving}
         onSave={updateAvatar}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        player={player}
+        stats={stats}
+        currentStats={currentStats}
+        combinedTrend={combinedTrend}
+        teammateStats={teammateStats}
+        matchHistory={matchHistory}
+        playerMap={playerMap}
       />
     </div>
   );
