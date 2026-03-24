@@ -228,16 +228,22 @@ function buildLineFlexBubbleForCourt_(court, nameMap, instantMuMap) {
                   text: redTeam[0],
                   align: 'center',
                   weight: 'bold',
-                  size: 'lg',
-                  color: '#2C3E50'
+                  size: 'md',
+                  color: '#2C3E50',
+                  wrap: true,
+                  maxLines: 2,
+                  adjustMode: 'shrink-to-fit'
                 },
                 {
                   type: 'text',
                   text: redTeam[1],
                   align: 'center',
                   weight: 'bold',
-                  size: 'lg',
-                  color: '#2C3E50'
+                  size: 'md',
+                  color: '#2C3E50',
+                  wrap: true,
+                  maxLines: 2,
+                  adjustMode: 'shrink-to-fit'
                 },
                 {
                   type: 'text',
@@ -290,16 +296,22 @@ function buildLineFlexBubbleForCourt_(court, nameMap, instantMuMap) {
                   text: blueTeam[0],
                   align: 'center',
                   weight: 'bold',
-                  size: 'lg',
-                  color: '#2C3E50'
+                  size: 'md',
+                  color: '#2C3E50',
+                  wrap: true,
+                  maxLines: 2,
+                  adjustMode: 'shrink-to-fit'
                 },
                 {
                   type: 'text',
                   text: blueTeam[1],
                   align: 'center',
                   weight: 'bold',
-                  size: 'lg',
-                  color: '#2C3E50'
+                  size: 'md',
+                  color: '#2C3E50',
+                  wrap: true,
+                  maxLines: 2,
+                  adjustMode: 'shrink-to-fit'
                 },
                 {
                   type: 'text',
