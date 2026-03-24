@@ -279,7 +279,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   // ─── Loading / Error ───
   if (profileQuery.isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-slate-950 transition-colors">
         <BadmintonLoader />
       </div>
     );
@@ -287,8 +287,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   if (!data) {
     return (
-      <div className="text-center py-20 bg-zinc-900/50 rounded-[3rem] border border-zinc-800">
-        <p className="text-zinc-400 font-bold mb-6">找不到該球員資料</p>
+      <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border border-slate-200 dark:border-slate-800 transition-colors">
+        <p className="text-slate-500 dark:text-slate-400 font-bold mb-6">找不到該球員資料</p>
         <button onClick={onBack} className="px-8 py-3 bg-emerald-500 text-white rounded-2xl font-black">返回大廳</button>
       </div>
     );
@@ -339,7 +339,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   if (ownerCheckLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-slate-950 transition-colors">
         <BadmintonLoader />
       </div>
     );
@@ -348,12 +348,12 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   if (!isOwner) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[65vh] md:min-h-[75vh] text-center px-6 animate-in fade-in zoom-in duration-500">
-        <div className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center mb-6 shadow-2xl border border-zinc-800">
+        <div className="w-24 h-24 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center mb-6 shadow-2xl border border-slate-200 dark:border-slate-800">
           <Lock className="w-10 h-10 text-rose-500" />
         </div>
-        <h2 className="text-2xl font-black text-white mb-2">隱私保護</h2>
-        <p className="text-zinc-400 font-medium mb-8 max-w-sm leading-relaxed">
-          基於隱私保護，只有 <span className="text-white font-black">{player.name}</span> 本人登入帳號後，才能解鎖並查看詳細的生涯戰力數據與對戰詳情。
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">隱私保護</h2>
+        <p className="text-slate-500 dark:text-slate-400 font-medium mb-8 max-w-sm leading-relaxed">
+          基於隱私保護，只有 <span className="text-slate-900 dark:text-white font-black">{player.name}</span> 本人登入帳號後，才能解鎖並查看詳細的生涯戰力數據與對戰詳情。
         </p>
         {canQuickBind && (
           <button
@@ -364,7 +364,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             {bindingNow ? '綁定中...' : '綁定此球員並進入'}
           </button>
         )}
-        <button onClick={onBack} className="px-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black transition-all active:scale-95 border border-zinc-700">
+        <button onClick={onBack} className="px-8 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-2xl font-black transition-all active:scale-95 border border-slate-200 dark:border-slate-700">
           返回大廳
         </button>
       </div>
@@ -375,19 +375,19 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 relative">
       {/* Top Banner Header */}
-      <div className="bg-zinc-950/20 backdrop-blur-xl border-b border-white/5 -mx-6 -mt-6 px-4 md:px-6 py-4 md:py-6 flex items-center justify-between sticky top-0 z-50">
+      <div className="bg-slate-50/80 dark:bg-slate-950/20 backdrop-blur-xl border-b border-slate-100 dark:border-white/5 -mx-6 -mt-6 px-4 md:px-6 py-4 md:py-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3 md:gap-6">
-          <button onClick={onBack} className="p-2 md:p-3 hover:bg-zinc-800 rounded-xl md:rounded-2xl transition-all text-zinc-400 hover:text-white">
+          <button onClick={onBack} className="p-2 md:p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl md:rounded-2xl transition-all text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border border-transparent hover:border-slate-100 dark:hover:border-white/5">
             <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" />
           </button>
-          <h1 className="text-lg md:text-3xl font-black text-white tracking-tighter uppercase">球員資訊</h1>
+          <h1 className="text-lg md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">球員資訊</h1>
         </div>
         <div className="flex items-center gap-3 md:gap-4">
           <div className="flex items-center min-w-[80px] md:min-w-[120px] justify-end">
             {isEditingName ? (
               <input
                 autoFocus
-                className="bg-zinc-800 border-b-2 border-emerald-500 px-2 py-0.5 text-white text-lg md:text-2xl font-black outline-none w-24 md:w-32 text-right"
+                className="bg-white dark:bg-slate-800 border-b-2 border-emerald-500 px-2 py-0.5 text-slate-900 dark:text-white text-lg md:text-2xl font-black outline-none w-24 md:w-32 text-right rounded-t-lg"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={handleUpdateName}
@@ -396,7 +396,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             ) : (
               <span
                 onClick={() => { setIsEditingName(true); setEditName(player.name); }}
-                className="px-2 text-lg md:text-2xl font-black text-zinc-200 hover:text-white cursor-pointer transition-colors tracking-tighter"
+                className="px-2 text-lg md:text-2xl font-black text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors tracking-tighter"
                 title="點擊修改姓名"
               >
                 {player.name}
@@ -405,7 +405,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           </div>
           <div
             onClick={() => setIsEditModalOpen(true)}
-            className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-zinc-800 overflow-hidden border-2 border-white/10 shadow-2xl cursor-pointer hover:border-emerald-500/50 transition-all flex items-center justify-center group shrink-0"
+            className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg cursor-pointer hover:border-emerald-500/50 transition-all flex items-center justify-center group shrink-0"
           >
             <img
               src={getAvatarUrl(currentAvatarFull, player.name)}
@@ -426,8 +426,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           disabled={saving || !currentUser?.picture}
           className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
             isGoogleAvatar
-              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-              : 'bg-zinc-900/80 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
+              : 'bg-white dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:border-zinc-500'
           } disabled:opacity-40`}
         >
           Google 頭像
@@ -438,8 +438,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           disabled={saving}
           className={`px-3 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
             !isGoogleAvatar
-              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-              : 'bg-zinc-900/80 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
+              : 'bg-white dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:border-zinc-500'
           } disabled:opacity-40`}
         >
           自訂頭像
@@ -468,7 +468,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       </div>
 
       {/* Tab Bar */}
-      <div className="flex bg-zinc-950/50 p-1.5 rounded-3xl border border-white/5 w-fit gap-1 sticky top-[88px] z-40 backdrop-blur-lg mx-auto md:mx-0 shadow-2xl">
+      <div className="flex bg-slate-100/80 dark:bg-zinc-950/50 p-1.5 rounded-3xl border border-slate-200 dark:border-white/5 w-fit gap-1 sticky top-[88px] z-40 backdrop-blur-lg mx-auto md:mx-0 shadow-xl dark:shadow-2xl transition-all">
         {[
           { id: 'trend' as const, label: '戰力趨勢', icon: <Activity size={14} /> },
           { id: 'partners' as const, label: '拍檔分析', icon: <Target size={14} /> },
@@ -478,7 +478,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 sm:gap-2.5 px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] font-black transition-all relative ${
-              activeTab === tab.id ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+              activeTab === tab.id ? "text-white" : "text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-300"
             }`}
           >
             {activeTab === tab.id && (

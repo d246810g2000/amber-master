@@ -67,7 +67,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isLockedByMe, isLockedByOther
 }) => {
   return (
-    <header className="flex flex-col mb-4 md:mb-6 bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white shrink-0 overflow-hidden">
+    <header className="flex flex-col mb-4 md:mb-6 bg-white dark:bg-slate-900 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 shrink-0 overflow-hidden">
       <div className="flex flex-nowrap justify-between items-center p-3 md:p-5 gap-2 md:gap-0 overflow-x-auto scrollbar-hide">
         
         {/* Logo & Titles */}
@@ -80,12 +80,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <BadmintonIcon className="text-white w-5 h-5 md:w-6 md:h-6" />
           </div>
           <div className="flex flex-col justify-center">
-            <h1 className="text-[17px] md:text-2xl font-black text-slate-900 tracking-tight leading-none whitespace-nowrap">
+            <h1 className="text-[17px] md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none whitespace-nowrap">
               安柏排點大師
             </h1>
             <div className="flex items-center gap-1.5 mt-1 md:mt-1.5">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
+              <p className="text-[8px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">
                 Amber Master
               </p>
             </div>
@@ -95,18 +95,18 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* Controls Group (All inline) */}
         <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
           {/* Controller Status & Takeover */}
-          <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 rounded-xl border border-slate-100 mr-1 md:mr-2 shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 mr-1 md:mr-2 shrink-0">
             <span className={cn(
               "w-2 h-2 rounded-full",
               isLockedByMe ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
               isLockedByOther ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : 
-              "bg-slate-300"
+              "bg-slate-300 dark:bg-slate-600"
             )} />
             <div className="flex flex-col">
-              <span className="hidden sm:block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+              <span className="hidden sm:block text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider leading-none">
                 {isLockedByMe ? "您擁有控制權" : isLockedByOther ? "目前控制者" : "自由操作模式"}
               </span>
-              <span className="text-[10px] md:text-[11px] font-black text-slate-700 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[60px] sm:max-w-none">
+              <span className="text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[60px] sm:max-w-none">
                 {isLockedByMe ? "已取得" : isLockedByOther ? currentControllerName : "未鎖定"}
               </span>
             </div>
@@ -123,7 +123,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           <button
             onClick={onToggleFullscreen}
-            className="hidden sm:flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-slate-100 shrink-0"
+            className="hidden sm:flex items-center justify-center bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-slate-100 dark:border-slate-700 shrink-0"
             title="全螢幕模式"
           >
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 md:w-5 md:h-5" /> : <Maximize className="w-3.5 h-3.5 md:w-5 md:h-5" />}
@@ -131,7 +131,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           
           <button
             onClick={onSettings}
-            className="flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 active:scale-95 shrink-0"
+            className="flex items-center justify-center bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all shadow-xl dark:shadow-none shadow-slate-200 active:scale-95 shrink-0"
             title="主控台"
           >
             <Settings className="w-3.5 h-3.5 md:w-5 md:h-5" />

@@ -8,6 +8,7 @@ import { HashRouter } from 'react-router-dom';
 
 import { DialogProvider } from './context/DialogContext.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
+import { ThemeProvider } from './context/ThemeContext.tsx';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const queryClient = new QueryClient({
@@ -29,11 +30,13 @@ createRoot(document.getElementById('root')!).render(
     <GoogleOAuthProvider clientId={FINAL_GOOGLE_CLIENT_ID}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <DialogProvider>
-            <HashRouter>
-              <App />
-            </HashRouter>
-          </DialogProvider>
+          <ThemeProvider>
+            <DialogProvider>
+              <HashRouter>
+                <App />
+              </HashRouter>
+            </DialogProvider>
+          </ThemeProvider>
         </AuthProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>

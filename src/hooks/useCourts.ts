@@ -273,7 +273,7 @@ export function useCourts({
 
       const mergedStatus = { ...playerStatusRef.current, ...newStatusOverrides };
       const fixedStatus: Record<string, PlayerStatus> = {};
-      Object.entries(mergedStatus).forEach(([id, status]) => {
+      (Object.entries(mergedStatus) as [string, PlayerStatus][]).forEach(([id, status]) => {
         if (status === "playing" && !playingIds.has(id)) {
           fixedStatus[id] = "ready";
         } else {
@@ -348,7 +348,7 @@ export function useCourts({
     if (!currentUser) return;
 
     const remoteStatus: Record<string, PlayerStatus> = {};
-    Object.entries(playerStatusRef.current).forEach(([id, status]) => {
+    (Object.entries(playerStatusRef.current) as [string, PlayerStatus][]).forEach(([id, status]) => {
       remoteStatus[id] = status === "finishing" ? "ready" : status;
     });
 

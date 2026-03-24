@@ -24,6 +24,8 @@
   --animate-bounce-stat: bounce-stat 0.5s ease-in-out infinite;
 }
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

@@ -4,7 +4,7 @@ import styles from './BadmintonLoader.module.css';
 export const BadmintonLoader: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center py-10 animate-in fade-in duration-700">
-      <div className="bg-white/5 backdrop-blur-xl p-8 rounded-[3rem] border border-white/10 shadow-2xl flex flex-col items-center gap-6">
+      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-xl p-8 rounded-[3rem] border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-2xl flex flex-col items-center gap-6">
         <svg viewBox="0 0 200 120" className="w-[200px] h-[120px] overflow-visible">
             {/* 定義球拍的共用設計 */}
             <defs>
@@ -48,9 +48,9 @@ export const BadmintonLoader: React.FC = () => {
             </defs>
 
             {/* 場地基準線與網子 */}
-            <line x1="20" y1="95" x2="180" y2="95" stroke="rgba(255,255,255,0.1)" strokeWidth="3" strokeLinecap="round"/>
-            <line x1="100" y1="95" x2="100" y2="70" stroke="rgba(255,255,255,0.2)" strokeWidth="3" strokeLinecap="round"/>
-            <rect x="98" y="70" width="4" height="15" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" rx="1"/>
+            <line x1="20" y1="95" x2="180" y2="95" className="stroke-slate-200 dark:stroke-white/10" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="100" y1="95" x2="100" y2="70" className="stroke-slate-300 dark:stroke-white/20" strokeWidth="3" strokeLinecap="round"/>
+            <rect x="98" y="70" width="4" height="15" className="fill-slate-100 dark:fill-white/5 stroke-slate-300 dark:stroke-white/20" strokeWidth="1" rx="1"/>
 
             {/* 動態陰影 */}
             <ellipse cx="0" cy="0" rx="10" ry="2" fill="rgba(0,0,0,0.3)" className={styles.birdieShadow} />

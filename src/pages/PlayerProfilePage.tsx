@@ -15,7 +15,7 @@ export function PlayerProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8">
+    <div className="min-h-screen bg-white transition-colors duration-500 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <PlayerProfile
           playerId={playerId}

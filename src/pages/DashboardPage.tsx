@@ -157,7 +157,7 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#F0F4F1] p-3 md:p-4 font-sans text-slate-800 flex flex-col selection:bg-emerald-100 overflow-x-hidden overflow-y-auto md:h-screen md:overflow-hidden safe-bottom">
+    <div className="min-h-[100dvh] bg-[#F0F4F1] dark:bg-slate-950 p-3 md:p-4 font-sans text-slate-800 dark:text-slate-100 flex flex-col selection:bg-emerald-100 dark:selection:bg-emerald-900 overflow-x-hidden overflow-y-auto md:h-screen md:overflow-hidden safe-bottom">
       <DashboardHeader
         loading={loading}
         showBannerEgg={showBannerEgg}
@@ -177,9 +177,9 @@ export function DashboardPage() {
 
 
       {error && (
-        <div className="bg-red-500/90 text-white p-4 rounded-xl mb-6 shadow-lg backdrop-blur-sm flex justify-between items-center border border-red-400 shrink-0">
+        <div className="bg-red-500/90 dark:bg-red-900/90 text-white p-4 rounded-xl mb-6 shadow-lg backdrop-blur-sm flex justify-between items-center border border-red-400 dark:border-red-700 shrink-0">
           <span className="font-medium">{error}</span>
-          <button onClick={() => setError(null)} className="text-white/80 hover:text-white bg-red-600/50 px-3 py-1 rounded-lg">關閉</button>
+          <button onClick={() => setError(null)} className="text-white/80 hover:text-white bg-red-600/50 dark:bg-red-800/50 px-3 py-1 rounded-lg">關閉</button>
         </div>
       )}
 
@@ -269,11 +269,11 @@ export function DashboardPage() {
           )}
         </div>
 
-        <div className="w-full md:w-[40%] bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100 flex flex-col h-auto min-h-[400px] md:h-full relative shrink-0">
+        <div className="w-full md:w-[40%] bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col h-auto min-h-[400px] md:h-full relative shrink-0">
           <div className="flex items-center justify-between mb-2 shrink-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">對戰紀錄</h2>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">History</span>
+              <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">對戰紀錄</h2>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">History</span>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">

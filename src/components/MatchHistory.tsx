@@ -66,15 +66,17 @@ const PlayerItem = React.memo(({
       <div className={cn("flex items-center gap-1.5 min-w-0 w-full", isRight ? "flex-row-reverse" : "flex-row")}>
         <div className={cn(
           "w-5 h-5 md:w-6 md:h-6 rounded-full border shadow-sm shrink-0 p-0.5 transition-transform group-hover/player:scale-110",
-          isWinner ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-slate-50"
+          isWinner 
+            ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" 
+            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900"
         )}>
           <img src={avatarUrl} alt={p.name} className="w-full h-full rounded-full object-cover" />
         </div>
         <span 
           onClick={() => onPlayerClick?.(p.id)}
           className={cn(
-            "text-[11px] md:text-[12px] font-black cursor-pointer hover:text-blue-600 truncate px-0.5 rounded transition-colors leading-tight min-w-0",
-            selectedPlayerIds.includes(p.id) ? "text-blue-500 bg-blue-50" : "text-slate-800"
+            "text-[11px] md:text-[12px] font-black cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 truncate px-0.5 rounded transition-colors leading-tight min-w-0",
+            selectedPlayerIds.includes(p.id) ? "text-blue-500 bg-blue-50 dark:bg-blue-900/40" : "text-slate-800 dark:text-slate-200"
           )}
         >
           {p?.name}
@@ -82,11 +84,11 @@ const PlayerItem = React.memo(({
       </div>
 
       {/* Bottom row: CP Info */}
-      <div className={cn("flex items-center gap-1 md:gap-1.5 border border-slate-100/30 px-1 py-[2px] w-fit rounded-lg", isRight ? "flex-row-reverse" : "flex-row")}>
-        <span className="text-[8px] font-bold text-slate-400 tabular-nums leading-none opacity-70">{getPowerBefore(p)}</span>
+      <div className={cn("flex items-center gap-1 md:gap-1.5 border border-slate-100/30 dark:border-slate-800/50 px-1 py-[2px] w-fit rounded-lg", isRight ? "flex-row-reverse" : "flex-row")}>
+        <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 tabular-nums leading-none opacity-70">{getPowerBefore(p)}</span>
         <span className={cn("text-[6px] leading-none", isWinner ? "text-emerald-400" : "text-rose-400")}>{isRight ? "◀" : "▶"}</span>
-        <span className="text-[10px] md:text-[12px] font-black text-slate-800 tabular-nums leading-none drop-shadow-sm">{getPowerAfter(p)}</span>
-        <div className={cn("px-1 py-[2px] rounded text-[8px] font-black tabular-nums leading-none ml-0.5 flex items-center justify-center -mt-[1px]", isWinner ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-rose-50 text-rose-500 border border-rose-100")}>
+        <span className="text-[10px] md:text-[12px] font-black text-slate-800 dark:text-slate-200 tabular-nums leading-none drop-shadow-sm">{getPowerAfter(p)}</span>
+        <div className={cn("px-1 py-[2px] rounded text-[8px] font-black tabular-nums leading-none ml-0.5 flex items-center justify-center -mt-[1px]", isWinner ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800" : "bg-rose-50 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400 border border-rose-100 dark:border-rose-800")}>
           {getDiff(p)}
         </div>
       </div>
@@ -155,8 +157,8 @@ export function MatchHistory({
       <div className="space-y-2 px-1">
         <div className="flex flex-row gap-2 justify-between md:justify-center">
           {/* Date Picker (Left) - Compact spacing */}
-          <div className="flex-1 md:flex-none md:w-[180px] flex items-center gap-1.5 bg-white px-2.5 py-2 rounded-2xl border border-slate-200 shadow-sm transition-all hover:bg-slate-50 focus-within:ring-2 focus-within:ring-emerald-500/20 min-w-0">
-            <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[10px] shrink-0 ml-1">
+          <div className="flex-1 md:flex-none md:w-[180px] flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 focus-within:ring-2 focus-within:ring-emerald-500/20 min-w-0">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[10px] shrink-0 ml-1">
               <Clock className="w-3.5 h-3.5 text-emerald-500" />
               <span className="tracking-tight uppercase">日期</span>
             </div>
@@ -175,8 +177,8 @@ export function MatchHistory({
             className={cn(
               "flex-1 md:flex-none md:w-[180px] flex items-center gap-1.5 px-3 py-2 rounded-2xl border transition-all duration-300 justify-center group relative overflow-hidden min-w-0",
               isFilterOpen || selectedPlayerIds.length > 0
-                ? "bg-[#0f172a] border-slate-800 text-white shadow-lg shadow-blue-500/20"
-                : "bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50"
+                ? "bg-[#0f172a] dark:bg-slate-100 border-slate-800 dark:border-white text-white dark:text-slate-900 shadow-lg shadow-blue-500/20 dark:shadow-none"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
             )}
           >
             <Users className={cn("w-4 h-4 transition-transform group-hover:scale-110", isFilterOpen ? "text-blue-400" : "text-blue-500")} />
@@ -220,7 +222,7 @@ export function MatchHistory({
                       "w-10 h-10 rounded-full border-2 p-0.5 transition-all duration-300",
                       isSelected 
                         ? "border-blue-400 bg-blue-400/20 shadow-[0_0_15px_rgba(59,130,246,0.4)]" 
-                        : "border-slate-700 bg-slate-800 shadow-inner group-hover/item:border-slate-500"
+                        : "border-slate-700 dark:border-slate-600 bg-slate-800 dark:bg-slate-700 shadow-inner group-hover/item:border-slate-500"
                     )}>
                       <img
                         src={getAvatarUrl(p.avatar, p.name)}
@@ -230,11 +232,11 @@ export function MatchHistory({
                     </div>
                     <span className={cn(
                       "text-[9px] font-black truncate w-12 text-center transition-colors",
-                      isSelected ? "text-blue-400" : "text-slate-400"
+                      isSelected ? "text-blue-400" : "text-slate-400 dark:text-slate-500"
                     )}>
                       {p.name}
                     </span>
-                    <span className="text-[8px] font-bold text-slate-500/60 -mt-1">{p.localCount} 場</span>
+                    <span className="text-[8px] font-bold text-slate-500/60 dark:text-slate-600/60 -mt-1">{p.localCount} 場</span>
                   </button>
                 );
               })}
@@ -250,8 +252,8 @@ export function MatchHistory({
             <p className="text-[10px] font-black uppercase tracking-widest">載入中...</p>
           </div>
         ) : filteredHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <Trophy className="w-8 h-8 mb-2 opacity-20 text-slate-400" />
+          <div className="flex flex-col items-center justify-center h-32 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+            <Trophy className="w-8 h-8 mb-2 opacity-20 text-slate-400 dark:text-slate-600" />
             <p className="text-xs font-medium">查無對戰紀錄</p>
           </div>
         ) : (
@@ -260,7 +262,7 @@ export function MatchHistory({
               <div key={match.id} className="match-history-item group flex items-center mb-1.5 md:mb-2 px-1">
                 {/* Refined Main Card with Integrated Badge */}
                 <div className={cn(
-                  "w-full bg-white rounded-[1.2rem] flex items-stretch shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-500 relative overflow-hidden h-auto border border-slate-100"
+                  "w-full bg-white dark:bg-slate-900 rounded-[1.2rem] flex items-stretch shadow-sm hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none transition-all duration-500 relative overflow-hidden h-auto border border-slate-100 dark:border-slate-800"
                 )}>
                   {/* Vertical Progress Bar Style Left Team Indicator */}
                   <div className={cn(
@@ -285,14 +287,14 @@ export function MatchHistory({
                     </div>
 
                     {/* Highly Compact VS Center */}
-                    <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-1 md:px-2 min-w-0 w-[24%] border-x border-slate-50/60">
-                      <div className="bg-slate-100 text-slate-400 px-1.5 py-[2px] rounded-sm text-[7px] md:text-[8px] font-black tracking-widest -mt-1 shadow-inner whitespace-nowrap opacity-80">
+                    <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-1 md:px-2 min-w-0 w-[24%] border-x border-slate-50/60 dark:border-slate-800/60">
+                      <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-1.5 py-[2px] rounded-sm text-[7px] md:text-[8px] font-black tracking-widest -mt-1 shadow-inner whitespace-nowrap opacity-80">
                         MATCH {match.matchNo}
                       </div>
-                      <div className="text-[10px] md:text-[12px] font-black text-slate-700 shadow-sm tracking-tight leading-none bg-slate-50 px-2.5 py-0.5 mx-auto rounded-full ring-1 ring-slate-200/60 w-fit shrink-0 whitespace-nowrap z-10 my-0.5">
+                      <div className="text-[10px] md:text-[12px] font-black text-slate-700 dark:text-slate-200 shadow-sm tracking-tight leading-none bg-slate-50 dark:bg-slate-800 px-2.5 py-0.5 mx-auto rounded-full ring-1 ring-slate-200/60 dark:ring-slate-700/60 w-fit shrink-0 whitespace-nowrap z-10 my-0.5">
                         {match.score || "VS"}
                       </div>
-                      <span className="text-[8px] md:text-[9px] font-bold text-slate-400 tracking-wider text-center shrink-0 leading-none">
+                      <span className="text-[8px] md:text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider text-center shrink-0 leading-none">
                         {format(parseLocalDateTime(match.date), "HH:mm")}
                       </span>
                       {match.duration && (
@@ -336,8 +338,8 @@ export function MatchHistory({
 export const MatchHistorySkeleton: React.FC = () => (
   <div className="space-y-3 px-1 animate-pulse-heavy">
     {[1, 2, 3, 4, 5].map(i => (
-      <div key={i} className="bg-white rounded-[1.2rem] flex items-stretch h-[88px] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="w-2 bg-slate-100/50 shrink-0" />
+      <div key={i} className="bg-white dark:bg-slate-900 rounded-[1.2rem] flex items-stretch h-[88px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+        <div className="w-2 bg-slate-100/50 dark:bg-slate-800/50 shrink-0" />
         <div className="flex-1 py-3 px-2 flex flex-row items-center justify-between gap-2">
           {/* Team 1 Skeleton */}
           <div className="flex flex-col gap-2 flex-1">
@@ -345,18 +347,18 @@ export const MatchHistorySkeleton: React.FC = () => (
             <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
           </div>
           {/* VS Skeleton */}
-          <div className="flex flex-col items-center justify-center gap-1 w-[24%] border-x border-slate-50/60">
-            <div className="h-2 w-8 bg-slate-100 rounded" />
-            <div className="h-4 w-12 bg-slate-100 rounded-full" />
-            <div className="h-2 w-6 bg-slate-100 rounded" />
+          <div className="flex flex-col items-center justify-center gap-1 w-[24%] border-x border-slate-50/60 dark:border-slate-800/60">
+            <div className="h-2 w-8 bg-slate-100 dark:bg-slate-800 rounded" />
+            <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded-full" />
+            <div className="h-2 w-6 bg-slate-100 dark:bg-slate-800 rounded" />
           </div>
           {/* Team 2 Skeleton */}
           <div className="flex flex-col gap-2 flex-1 items-end">
-            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-12 bg-slate-100 rounded" /></div>
-            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-12 bg-slate-100 dark:bg-slate-800 rounded" /></div>
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-10 bg-slate-100 dark:bg-slate-800 rounded" /></div>
           </div>
         </div>
-        <div className="w-2 bg-slate-100/50 shrink-0" />
+        <div className="w-2 bg-slate-100/50 dark:bg-slate-800/50 shrink-0" />
       </div>
     ))}
   </div>

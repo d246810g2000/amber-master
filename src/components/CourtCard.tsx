@@ -46,11 +46,11 @@ const PlayerSlot = React.memo(({
       className={cn(
         "flex flex-col items-center justify-center p-0.5 md:p-1 rounded-xl transition-all duration-300 absolute overflow-hidden shadow-sm hover:z-20",
         player 
-          ? "bg-white opacity-100 ring-1 ring-black/5" 
-          : "bg-black/5 opacity-0 hover:opacity-10",
+          ? "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10" 
+          : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10",
         isSelected && player && "ring-4 ring-amber-400 z-30 shadow-2xl scale-[1.03]",
-        !isSelected && teamColor === "red" && player && "bg-rose-50/95 ring-rose-200/50",
-        !isSelected && teamColor === "blue" && player && "bg-blue-50/95 ring-blue-200/50",
+        !isSelected && teamColor === "red" && player && "bg-rose-50/95 dark:bg-rose-950/80 ring-rose-200/50 dark:ring-rose-900/50",
+        !isSelected && teamColor === "blue" && player && "bg-blue-50/95 dark:bg-blue-950/80 ring-blue-200/50 dark:ring-blue-900/50",
         "active:scale-95 group/slot",
         className
       )}
@@ -62,15 +62,15 @@ const PlayerSlot = React.memo(({
             alt={player.name}
             className="hidden md:block w-7 h-7 rounded-full object-cover shadow-sm bg-white mb-1 border border-slate-200/50"
           />
-          <div className="font-black text-[11px] md:text-[13px] tracking-tighter text-slate-800 truncate w-full text-center px-0.5 md:px-1 leading-none mb-0.5 md:mb-1 drop-shadow-sm">
+          <div className="font-black text-[11px] md:text-[13px] tracking-tighter text-slate-800 dark:text-slate-100 truncate w-full text-center px-0.5 md:px-1 leading-none mb-0.5 md:mb-1 drop-shadow-sm">
             {player.name}
           </div>
-          <div className="flex items-center gap-1 px-1 md:px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded-md md:rounded-lg shadow-inner scale-[0.8] origin-top md:scale-90">
-             <span className="text-[9px] font-black text-slate-500 leading-none">
+          <div className="flex items-center gap-1 px-1 md:px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-md md:rounded-lg shadow-inner scale-[0.8] origin-top md:scale-90">
+             <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 leading-none">
                {player.matchCount || 0}場
              </span>
-             <span className="text-[9px] font-black text-slate-200">|</span>
-             <span className="text-[9px] font-black text-emerald-700 leading-none">
+             <span className="text-[9px] font-black text-slate-200 dark:text-slate-700">|</span>
+             <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 leading-none">
                {Math.round(player.mu * 10)}
              </span>
           </div>
@@ -129,18 +129,18 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   }, [startTime]);
 
   return (
-    <div className="bg-white rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 transition-all hover:shadow-lg w-full max-w-[340px] md:max-w-[220px] mx-auto group">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 dark:border-slate-800 transition-all hover:shadow-lg w-full max-w-[340px] md:max-w-[220px] mx-auto group">
       {/* Court Header */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-white border-b border-slate-50 h-[42px] shrink-0">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-white dark:bg-slate-900 border-b border-slate-50 dark:border-slate-800 h-[42px] shrink-0">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isRecommended ? "bg-indigo-500 animate-pulse" : "bg-emerald-500")} />
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">
+          <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">
             {isRecommended ? "Target Match" : `Court ${title.replace("場地", "")}`}
           </span>
         </div>
         {!isRecommended && (
-          <div className="bg-slate-900 px-2 py-0.5 rounded shadow-sm scale-90 origin-right shrink-0">
-            <span className="font-mono text-xs font-black text-white tracking-widest whitespace-nowrap">
+          <div className="bg-slate-900 dark:bg-slate-100 px-2 py-0.5 rounded shadow-sm scale-90 origin-right shrink-0">
+            <span className="font-mono text-xs font-black text-white dark:text-slate-900 tracking-widest whitespace-nowrap">
               {elapsed}
             </span>
           </div>
@@ -157,8 +157,8 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                  "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border",
                  hasControl ? "cursor-pointer active:scale-95" : "cursor-not-allowed opacity-50",
                  isAutoMode 
-                   ? "bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm shadow-indigo-200/50 animate-pulse-subtle" 
-                   : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                   ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 shadow-sm shadow-indigo-200/50 animate-pulse-subtle" 
+                   : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                )}
                title={hasControl ? (isAutoMode ? "自動模式已開啟" : "開啟自動模式") : "無控制權"}
             >
@@ -184,18 +184,18 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       </div>
 
       {/* Court Floor - FULL PRECISION ALIGNMENT WITH INSET */}
-      <div className="relative bg-[#4A7265] h-[220px] md:h-[300px] flex flex-col justify-between overflow-hidden shrink-0 select-none">
+      <div className="relative bg-[#4A7265] dark:bg-[#3d5c52] h-[220px] md:h-[300px] flex flex-col justify-between overflow-hidden shrink-0 select-none">
         
         {/* Court Markings - Absolute Relative to the 300px floor */}
         <div className="absolute inset-0 pointer-events-none z-0">
-          <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/50"></div>
-          <div className="absolute inset-x-0 top-[5.7%] h-0 border-t-[1px] border-white/50"></div>
-          <div className="absolute inset-x-0 bottom-[5.7%] h-0 border-t-[1px] border-white/50"></div>
-          <div className="absolute inset-x-0 top-[35.3%] h-0 border-t-[1.5px] border-white/70"></div>
-          <div className="absolute inset-x-0 bottom-[35.3%] h-0 border-t-[1.5px] border-white/70"></div>
-          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[1.5px] bg-white/50"></div>
+        <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/30 dark:border-white/20"></div>
+          <div className="absolute inset-x-0 top-[5.7%] h-0 border-t-[1px] border-white/30 dark:border-white/20"></div>
+          <div className="absolute inset-x-0 bottom-[5.7%] h-0 border-t-[1px] border-white/30 dark:border-white/20"></div>
+          <div className="absolute inset-x-0 top-[35.3%] h-0 border-t-[1.5px] border-white/40 dark:border-white/30"></div>
+          <div className="absolute inset-x-0 bottom-[35.3%] h-0 border-t-[1.5px] border-white/40 dark:border-white/30"></div>
+          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[1.5px] bg-white/30 dark:bg-white/20"></div>
           {/* Net Line */}
-          <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-0 border-t-[1.5px] border-white/80 border-dashed z-0 opacity-50"></div>
+          <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-0 border-t-[1.5px] border-white/40 dark:border-white/30 border-dashed z-0 opacity-50"></div>
         </div>
 
         {/* Big Background ID */}
@@ -267,7 +267,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
       {/* Footer */}
       {/* Footer - CENTERED & BALANCED ACTION AREA */}
-      <div className="p-2 bg-white flex items-center justify-center h-[52px] shrink-0 border-t border-slate-50/50">
+      <div className="p-2 bg-white dark:bg-slate-900 flex items-center justify-center h-[52px] shrink-0 border-t border-slate-50/50 dark:border-slate-800/50">
         <div className={cn(
           "w-full px-1",
           (isRecommended || (actionText === "結束" && onCancel && players.some(p => p !== null))) ? "grid grid-cols-2 gap-2" : "flex justify-center"
@@ -276,7 +276,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             <button
               onClick={onSelectPlayers}
               disabled={isLoading || isActionDisabled || !hasControl}
-              className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 border border-indigo-100 hover:bg-black hover:text-white hover:border-black rounded-xl transition-all active:scale-95 bg-indigo-50/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black hover:border-black dark:hover:border-white rounded-xl transition-all active:scale-95 bg-indigo-50/30 dark:bg-indigo-950/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
             </button>
@@ -288,7 +288,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                 <button
                   onClick={onCancel}
                   disabled={isLoading || isActionDisabled}
-                  className="px-4 py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 text-slate-500 hover:bg-slate-200 w-full"
+                  className="px-4 py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 w-full"
                 >
                   取消
                 </button>
@@ -300,8 +300,8 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                 className={cn(
                   "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center",
                   actionText === "結束" 
-                    ? "bg-red-50 text-red-500 hover:bg-red-600 hover:text-white w-full" 
-                    : "bg-slate-900 text-white hover:bg-black w-full"
+                    ? "bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 hover:bg-red-600 hover:text-white w-full" 
+                    : "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black dark:hover:bg-white w-full"
                 )}
               >
                 {actionText}
@@ -315,21 +315,21 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 });
 
 export const CourtCardSkeleton: React.FC = () => (
-  <div className="bg-white rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 w-full max-w-[340px] md:max-w-[220px] mx-auto animate-pulse-heavy">
+  <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 dark:border-slate-800 w-full max-w-[340px] md:max-w-[220px] mx-auto animate-pulse-heavy">
     {/* Skeleton Header */}
-    <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-50 h-[42px]">
+    <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-50 dark:border-slate-800 h-[42px]">
       <div className="flex items-center gap-1.5">
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-200" />
-        <div className="h-2 w-16 bg-slate-200 rounded" />
+        <div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />
+        <div className="h-2 w-16 bg-slate-200 dark:bg-slate-700 rounded" />
       </div>
-      <div className="h-4 w-10 bg-slate-200 rounded" />
+      <div className="h-4 w-10 bg-slate-200 dark:bg-slate-700 rounded" />
     </div>
 
     {/* Skeleton Court Floor */}
-    <div className="relative bg-slate-100 h-[220px] md:h-[300px]">
-      <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/40" />
-      <div className="absolute inset-x-0 top-[35.3%] h-0 border-t-[1.5px] border-white/60" />
-      <div className="absolute inset-x-0 bottom-[35.3%] h-0 border-t-[1.5px] border-white/60" />
+    <div className="relative bg-slate-100 dark:bg-slate-800 h-[220px] md:h-[300px]">
+      <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/30 dark:border-white/10" />
+      <div className="absolute inset-x-0 top-[35.3%] h-0 border-t-[1.5px] border-white/40 dark:border-white/20" />
+      <div className="absolute inset-x-0 bottom-[35.3%] h-0 border-t-[1.5px] border-white/40 dark:border-white/20" />
       
       {/* Skeleton Player Slots */}
       {[0, 1, 2, 3].map((i) => (
@@ -347,8 +347,8 @@ export const CourtCardSkeleton: React.FC = () => (
     </div>
 
     {/* Skeleton Footer */}
-    <div className="p-2 h-[52px] border-t border-slate-50/50 flex items-center justify-center">
-      <div className="h-8 w-3/4 bg-slate-100 rounded-xl" />
+    <div className="p-2 h-[52px] border-t border-slate-50/50 dark:border-slate-800/50 flex items-center justify-center">
+      <div className="h-8 w-3/4 bg-slate-100 dark:bg-slate-800 rounded-xl" />
     </div>
   </div>
 );
