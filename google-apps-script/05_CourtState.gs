@@ -67,6 +67,30 @@ function getCourtState(targetDate) {
     }
 
     if (foundRow === -1) {
+      // 如果找不到當天狀態且是對應今天，則初始化一個包含「常駐球員」的初始狀態
+      if (target === Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd')) {
+        const playersResult = getPlayers();
+        const initialPlayerStatus = {};
+        if (playersResult.status === 'success') {
+          playersResult.data.forEach(p => {
+            if (p.type === 'resident') {
+              initialPlayerStatus[p.id] = 'ready';
+            }
+          });
+        }
+
+        const initialState = {
+          courts: [
+            { id: '1', name: '1', players: [null, null, null, null], startTime: null },
+            { id: '2', name: '2', players: [null, null, null, null], startTime: null }
+          ],
+          playerStatus: initialPlayerStatus,
+          recommendedPlayers: [null, null, null, null],
+          controller: null,
+          controllerName: null
+        };
+        return { status: 'success', data: { version: 0, state: initialState, targetDate: target } };
+      }
       return { status: 'success', data: { version: 0, state: null, targetDate: target } };
     }
 

@@ -38,7 +38,7 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
         let changed = false;
         players.forEach(p => {
           if (!next[p.id]) {
-            next[p.id] = "resting";
+            next[p.id] = p.type === 'resident' ? "ready" : "resting";
             changed = true;
           }
         });

@@ -8,6 +8,7 @@ export const RawPlayerSchema = z.object({
   mu: z.coerce.number().optional(),
   sigma: z.coerce.number().optional(),
   isGoogleLinked: z.boolean().optional(),
+  type: z.enum(['resident', 'guest']).optional().default('guest'),
 });
 
 export const PlayerBindingSchema = z.object({

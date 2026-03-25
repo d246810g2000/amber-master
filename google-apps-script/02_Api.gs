@@ -83,9 +83,9 @@ function doPost(e) {
     }
     const action = data.action;
     const actions = {
-      'addPlayer': () => addPlayer(data.name, data.avatar),
+      'addPlayer': () => addPlayer(data.name, data.avatar, data.type),
       'addPlayersBatch': () => addPlayersBatch(data.names),
-      'updatePlayer': () => updatePlayer(data.id, data.name, data.avatar),
+      'updatePlayer': () => updatePlayer(data.id, data.name, data.avatar, data.type),
       'deletePlayer': () => deletePlayer(data.id),
       'deletePlayersBatch': () => deletePlayersBatch(data.ids),
       'recordMatchAndUpdate': () => recordMatchAndUpdate(data),

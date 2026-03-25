@@ -14,7 +14,8 @@ function getPlayers() {
       mu: Number(row[3]) || CONFIG.INITIAL.MU,
       sigma: Number(row[4]) || CONFIG.INITIAL.SIGMA,
       hasBinding: !!rowEmail,
-      isGoogleLinked: !!rowEmail && rowEmail.includes('@')
+      isGoogleLinked: !!rowEmail && rowEmail.includes('@'),
+      type: row[6] ? String(row[6]) : 'guest'
     };
   });
 
@@ -140,12 +141,13 @@ function unbindPlayer(playerId, userEmail) {
 }
 
 /** 新增球員 */
-function addPlayer(name, avatar) {
+function addPlayer(name, avatar, type) {
   const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
   const id = new Date().getTime().toString();
   const finalAvatar = avatar || getRandomAvatar();
-  sheet.appendRow([id, name, finalAvatar, CONFIG.INITIAL.MU, CONFIG.INITIAL.SIGMA]);
-  return { status: 'success', data: { id, name, avatar: finalAvatar } };
+  const finalType = type || 'guest';
+  sheet.appendRow([id, name, finalAvatar, CONFIG.INITIAL.MU, CONFIG.INITIAL.SIGMA, '', finalType]);
+  return { status: 'success', data: { id, name, avatar: finalAvatar, type: finalType } };
 }
 
 /** 批次新增球員 */
@@ -153,20 +155,27 @@ function addPlayersBatch(names) {
   if (!names || names.length === 0) return { status: 'error', message: 'No names provided' };
   const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
   const now = new Date().getTime();
-  const rows = names.map((name, i) => [
-    (now + i).toString(),
-    name,
-    getRandomAvatar(),
-    CONFIG.INITIAL.MU,
-    CONFIG.INITIAL.SIGMA
-  ]);
+  const rows = names.map((p, i) => {
+    const name = typeof p === 'string' ? p : p.name;
+    const avatar = (typeof p === 'object' && p.avatar) ? p.avatar : getRandomAvatar();
+    const type = (typeof p === 'object' && p.type) ? p.type : 'guest';
+    return [
+      (now + i).toString(),
+      name,
+      avatar,
+      CONFIG.INITIAL.MU,
+      CONFIG.INITIAL.SIGMA,
+      '',
+      type
+    ];
+  });
 
-  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
   return { status: 'success', message: `Added ${rows.length} players` };
 }
 
 /** 更新球員資訊 */
-function updatePlayer(id, name, avatar) {
+function updatePlayer(id, name, avatar, type) {
   const sheet = getSheet(CONFIG.SHEETS.PLAYERS);
   const data = sheet.getDataRange().getValues();
   const rowIndex = data.findIndex(row => String(row[0]) === String(id));
@@ -174,8 +183,9 @@ function updatePlayer(id, name, avatar) {
   if (rowIndex === -1) return { status: 'error', message: 'Player not found' };
 
   const rowNum = rowIndex + 1;
-  sheet.getRange(rowNum, 2).setValue(name);
+  if (name !== undefined) sheet.getRange(rowNum, 2).setValue(name);
   if (avatar !== undefined) sheet.getRange(rowNum, 3).setValue(avatar);
+  if (type !== undefined) sheet.getRange(rowNum, 7).setValue(type);
 
   return { status: 'success', message: 'Player updated' };
 }

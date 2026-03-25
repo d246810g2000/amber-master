@@ -19,6 +19,8 @@ import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import Link2 from "lucide-react/dist/esm/icons/link-2";
 import Link2Off from "lucide-react/dist/esm/icons/link-2-off";
 import ShieldAlert from "lucide-react/dist/esm/icons/shield-alert";
+import Star from "lucide-react/dist/esm/icons/star";
+import User from "lucide-react/dist/esm/icons/user";
 
 import Monitor from "lucide-react/dist/esm/icons/monitor";
 import * as gasApi from '../lib/gasApi';
@@ -55,6 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [bindingActionId, setBindingActionId] = useState<string | null>(null);
   const [ownerMap, setOwnerMap] = useState<Record<string, boolean>>({});
+  const [newPlayerType, setNewPlayerType] = useState<'resident' | 'guest'>('guest');
   const { showAlert, showConfirm } = useDialog();
   const { currentUser, isAuthenticated } = useAuth();
   const [userBinding, setUserBinding] = useState<{ isBound: boolean; playerId?: string } | null>(null);
@@ -103,11 +106,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     try {
       if (names.length === 1) {
-        await gasApi.addPlayer(names[0], getRandomAvatar());
+        await gasApi.addPlayer(names[0], getRandomAvatar(), newPlayerType);
       } else {
         const playersToAdd = names.map(name => ({
           name,
-          avatar: getRandomAvatar()
+          avatar: getRandomAvatar(),
+          type: newPlayerType
         }));
         await gasApi.addPlayersBatch(playersToAdd);
       }
@@ -186,6 +190,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setBindingActionId(null);
       }
     });
+  };
+
+  const handleToggleType = async (id: string, currentType?: 'resident' | 'guest') => {
+    const nextType = currentType === 'resident' ? 'guest' : 'resident';
+    setActionId(id);
+    try {
+      await gasApi.updatePlayer(id, undefined, undefined, nextType);
+      onUpdate();
+    } catch (err) {
+      showAlert("更新失敗", "無法變更球員類型。");
+    } finally {
+      setActionId(null);
+    }
   };
 
   const loadBindingStatus = async () => {
@@ -400,6 +417,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <form onSubmit={handleAdd} className="space-y-4">
                       <textarea value={newPlayerNames} onChange={(e) => setNewPlayerNames(e.target.value)} placeholder="輸入姓名 (多行/空格/逗點即可)"
                         className="w-full p-4 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 outline-none transition-all" rows={3} disabled={loading} />
+                      <div className="flex items-center gap-4 px-2">
+                        <span className="text-xs font-bold text-slate-500">預設類型：</span>
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                          <button type="button" onClick={() => setNewPlayerType('resident')} className={cn("px-3 py-1.5 rounded-md text-[10px] font-black transition-all", newPlayerType === 'resident' ? "bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400" : "text-slate-400")}>常駐</button>
+                          <button type="button" onClick={() => setNewPlayerType('guest')} className={cn("px-3 py-1.5 rounded-md text-[10px] font-black transition-all", newPlayerType === 'guest' ? "bg-white dark:bg-slate-700 shadow-sm text-emerald-600 dark:text-emerald-400" : "text-slate-400")}>臨打</button>
+                        </div>
+                      </div>
                       <div className="flex gap-2">
                         <button type="submit" disabled={loading} className="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-black text-xs disabled:opacity-50 flex justify-center items-center">
                           {loading ? <Loader2 size={16} className="animate-spin" /> : '匯入資料'}
@@ -425,68 +449,91 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
 
-                {/* Player List */}
-                <div className="space-y-1">
-                  {players.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 py-3 border-b border-slate-50 dark:border-slate-800/50 group hover:bg-slate-50 dark:hover:bg-slate-800/30 px-2 rounded-xl transition-colors">
-                      {/* Checkbox for Batch Delete */}
-                      <button onClick={() => {
-                        const newSet = new Set(selectedIds);
-                        if (newSet.has(p.id)) newSet.delete(p.id);
-                        else newSet.add(p.id);
-                        setSelectedIds(newSet);
-                      }} className="text-slate-300 dark:text-slate-600 hover:text-slate-500 transition-colors">
-                        {selectedIds.has(p.id) ? <CheckSquare size={16} className="text-indigo-500" /> : <Square size={16} />}
-                      </button>
-
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0">
-                        <img src={getAvatarUrl(p.avatar, p.name)} className="w-full h-full object-cover" alt={p.name} />
-                      </div>
-
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { onSelectPlayer(p.id); onClose(); }}>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
-                          {p.hasBinding && (
-                             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 rounded-md shrink-0">
-                               <ShieldCheck size={10} className="text-indigo-600 dark:text-indigo-400" />
-                               <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">已綁定</span>
-                             </div>
-                          )}
+                {/* Player List grouped */}
+                <div className="space-y-6">
+                  {['resident', 'guest'].map((groupType) => {
+                    const groupPlayers = players.filter(p => (p.type || 'guest') === groupType);
+                    if (groupPlayers.length === 0) return null;
+                    return (
+                      <div key={groupType} className="space-y-1">
+                        <div className="flex items-center gap-2 px-2 py-1">
+                          {groupType === 'resident' ? <Star size={12} className="text-indigo-500" /> : <User size={12} className="text-emerald-500" />}
+                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {groupType === 'resident' ? '常駐球員' : '臨打球員'} ({groupPlayers.length})
+                          </h3>
                         </div>
-                      </div>
+                        {groupPlayers.map(p => (
+                          <div key={p.id} className="flex items-center gap-3 py-3 border-b border-slate-50 dark:border-slate-800/50 group hover:bg-slate-50 dark:hover:bg-slate-800/30 px-2 rounded-xl transition-colors">
+                            {/* Checkbox for Batch Delete */}
+                            <button onClick={() => {
+                              const newSet = new Set(selectedIds);
+                              if (newSet.has(p.id)) newSet.delete(p.id);
+                              else newSet.add(p.id);
+                              setSelectedIds(newSet);
+                            }} className="text-slate-300 dark:text-slate-600 hover:text-slate-500 transition-colors">
+                              {selectedIds.has(p.id) ? <CheckSquare size={16} className="text-indigo-500" /> : <Square size={16} />}
+                            </button>
 
-                      {/* Binding Actions */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                        {isAuthenticated && currentUser?.email && (
-                          <>
-                            {ownerMap[p.id] ? (
-                              <button
-                                onClick={() => handleUnbind(p.id, p.name)}
-                                disabled={!!bindingActionId}
-                                className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
-                                title="解除綁定"
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0">
+                              <img src={getAvatarUrl(p.avatar, p.name)} className="w-full h-full object-cover" alt={p.name} />
+                            </div>
+
+                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { onSelectPlayer(p.id); onClose(); }}>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
+                                {p.hasBinding && (
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 rounded-md shrink-0">
+                                    <ShieldCheck size={10} className="text-indigo-600 dark:text-indigo-400" />
+                                    <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">已綁定</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <button 
+                                onClick={() => handleToggleType(p.id, p.type)}
+                                disabled={actionId === p.id}
+                                className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-lg transition-all"
+                                title={p.type === 'resident' ? "轉為臨打" : "設為常駐"}
                               >
-                                {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2Off size={16} />}
+                                {actionId === p.id ? <Loader2 size={16} className="animate-spin" /> : p.type === 'resident' ? <User size={16} /> : <Star size={16} />}
                               </button>
-                            ) : !p.hasBinding && !userBinding?.isBound ? (
-                              <button
-                                onClick={() => handleBind(p.id, p.name)}
-                                disabled={!!bindingActionId}
-                                className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all"
-                                title="立即綁定"
-                              >
-                                {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+
+                              {isAuthenticated && currentUser?.email && (
+                                <>
+                                  {ownerMap[p.id] ? (
+                                    <button
+                                      onClick={() => handleUnbind(p.id, p.name)}
+                                      disabled={!!bindingActionId}
+                                      className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                                      title="解除綁定"
+                                    >
+                                      {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2Off size={16} />}
+                                    </button>
+                                  ) : !p.hasBinding && !userBinding?.isBound ? (
+                                    <button
+                                      onClick={() => handleBind(p.id, p.name)}
+                                      disabled={!!bindingActionId}
+                                      className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                      title="立即綁定"
+                                    >
+                                      {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                                    </button>
+                                  ) : null}
+                                </>
+                              )}
+                              
+                              <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500" title="刪除單一球員">
+                                {actionId === p.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
                               </button>
-                            ) : null}
-                          </>
-                        )}
-                        
-                        <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500" title="刪除單一球員">
-                          {actionId === p.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
-                        </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {players.length === 0 && (
                     <div className="py-10 text-center text-slate-400 text-sm font-bold">目前沒有球員資料</div>
                   )}

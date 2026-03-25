@@ -100,18 +100,18 @@ export async function fetchMatches(date?: string): Promise<RawMatch[]> {
 }
 
 /** 新增球員 */
-export async function addPlayer(name: string, avatar?: string) {
-  return gasPost({ action: 'addPlayer', name, avatar }, z.any());
+export async function addPlayer(name: string, avatar?: string, type?: 'resident' | 'guest') {
+  return gasPost({ action: 'addPlayer', name, avatar, type }, z.any());
 }
 
 /** 批次新增球員 */
-export async function addPlayersBatch(players: { name: string, avatar?: string }[]) {
-  return gasPost({ action: 'addPlayersBatch', players }, z.any());
+export async function addPlayersBatch(players: { name: string, avatar?: string, type?: 'resident' | 'guest' }[]) {
+  return gasPost({ action: 'addPlayersBatch', names: players }, z.any());
 }
 
 /** 更新球員名稱與頭像 */
-export async function updatePlayer(id: string, name: string, avatar?: string) {
-  return gasPost({ action: 'updatePlayer', id, name, avatar }, z.any());
+export async function updatePlayer(id: string, name?: string, avatar?: string, type?: 'resident' | 'guest') {
+  return gasPost({ action: 'updatePlayer', id, name, avatar, type }, z.any());
 }
 
 /** 刪除球員 */

@@ -8,6 +8,7 @@ export interface Player {
   avatar?: string;
   email?: string;
   hasBinding?: boolean;
+  type?: 'resident' | 'guest';
 }
 
 export interface MatchPlayer {
