@@ -13,7 +13,8 @@ function getPlayers() {
       avatar: row[2] ? String(row[2]) : '',
       mu: Number(row[3]) || CONFIG.INITIAL.MU,
       sigma: Number(row[4]) || CONFIG.INITIAL.SIGMA,
-      hasBinding: !!rowEmail
+      hasBinding: !!rowEmail,
+      isGoogleLinked: !!rowEmail && rowEmail.includes('@')
     };
   });
 

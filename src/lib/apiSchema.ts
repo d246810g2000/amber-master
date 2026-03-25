@@ -7,7 +7,7 @@ export const RawPlayerSchema = z.object({
   hasBinding: z.boolean().optional(),
   mu: z.coerce.number().optional(),
   sigma: z.coerce.number().optional(),
-  email: z.string().optional(),
+  isGoogleLinked: z.boolean().optional(),
 });
 
 export const PlayerBindingSchema = z.object({
