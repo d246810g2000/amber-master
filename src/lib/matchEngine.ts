@@ -15,6 +15,28 @@ export const BASE_SIGMA = INITIAL_SIGMA;
 
 // ─── Helpers ───
 
+/**
+ * 根據比分計算權重 Multiplier (M)
+ * 公式: M = (2 * WinnerScore) / (WinnerScore + LoserScore)
+ * 範圍限制在 [1.0, 1.5] 之間。
+ */
+export function calculateScoreMultiplier(scoreStr?: string): number {
+  if (!scoreStr) return 1.0;
+  
+  // 解析比分 (支援 21:10, 21-10, 21 10)
+  const parts = scoreStr.split(/[:\-\s]+/).map(Number).filter(n => !isNaN(n));
+  if (parts.length < 2) return 1.0;
+
+  const w = Math.max(parts[0], parts[1]);
+  const l = Math.min(parts[0], parts[1]);
+  
+  if (w === 0) return 1.0; // 避免除以 0
+
+  const rawM = (2 * w) / (w + l);
+  // 限制在 1.0 (最小) 到 1.5 (最大加權) 之間
+  return Math.max(1.0, Math.min(1.5, rawM));
+}
+
 function getLocalDateString(dateVal?: unknown): string {
   if (typeof dateVal === 'string') {
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
@@ -122,10 +144,17 @@ export function getDerivedPlayers(
         const ranks = (Number(winnerVal) === 1) ? [0, 1] : [1, 0];
         const [newTeam1, newTeam2] = rate([team1Ratings, team2Ratings], ranks);
 
-        t1p1.mu = newTeam1[0].mu; t1p1.sigma = newTeam1[0].sigma;
-        t1p2.mu = newTeam1[1].mu; t1p2.sigma = newTeam1[1].sigma;
-        t2p1.mu = newTeam2[0].mu; t2p1.sigma = newTeam2[0].sigma;
-        t2p2.mu = newTeam2[1].mu; t2p2.sigma = newTeam2[1].sigma;
+        const multiplier = calculateScoreMultiplier(match.score);
+
+        // 套用加權後的 Mu (Delta * M)
+        t1p1.mu = t1p1.mu + (newTeam1[0].mu - t1p1.mu) * multiplier;
+        t1p1.sigma = newTeam1[0].sigma;
+        t1p2.mu = t1p2.mu + (newTeam1[1].mu - t1p2.mu) * multiplier;
+        t1p2.sigma = newTeam1[1].sigma;
+        t2p1.mu = t2p1.mu + (newTeam2[0].mu - t2p1.mu) * multiplier;
+        t2p1.sigma = newTeam2[0].sigma;
+        t2p2.mu = t2p2.mu + (newTeam2[1].mu - t2p2.mu) * multiplier;
+        t2p2.sigma = newTeam2[1].sigma;
 
         [t1p1, t1p2, t2p1, t2p2].forEach((p) => p.matchCount = (p.matchCount || 0) + 1);
         if (winnerVal === 1) { t1p1.winCount = (t1p1.winCount || 0) + 1; t1p2.winCount = (t1p2.winCount || 0) + 1; }
@@ -316,11 +345,13 @@ export function calculateMatchResult(
   const ranks = winner === 1 ? [0, 1] : [1, 0];
   const [newTeam1, newTeam2] = rate([team1Ratings, team2Ratings], ranks);
 
+  const multiplier = calculateScoreMultiplier(score);
+
   const updatedPlayers = [
-    { id: t1p1.id, name: t1p1.name, muBefore: t1p1.mu, muAfter: newTeam1[0].mu, mu: newTeam1[0].mu, sigma: newTeam1[0].sigma },
-    { id: t1p2.id, name: t1p2.name, muBefore: t1p2.mu, muAfter: newTeam1[1].mu, mu: newTeam1[1].mu, sigma: newTeam1[1].sigma },
-    { id: t2p1.id, name: t2p1.name, muBefore: t2p1.mu, muAfter: newTeam2[0].mu, mu: newTeam2[0].mu, sigma: newTeam2[0].sigma },
-    { id: t2p2.id, name: t2p2.name, muBefore: t2p2.mu, muAfter: newTeam2[1].mu, mu: newTeam2[1].mu, sigma: newTeam2[1].sigma },
+    { id: t1p1.id, name: t1p1.name, muBefore: t1p1.mu, muAfter: t1p1.mu + (newTeam1[0].mu - t1p1.mu) * multiplier, mu: t1p1.mu + (newTeam1[0].mu - t1p1.mu) * multiplier, sigma: newTeam1[0].sigma },
+    { id: t1p2.id, name: t1p2.name, muBefore: t1p2.mu, muAfter: t1p2.mu + (newTeam1[1].mu - t1p2.mu) * multiplier, mu: t1p2.mu + (newTeam1[1].mu - t1p2.mu) * multiplier, sigma: newTeam1[1].sigma },
+    { id: t2p1.id, name: t2p1.name, muBefore: t2p1.mu, muAfter: t2p1.mu + (newTeam2[0].mu - t2p1.mu) * multiplier, mu: t2p1.mu + (newTeam2[0].mu - t2p1.mu) * multiplier, sigma: newTeam2[0].sigma },
+    { id: t2p2.id, name: t2p2.name, muBefore: t2p2.mu, muAfter: t2p2.mu + (newTeam2[1].mu - t2p2.mu) * multiplier, mu: t2p2.mu + (newTeam2[1].mu - t2p2.mu) * multiplier, sigma: newTeam2[1].sigma },
   ];
 
   const makeStatEntry = (p: DerivedPlayer, newMu: number, newSigma: number, isWin: boolean) => {
@@ -339,10 +370,10 @@ export function calculateMatchResult(
   };
 
   const updatedStats = [
-    makeStatEntry(t1p1, newTeam1[0].mu, newTeam1[0].sigma, winner === 1),
-    makeStatEntry(t1p2, newTeam1[1].mu, newTeam1[1].sigma, winner === 1),
-    makeStatEntry(t2p1, newTeam2[0].mu, newTeam2[0].sigma, winner === 2),
-    makeStatEntry(t2p2, newTeam2[1].mu, newTeam2[1].sigma, winner === 2),
+    makeStatEntry(t1p1, updatedPlayers[0].mu, updatedPlayers[0].sigma, winner === 1),
+    makeStatEntry(t1p2, updatedPlayers[1].mu, updatedPlayers[1].sigma, winner === 1),
+    makeStatEntry(t2p1, updatedPlayers[2].mu, updatedPlayers[2].sigma, winner === 2),
+    makeStatEntry(t2p2, updatedPlayers[3].mu, updatedPlayers[3].sigma, winner === 2),
   ];
 
   const matchRecord: MatchRecord = {
@@ -350,12 +381,12 @@ export function calculateMatchResult(
     date: getTaipeiDateTimeString(),
     matchDate,
     team1: [
-      { id: t1p1.id, name: t1p1.name, avatar: t1p1.avatar, muBefore: t1p1.mu, muAfter: newTeam1[0].mu, sigma: newTeam1[0].sigma },
-      { id: t1p2.id, name: t1p2.name, avatar: t1p2.avatar, muBefore: t1p2.mu, muAfter: newTeam1[1].mu, sigma: newTeam1[1].sigma },
+      { id: t1p1.id, name: t1p1.name, avatar: t1p1.avatar, muBefore: t1p1.mu, muAfter: updatedPlayers[0].mu, sigma: updatedPlayers[0].sigma },
+      { id: t1p2.id, name: t1p2.name, avatar: t1p2.avatar, muBefore: t1p2.mu, muAfter: updatedPlayers[1].mu, sigma: updatedPlayers[1].sigma },
     ],
     team2: [
-      { id: t2p1.id, name: t2p1.name, avatar: t2p1.avatar, muBefore: t2p1.mu, muAfter: newTeam2[0].mu, sigma: newTeam2[0].sigma },
-      { id: t2p2.id, name: t2p2.name, avatar: t2p2.avatar, muBefore: t2p2.mu, muAfter: newTeam2[1].mu, sigma: newTeam2[1].sigma },
+      { id: t2p1.id, name: t2p1.name, avatar: t2p1.avatar, muBefore: t2p1.mu, muAfter: updatedPlayers[2].mu, sigma: updatedPlayers[2].sigma },
+      { id: t2p2.id, name: t2p2.name, avatar: t2p2.avatar, muBefore: t2p2.mu, muAfter: updatedPlayers[3].mu, sigma: updatedPlayers[3].sigma },
     ],
     winner,
     score: score || '',
@@ -485,10 +516,16 @@ export function calculateComprehensiveMu(
       const ranks = winnerVal === 1 ? [0, 1] : [1, 0];
       const [newTeam1, newTeam2] = rate([team1Ratings, team2Ratings], ranks);
 
-      t1p1.mu = newTeam1[0].mu; t1p1.sigma = newTeam1[0].sigma;
-      t1p2.mu = newTeam1[1].mu; t1p2.sigma = newTeam1[1].sigma;
-      t2p1.mu = newTeam2[0].mu; t2p1.sigma = newTeam2[0].sigma;
-      t2p2.mu = newTeam2[1].mu; t2p2.sigma = newTeam2[1].sigma;
+      const multiplier = calculateScoreMultiplier(match.score);
+
+      t1p1.mu = t1p1.mu + (newTeam1[0].mu - t1p1.mu) * multiplier;
+      t1p1.sigma = newTeam1[0].sigma;
+      t1p2.mu = t1p2.mu + (newTeam1[1].mu - t1p2.mu) * multiplier;
+      t1p2.sigma = newTeam1[1].sigma;
+      t2p1.mu = t2p1.mu + (newTeam2[0].mu - t2p1.mu) * multiplier;
+      t2p1.sigma = newTeam2[0].sigma;
+      t2p2.mu = t2p2.mu + (newTeam2[1].mu - t2p2.mu) * multiplier;
+      t2p2.sigma = newTeam2[1].sigma;
     }
   });
 
@@ -534,10 +571,16 @@ export function calculateComprehensiveTrend(
         [new Rating(t2p1.mu, t2p1.sigma), new Rating(t2p2.mu, t2p2.sigma)]
       ], ranks);
 
-      t1p1.mu = newTeam1[0].mu; t1p1.sigma = newTeam1[0].sigma;
-      t1p2.mu = newTeam1[1].mu; t1p2.sigma = newTeam1[1].sigma;
-      t2p1.mu = newTeam2[0].mu; t2p1.sigma = newTeam2[0].sigma;
-      t2p2.mu = newTeam2[1].mu; t2p2.sigma = newTeam2[1].sigma;
+        const multiplier = calculateScoreMultiplier(match.score);
+
+        t1p1.mu = t1p1.mu + (newTeam1[0].mu - t1p1.mu) * multiplier;
+        t1p1.sigma = newTeam1[0].sigma;
+        t1p2.mu = t1p2.mu + (newTeam1[1].mu - t1p2.mu) * multiplier;
+        t1p2.sigma = newTeam1[1].sigma;
+        t2p1.mu = t2p1.mu + (newTeam2[0].mu - t2p1.mu) * multiplier;
+        t2p1.sigma = newTeam2[0].sigma;
+        t2p2.mu = t2p2.mu + (newTeam2[1].mu - t2p2.mu) * multiplier;
+        t2p2.sigma = newTeam2[1].sigma;
 
       if (t1Names.includes(targetPlayer.name) || t2Names.includes(targetPlayer.name)) {
         trend.push({
