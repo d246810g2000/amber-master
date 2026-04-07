@@ -239,7 +239,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const teammateStats = useMemo(() => {
     if (!data?.player || !data?.history) return [];
     const { player, history } = data;
-    const statsMap = new Map<string, { count: number, wins: number }>();
+    const statsMap = new Map<string, { count: number, wins: number, name: string }>();
 
     history.forEach(m => {
       const p1 = m.team1.find(p => p.id === player.id);
@@ -252,21 +252,36 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
       const teammate = myTeam.find(p => p.id !== player.id);
       if (teammate) {
-        const s = statsMap.get(teammate.name) || { count: 0, wins: 0 };
+        const s = statsMap.get(teammate.id) || { count: 0, wins: 0, name: teammate.name };
         s.count++;
         if (isWinner) s.wins++;
-        statsMap.set(teammate.name, s);
+        statsMap.set(teammate.id, s);
       }
     });
 
-    return Array.from(statsMap.entries()).map(([name, s]) => ({
-      name,
-      count: s.count,
-      wins: s.wins,
-      winRate: (s.wins / s.count * 100)
-    })).sort((a, b) => {
+    return Array.from(statsMap.entries()).map(([id, s]) => {
+      const winRate = (s.wins / s.count * 100);
+      // 加權得分：勝率 * (1 - 1 / (場次 + 1))
+      // 確保高場次高勝率排在前面
+      const reliabilityScore = winRate * (1 - 1 / (s.count + 1));
+      
+      return {
+        id,
+        name: s.name,
+        count: s.count,
+        wins: s.wins,
+        winRate,
+        reliabilityScore
+      };
+    }).sort((a, b) => {
       const modifier = partnerSort.dir === 'asc' ? 1 : -1;
       const key = partnerSort.key as keyof typeof a;
+      
+      // 如果是依勝率排序，使用加權後的可靠性分數
+      if (key === 'winRate' && partnerSort.dir === 'desc') {
+        return (b.reliabilityScore - a.reliabilityScore);
+      }
+      
       if (typeof a[key] === 'string') return (a[key] as string).localeCompare(b[key] as string) * modifier;
       return ((a[key] as number) - (b[key] as number)) * modifier;
     });

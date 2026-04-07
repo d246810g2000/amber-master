@@ -32,6 +32,7 @@ export interface MatchRecord {
   duration?: string;
   courtName?: string;
   matchNo?: number;
+  quality?: number;
 }
 
 export interface Match {

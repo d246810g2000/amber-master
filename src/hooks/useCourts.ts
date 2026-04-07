@@ -465,7 +465,8 @@ export function useCourts({
         players as matchEngine.DerivedPlayer[],
         readyPlayerIds,
         matchHistory,
-        ignoreFatigue
+        ignoreFatigue,
+        targetDate
       );
 
       if (suggestions.length > 0) {
@@ -592,7 +593,13 @@ export function useCourts({
     setSelectedCourtSlot(null);
     await syncToRemote(newCourts, [null, null, null, null], newStatus, ['recommended', newCourts[emptyCourtIndex].id]);
     
-    if (isAutoMode) triggerCooldown();
+    if (isAutoMode) {
+      triggerCooldown();
+      // 在上場清空後，延遲一下下立刻為預告場重新排點
+      setTimeout(() => {
+        handleMatchmake();
+      }, 500);
+    }
   };
 
   const handleEndMatch = (courtId: string) => {
@@ -667,10 +674,20 @@ export function useCourts({
 
       // 4. 清理：1.5秒後把球員狀態從 finishing 轉回 ready 並同步
       setTimeout(() => {
+        const currentRefStatus = playerStatusRef.current;
         const releases: Record<string, PlayerStatus> = {};
         participants.forEach((p) => { releases[p.id] = "ready"; });
+        
         // 只同步狀態，不重複觸發該場地/備戰區的 loading 動畫
         syncToRemote(newCourts, recommendedPlayers, releases, []);
+
+        // 【核心優化】: 如果開啟自動模式，當球員回歸 ready 時，立刻觸發重新排點（洗牌預告場）
+        if (isAutoMode) {
+          // 這裡我們需要短暫延時確保上面的 syncToRemote 已經反應到最新的 playerStatus
+          setTimeout(() => {
+            handleMatchmake();
+          }, 300);
+        }
       }, 1500);
 
     } catch (err: any) {

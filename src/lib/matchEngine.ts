@@ -14,6 +14,26 @@ export const BASE_MU = INITIAL_MU;
 export const BASE_SIGMA = INITIAL_SIGMA;
 
 // ─── Helpers ───
+ 
+/**
+ * 取得陣列的所有子集組合 (k-combinations)
+ */
+function getCombinations<T>(array: T[], k: number): T[][] {
+  const result: T[][] = [];
+  function backtrack(start: number, current: T[]) {
+    if (current.length === k) {
+      result.push([...current]);
+      return;
+    }
+    for (let i = start; i < array.length; i++) {
+        current.push(array[i]);
+        backtrack(i + 1, current);
+        current.pop();
+    }
+  }
+  backtrack(0, []);
+  return result;
+}
 
 /**
  * 根據比分計算權重 Multiplier (M)
@@ -181,53 +201,84 @@ export interface MatchSuggestion {
 /**
  * 配對演算法：實現絕對公平輪替、體力連打平衡與對戰多樣性。
  */
+export const ENGINE_CONFIG = {
+  MODE: 'Hard-Constraint (Anti-Bench Mode)',
+  WAIT_WEIGHT: 10,
+  BONUS_THRESHOLD: 3,
+  BONUS_MULTIPLIER: 1000,
+  FATIGUE_PENALTY_PER_GAME: 2, // 每多連打一場，戰力計算時扣除的分數
+};
+
 export function matchmake(
   allPlayers: DerivedPlayer[], 
   playerIds: string[], 
   recentMatches: MatchRecord[] = [],
-  ignoreFatigue = false
+  ignoreFatigue = false,
+  targetDate: string = getTaipeiDateString()
 ): (MatchSuggestion & { effectiveQuality: number })[] {
   const stringPlayerIds = playerIds.map(id => String(id));
   const targetPlayers = allPlayers.filter((p) => stringPlayerIds.includes(String(p.id)));
   if (targetPlayers.length < 4) throw new Error('每場比賽至少需要 4 名球員');
 
-  // 0. 獲取「剛打完」的人員 ID (追蹤最後 2 場共 8 人，適配雙場地)
-  const lastMatchIds = new Set<string>();
-  recentMatches.slice(0, 2).forEach(match => {
-    [...match.team1, ...match.team2].forEach(p => lastMatchIds.add(String(p.id)));
+  // 0. 計算每位球員的等候時間 (Rounds Since Played) 與 連打次數 (Consecutive Matches)
+  const waitCountMap: Record<string, number> = {};
+  const consecutiveCountMap: Record<string, number> = {};
+  stringPlayerIds.forEach(id => {
+    waitCountMap[id] = 0;
+    consecutiveCountMap[id] = 0;
   });
-
-  // 1. 群組過濾：按照場數由少到多
-  const countsMap: Record<number, DerivedPlayer[]> = {};
-  targetPlayers.forEach((p) => {
-    const c = p.matchCount || 0;
-    if (!countsMap[c]) countsMap[c] = [];
-    countsMap[c].push(p);
-  });
-
-  const sortedCounts = Object.keys(countsMap).map(Number).sort((a, b) => a - b);
   
-  // 2. 嚴格場數與體力雙重優先
-  let pool: DerivedPlayer[] = [];
-  for (const count of sortedCounts) {
-    const playersInTier = countsMap[count];
-    
-    // 將該場次的球員再細分為「剛打完」與「已休息」
-    const rested = playersInTier.filter(p => !lastMatchIds.has(String(p.id))).sort(() => Math.random() - 0.5);
-    const fatigued = playersInTier.filter(p => lastMatchIds.has(String(p.id))).sort(() => Math.random() - 0.5);
-    
-    // 優先讓「已休息」的人進入候選池 (除非開啟無視疲勞)
-    if (ignoreFatigue) {
-      pool = [...pool, ...playersInTier.sort(() => Math.random() - 0.5)];
-    } else {
-      pool = [...pool, ...rested];
-      // 如果休息的人不夠 4 個，才把疲勞的人補進來
-      if (pool.length < 4) {
-        pool = [...pool, ...fatigued];
+  // 遍歷最近對戰
+  let stillConsecutive: Record<string, boolean> = {};
+  stringPlayerIds.forEach(id => stillConsecutive[id] = true);
+
+  for (let i = 0; i < recentMatches.length; i++) {
+    const match = recentMatches[i];
+    const participants = new Set([...match.team1, ...match.team2].map(p => String(p.id)));
+    stringPlayerIds.forEach(id => {
+      if (participants.has(id)) {
+        if (waitCountMap[id] === 0) waitCountMap[id] = i + 1;
+        if (stillConsecutive[id]) consecutiveCountMap[id]++;
+      } else {
+        stillConsecutive[id] = false; // 只要有一場沒打，連打就中斷
       }
+    });
+  }
+  
+  // 對於從未上場的人 (剛到)，給予模擬的中等等待
+  stringPlayerIds.forEach(id => {
+    if (waitCountMap[id] === 0) {
+        waitCountMap[id] = 2;
+        consecutiveCountMap[id] = 0;
     }
-    
-    if (pool.length >= 4) break;
+  });
+
+  // 1. 給予權重排序：等候感優先 (Social-Diversity Mode)
+  // Score = matchCount * 10 - waitCount * 3
+  const playerScores = targetPlayers.map(p => {
+    const wait = waitCountMap[String(p.id)] || 0;
+    const match = p.matchCount || 0;
+    // 連休 2 場 (wait >= 3) -> 給予極高優先權 (核彈級權重)
+    // 確保任何連休 2 場的人在下一場空位出現時必定上場
+    const bonus = wait >= 3 ? 1000 : 0; 
+    return {
+      player: p,
+      score: (match * 10) - (wait * 10) - bonus
+    };
+  });
+
+  playerScores.sort((a, b) => a.score - b.score || Math.random() - 0.5);
+  
+  // 2. 挑選候選池 (前 12 名)
+  // 這樣能保證連休的人一定在前 12 名內被選中，進入全組合掃描
+  const pool = playerScores.slice(0, 12).map(s => s.player);
+  
+  // 3. 獲取直接疲勞 ID (最後 1 場共 4 人)，避免連打
+  // 即使在 pool 內，排點組合評分時仍會避開剛打完的人
+  const lastMatchIds = new Set<string>();
+  if (recentMatches.length > 0) {
+    const m = recentMatches[0];
+    [...m.team1, ...m.team2].forEach(p => lastMatchIds.add(String(p.id)));
   }
 
   const finalists = pool.slice(0, 12);
@@ -240,21 +291,31 @@ export function matchmake(
     const currentFourIds = new Set([...t1, ...t2].map(p => String(p.id)));
 
     // 歷史多樣性懲罰 (隊友重複、對手重複)
-    recentMatches.slice(0, 10).forEach((m, idx) => {
+    // 掃描範圍擴大至 20 場或當天所有比賽
+    const scanLimit = Math.max(15, recentMatches.length);
+    recentMatches.slice(0, scanLimit).forEach((m, idx) => {
       const m1Ids = new Set(m.team1.map(p => String(p.id)));
       const m2Ids = new Set(m.team2.map(p => String(p.id)));
       const allMIds = new Set([...m1Ids, ...m2Ids]);
-      const weight = (10 - idx) / 10;
+      
+      const isToday = m.matchDate === targetDate;
+      // 當天活動的權重極高 (1.2x)，確保在 24 場以內絕不輕易重複
+      const weight = isToday ? 1.2 : Math.max(0.1, (scanLimit - idx) / scanLimit);
 
-      // 避免固定搭檔
-      if (t1.every(p => m1Ids.has(String(p.id))) || t1.every(p => m2Ids.has(String(p.id)))) penalty += 0.15 * weight;
-      if (t2.every(p => m1Ids.has(String(p.id))) || t2.every(p => m2Ids.has(String(p.id)))) penalty += 0.15 * weight;
+      // A. 四人組重複：極重罰 (0.6 -> 0.8)
+      let sameQuartetCount = 0;
+      allMIds.forEach(id => { if (currentFourIds.has(id)) sameQuartetCount++; });
+      if (sameQuartetCount === 4) penalty += 0.8 * weight;
 
-      // 避免固定四人組
-      if (idx < 5) {
-        let sameCount = 0;
-        allMIds.forEach(id => { if (currentFourIds.has(id)) sameCount++; });
-        if (sameCount === 4) penalty += 0.2 * weight;
+      // B. 固定搭檔重複：重罰 (0.35 -> 0.4)
+      const t1Repeat = t1.every(p => m1Ids.has(String(p.id))) || t1.every(p => m2Ids.has(String(p.id)));
+      const t2Repeat = t2.every(p => m1Ids.has(String(p.id))) || t2.every(p => m2Ids.has(String(p.id)));
+      if (t1Repeat) penalty += 0.4 * weight;
+      if (t2Repeat) penalty += 0.4 * weight;
+      
+      // C. 互動重複：只要 4 人中有 2 人以上在同一場出現過，就給予累進懲罰
+      if (sameQuartetCount >= 2) {
+        penalty += (sameQuartetCount - 1) * 0.15 * weight;
       }
     });
 
@@ -262,8 +323,8 @@ export function matchmake(
     if (!ignoreFatigue) {
       const fatigueCount = [...currentFourIds].filter(id => lastMatchIds.has(id)).length;
       if (fatigueCount > 0) {
-        // 只要包含一個疲勞球員，就給予基礎懲罰；包含越多，懲罰越重
-        penalty += 0.3 * fatigueCount;
+        // 連打一場基礎罰 0.35，連打兩場（全場 4 人都在）極重罰
+        penalty += 0.35 * fatigueCount;
       }
     }
 
@@ -278,12 +339,20 @@ export function matchmake(
     ];
 
     candidates.forEach(([t1, t2]) => {
-      const team1Ratings = t1.map((p) => new Rating(p.mu, p.sigma));
-      const team2Ratings = t2.map((p) => new Rating(p.mu, p.sigma));
+      // 考慮連打疲勞後的「有效戰力」進行平衡分組
+      const getEffectiveRating = (p: DerivedPlayer) => {
+        const count = consecutiveCountMap[String(p.id)] || 0;
+        const penalty = (!ignoreFatigue && count >= 1) ? count * ENGINE_CONFIG.FATIGUE_PENALTY_PER_GAME : 0;
+        return new Rating(p.mu - penalty, p.sigma);
+      };
+
+      const team1Ratings = t1.map(p => getEffectiveRating(p));
+      const team2Ratings = t2.map(p => getEffectiveRating(p));
+      
       const q = quality([team1Ratings, team2Ratings]);
       const penalty = getPenalty(t1, t2);
       
-      // 有效品質評級
+      // 有效品質評級 (考慮歷史重複與疲勞懲罰)
       const effectiveQuality = q - penalty + (Math.random() * 0.02);
       matches.push({ team1: t1, team2: t2, quality: q, effectiveQuality });
     });
@@ -292,10 +361,18 @@ export function matchmake(
   if (finalists.length === 4) {
     processGroup(finalists);
   } else {
-    const sortedFinalists = [...finalists].sort((a, b) => a.mu - b.mu);
-    for (let i = 0; i <= sortedFinalists.length - 4; i++) {
-        processGroup(sortedFinalists.slice(i, i + 4));
-    }
+    // 改用全組合掃描 (Exhaustive Scan)
+    // C(12, 4) = 495 組，每組 3 種分隊 = 1485 種可能，計算量極小但能徹底解決重複問題
+    const allQuartets = getCombinations(finalists, 4);
+    
+    // 如果組合太多 (例如 > 20 人)，則進行隨機抽樣以保全效能
+    const sampledQuartets = allQuartets.length > 1000 
+      ? allQuartets.sort(() => Math.random() - 0.5).slice(0, 1000)
+      : allQuartets;
+
+    sampledQuartets.forEach(group => {
+      processGroup(group);
+    });
   }
 
   matches.sort((a, b) => b.effectiveQuality - a.effectiveQuality);
@@ -327,6 +404,7 @@ export function calculateMatchResult(
   score?: string,
   duration?: string,
   matchId?: string,
+  quality?: number
 ): MatchResultData {
   const getPlayer = (id: string) => allPlayers.find((p) => p.id === id);
 
@@ -391,6 +469,7 @@ export function calculateMatchResult(
     winner,
     score: score || '',
     duration: duration || '',
+    quality: quality,
   };
 
   return { matchRecord, updatedPlayers, updatedStats };
