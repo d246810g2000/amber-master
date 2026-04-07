@@ -93,7 +93,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
         {/* Controls Group (All inline) */}
-        <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
+        <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto pl-2">
           {/* Controller Status & Takeover */}
           <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 mr-1 md:mr-2 shrink-0">
             <span className={cn(

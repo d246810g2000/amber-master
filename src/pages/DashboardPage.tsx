@@ -72,6 +72,14 @@ export function DashboardPage() {
     targetDate: currentFilterDate
   });
 
+  // 當遠端同步狀態的版本號更新時，主動重新整理球員數據與對戰紀錄，達成即時同步分數
+  React.useEffect(() => {
+    if (syncState.version > 0 && isSyncInitialized) {
+      refetchPlayers();
+      refetchMatches();
+    }
+  }, [syncState.version, isSyncInitialized, refetchPlayers, refetchMatches]);
+
   const loading = playersLoading || historyLoading || playersFetching || historyFetching;
 
   const {

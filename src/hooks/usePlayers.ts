@@ -26,6 +26,7 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
       const derived = matchEngine.getDerivedPlayers(basePlayers, stats, matches, targetDate);
       return derived.sort((a, b) => b.mu - a.mu);
     },
+    refetchInterval: 30000, 
   });
 
   const players = playersQuery.data || EMPTY_PLAYERS;

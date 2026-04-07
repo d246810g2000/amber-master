@@ -90,11 +90,11 @@ export function LoginButton() {
 
   if (currentUser) {
     return (
-      <div className="flex items-center gap-2 md:gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-2 md:pr-4 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:bg-white dark:hover:bg-slate-900 shrink-0 h-[26px] md:h-[44px] self-center">
+      <div className="flex items-center gap-2 md:gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-2.5 md:pr-4 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:bg-white dark:hover:bg-slate-900 shrink-0 h-[34px] md:h-[44px] self-center">
         <img
           src={displayAvatarSrc}
           alt={displayName}
-          className="w-5 h-5 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
+          className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
           referrerPolicy="no-referrer"
         />
         <div className="flex flex-col min-w-0 justify-center h-full">
@@ -104,7 +104,7 @@ export function LoginButton() {
             disabled={!canGoToProfile}
             title={canGoToProfile ? '進入我的球員頁' : '請先綁定球員'}
             className={cn(
-              'text-left text-[10px] md:text-sm font-black text-slate-800 dark:text-slate-100 leading-none truncate max-w-[80px] md:max-w-[160px]',
+              'text-left text-[12px] md:text-sm font-black text-slate-800 dark:text-slate-100 leading-none truncate max-w-[80px] md:max-w-[160px] py-1',
               canGoToProfile && 'cursor-pointer hover:text-emerald-600 hover:underline underline-offset-2',
               !canGoToProfile && 'cursor-default opacity-90'
             )}
@@ -127,7 +127,7 @@ export function LoginButton() {
   return (
     <button
       onClick={() => handleCustomLogin()}
-      className="flex items-center gap-2 px-3.5 md:px-5 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 dark:shadow-none active:scale-95 shrink-0 border border-slate-800 dark:border-white h-[26px] md:h-[44px]"
+      className="flex items-center gap-2 px-3.5 md:px-5 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 dark:shadow-none active:scale-95 shrink-0 border border-slate-800 dark:border-white h-[34px] md:h-[44px]"
     >
       <div className="w-3.5 h-3.5 md:w-5 md:h-5 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0">
         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 md:w-3.5 md:h-3.5">

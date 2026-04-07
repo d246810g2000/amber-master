@@ -22,6 +22,7 @@ export function useMatches(targetDate: string) {
       const playerMap = buildPlayerMap(basePlayers);
       return mapAndSortMatches(rawMatches, playerMap);
     },
+    refetchInterval: 30000,
   });
 
   const allMatchesQuery = useQuery({

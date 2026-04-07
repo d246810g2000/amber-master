@@ -196,7 +196,7 @@ function recordMatchAndUpdate(data) {
   matchSheet.appendRow([
     matchId, "'" + nowStr,
     data.t1p1, data.t1p2, data.t2p1, data.t2p2,
-    data.winnerTeam, data.score || '', data.duration || '',
+    data.winnerTeam, (data.score ? "'" + data.score : ''), (data.duration ? "'" + data.duration : ''),
     JSON.stringify(data.updatedPlayers || []),
     data.courtName || '',
     matchNo
