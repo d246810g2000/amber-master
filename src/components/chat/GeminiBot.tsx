@@ -148,7 +148,7 @@ export function GeminiBot({ players = [], playerStatus = {}, courts = [], recomm
 【當前環境上下文 (內部數據)】
 - 用戶: ${currentUser?.name || '匿名球友'}
 - 用戶生涯戰力: ${profile?.comprehensiveMu ? (profile.comprehensiveMu * 10).toFixed(0) : '250'}
-- 用戶內容即時戰力: ${profile?.instantMu ? (profile.instantMu * 10).toFixed(0) : '250'}
+- 用戶今日即時戰力: ${profile?.instantMu ? (profile.instantMu * 10).toFixed(0) : '250'} (若為250且今日無紀錄，代表今日首場尚未開始)
 - 今日紀錄: ${userWins}勝 ${userLosses}敗
 - 備戰區玩家(即時): ${readyList.length > 0 ? readyList.join(', ') : '無'}
 - 球場狀態: ${activeCourts.map(c => `${c.name}號場(${c.players.filter((p: any) => p).map((p: any) => p.name).join('&')})`).join(', ') || '目前全空'}

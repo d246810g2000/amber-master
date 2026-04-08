@@ -19,7 +19,7 @@ import Share2 from "lucide-react/dist/esm/icons/share-2";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
-import { getAvatarUrl, isGoogleAvatarString, cn } from '../lib/utils';
+import { getAvatarUrl, isGoogleAvatarString, cn, getTaipeiDateString } from '../lib/utils';
 import { usePlayerProfile } from '../hooks/usePlayerProfile';
 
 // Sub-components
@@ -369,11 +369,19 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   }, [matchHistory]);
 
   const currentStats = useMemo(() => {
+    const today = getTaipeiDateString();
     const sorted = [...matchHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    if (sorted.length === 0) return {
-      instant: Math.round((instantMu || 25) * 10),
-      career: Math.round((comprehensiveMu || 25) * 10)
-    };
+    
+    // 檢查最後一場比賽是否為今天
+    const isLatestFromToday = sorted.length > 0 && 
+      sorted[0].date?.split(' ')[0] === today;
+
+    if (sorted.length === 0 || !isLatestFromToday) {
+      return {
+        instant: Math.round((instantMu || 25) * 10),
+        career: Math.round((comprehensiveMu || 25) * 10)
+      };
+    }
     return { instant: sorted[0].instantAfter, career: sorted[0].compAfter };
   }, [matchHistory, instantMu, comprehensiveMu]);
 

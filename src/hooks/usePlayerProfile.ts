@@ -4,6 +4,8 @@ import * as matchEngine from '../lib/matchEngine';
 import type { PlayerHistoryResult } from '../lib/matchEngine';
 import type { RawPlayer, RawPlayerStat } from '../lib/gasApi';
 
+import { getTaipeiDateString } from '../lib/utils';
+
 /** 趨勢圖上的單一數據點 */
 export interface CombinedTrendPoint {
   date: string;
@@ -48,19 +50,27 @@ export function usePlayerProfile(playerId: string) {
 
       const result = matchEngine.getPlayerHistory(playerId, basePlayers, allMatches);
 
-      // 1. 即時戰力
-      const playerSnapshots = snapshots.filter(s => s.id === playerId);
+      // 1. 即時戰力 (僅限今日，若今日無對戰則回歸 25.0)
+      const today = getTaipeiDateString();
       let latestInstant = 25.0;
-      if (playerSnapshots.length > 0) {
-        playerSnapshots.sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
-        const latestStat = playerSnapshots[playerSnapshots.length - 1];
-        latestInstant = latestStat.mu ?? 25.0;
+
+      if (result.history && result.history.length > 0) {
+        // 過濾出今天的比賽 (result.history 已經是由新到舊排序)
+        const todayMatches = result.history.filter(m => m.matchDate === today);
+        if (todayMatches.length > 0) {
+          const latestM = todayMatches[0];
+          const myP = [...latestM.team1, ...latestM.team2].find(p => String(p.id) === playerId);
+          if (myP?.muAfter !== undefined) {
+            latestInstant = myP.muAfter;
+          }
+        }
       }
 
       // 2. 生涯戰力
       let latestComp = result.player.mu || 25.0;
 
       // 3. 組合趨勢圖
+      const playerSnapshots = snapshots.filter(s => s.id === playerId);
       const dailyMap: Record<string, number> = {};
       playerSnapshots.forEach(s => {
         if (s.date) dailyMap[s.date] = s.mu ?? 25.0;
@@ -70,14 +80,6 @@ export function usePlayerProfile(playerId: string) {
 
       if (comprehensiveTrend.length > 0) {
         latestComp = comprehensiveTrend[comprehensiveTrend.length - 1].mu;
-      }
-
-      if (result.history && result.history.length > 0) {
-        const latestM = result.history[0];
-        const myP = [...latestM.team1, ...latestM.team2].find(p => String(p.id) === playerId);
-        if (myP?.muAfter) {
-          latestInstant = myP.muAfter;
-        }
       }
 
       const combinedTrend: CombinedTrendPoint[] = comprehensiveTrend.map((t, idx) => {
