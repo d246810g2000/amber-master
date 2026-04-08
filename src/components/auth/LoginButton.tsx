@@ -90,34 +90,39 @@ export function LoginButton() {
 
   if (currentUser) {
     return (
-      <div className="flex items-center gap-2 md:gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-2.5 md:pr-4 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:bg-white dark:hover:bg-slate-900 shrink-0 h-[34px] md:h-[44px] self-center">
-        <img
-          src={displayAvatarSrc}
-          alt={displayName}
-          className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
-          referrerPolicy="no-referrer"
-        />
-        <div className="flex flex-col min-w-0 justify-center h-full">
-          <button
-            type="button"
-            onClick={handleNameClick}
-            disabled={!canGoToProfile}
-            title={canGoToProfile ? '進入我的球員頁' : '請先綁定球員'}
-            className={cn(
-              'text-left text-[12px] md:text-sm font-black text-slate-800 dark:text-slate-100 leading-none truncate max-w-[80px] md:max-w-[160px] py-1',
-              canGoToProfile && 'cursor-pointer hover:text-emerald-600 hover:underline underline-offset-2',
-              !canGoToProfile && 'cursor-default opacity-90'
-            )}
-          >
-            {displayName}
-          </button>
-        </div>
+      <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-1 md:pr-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all shrink-0 h-[34px] md:h-[44px] self-center">
+        <button
+          type="button"
+          onClick={handleNameClick}
+          disabled={!canGoToProfile}
+          title={canGoToProfile ? '進入我的球員頁' : '請先綁定球員'}
+          className={cn(
+            "flex items-center gap-2 md:gap-3 pl-0.5 md:pl-1 pr-1.5 md:pr-2.5 py-1 rounded-full transition-all shrink-0 min-w-0 h-full",
+            canGoToProfile ? "hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer group/profile" : "cursor-default"
+          )}
+        >
+          <img
+            src={displayAvatarSrc}
+            alt={displayName}
+            className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
+            referrerPolicy="no-referrer"
+          />
+          <div className="flex flex-col min-w-0 justify-center">
+            <span className={cn(
+              'text-left text-[12px] md:text-sm font-black text-slate-800 dark:text-slate-100 leading-none truncate max-w-[80px] md:max-w-[160px]',
+              canGoToProfile && 'group-hover/profile:text-emerald-600 group-hover/profile:underline underline-offset-2'
+            )}>
+              {displayName}
+            </span>
+          </div>
+        </button>
+
         <button
           onClick={logout}
-          className="ml-0.5 md:ml-1 p-0.5 md:p-1.5 rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center justify-center h-full"
+          className="ml-0.5 p-1 md:p-2 rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center justify-center h-[28px] w-[28px] md:h-[36px] md:w-[36px]"
           title="登出"
         >
-          <LogOut className="w-3 h-3 md:w-4 md:h-4" />
+          <LogOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
         </button>
       </div>
     );

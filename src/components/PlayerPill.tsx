@@ -15,6 +15,7 @@ interface PlayerPillProps {
   isFatigued?: boolean;
   isGolden?: boolean;
   hasControl?: boolean;
+  courtName?: string;
 }
 
 export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
@@ -28,6 +29,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   isFatigued,
   isGolden,
   hasControl = true,
+  courtName,
 }) => {
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
@@ -111,8 +113,8 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         {status === "playing" && (
           <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/40 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
             <div className="bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded shadow-sm rotate-[-12deg]">
-              <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">
-                On Court
+              <span className="text-[10px] font-black text-slate-700 dark:text-slate-100 uppercase tracking-tighter">
+                {courtName ? `${courtName} 場` : "On Court"}
               </span>
             </div>
           </div>

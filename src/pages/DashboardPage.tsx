@@ -13,6 +13,7 @@ import { PlayerZones, PlayerZonesSkeleton } from "../components/dashboard/Player
 import { CourtCard, CourtCardSkeleton } from "../components/CourtCard";
 import { useNavigate } from 'react-router-dom';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import { GeminiBot } from "../components/chat/GeminiBot";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -122,6 +123,16 @@ export function DashboardPage() {
     [...match.team1, ...match.team2].forEach(p => fatiguedPlayerIds.add(p.id));
   });
 
+  const playerCourtMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    courts.forEach(c => {
+      c.players.forEach(p => {
+        if (p) map[p.id] = c.name;
+      });
+    });
+    return map;
+  }, [courts]);
+  
   const handleAllReady = () => {
     const updates: Record<string, PlayerStatus> = {};
     restingPlayers.forEach(p => { updates[p.id] = "ready"; });
@@ -273,6 +284,7 @@ export function DashboardPage() {
               onAllReady={handleAllReady}
               onAllResting={handleAllResting}
               hasControl={hasControl}
+              playerCourtMap={playerCourtMap}
             />
           )}
         </div>
@@ -326,6 +338,13 @@ export function DashboardPage() {
           isSubmitting={submittingMatch}
         />
       )}
+      
+      <GeminiBot 
+        players={players as any} 
+        playerStatus={playerStatus}
+        courts={courts}
+        recommendedPlayers={recommendedPlayers as any}
+      />
     </div>
   );
 }

@@ -95,7 +95,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* Controls Group (All inline) */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto pl-2">
           {/* Controller Status & Takeover */}
-          <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 mr-1 md:mr-2 shrink-0">
+          <div className={cn(
+            "flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border transition-all mr-1 md:mr-2 shrink-0",
+            isLockedByOther ? "border-amber-200 dark:border-amber-900/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]" : "border-slate-100 dark:border-slate-700"
+          )} title={isGuest ? "請先登入 Google 帳號以進行操作" : undefined}>
             <span className={cn(
               "w-2 h-2 rounded-full",
               isLockedByMe ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
@@ -112,7 +115,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
             {!isLockedByMe && !isGuest && (
               <button
-                onClick={onTakeover}
+                onClick={() => {
+                  if (isLockedByOther) {
+                    if (window.confirm(`⚠️ ${currentControllerName} 正在操作中，確定要取得控制權？`)) {
+                      onTakeover();
+                    }
+                  } else {
+                    onTakeover();
+                  }
+                }}
                 disabled={isSyncing}
                 className="ml-1 md:ml-2 px-2 py-1 bg-[#0f172a] hover:bg-slate-800 text-white text-[9px] md:text-[10px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50 border border-slate-700 whitespace-nowrap"
               >

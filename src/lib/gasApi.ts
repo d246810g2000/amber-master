@@ -195,4 +195,5 @@ export async function updateCourtState(data: { expectedVersion: number; state: a
 }
 
 
+export type UserBinding = z.infer<typeof UserBindingSchema>;
 export type { RawPlayer, RawPlayerStat, RawMatch };

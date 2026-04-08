@@ -123,6 +123,18 @@ export function useCourts({
    */
   const localRecommendedUnsyncedRef = useRef(false);
 
+  // 【核心優化】：使用 Ref 追蹤絕對最新的狀態，防止非同步回調（如 setTimeout）中的 stale closure 導致回滾／覆寫
+  const courtsRef = useRef(courts);
+  const recommendedPlayersRef = useRef(recommendedPlayers);
+
+  useEffect(() => {
+    courtsRef.current = courts;
+  }, [courts]);
+
+  useEffect(() => {
+    recommendedPlayersRef.current = recommendedPlayers;
+  }, [recommendedPlayers]);
+
   useEffect(() => {
     playerStatusRef.current = playerStatus;
   }, [playerStatus]);
@@ -231,13 +243,13 @@ export function useCourts({
 
   // Auto Mode Logic
   useEffect(() => {
-    if (!isAutoMode || !hasControl || !autoActionReady || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching || pendingRemoteSyncCount > 0) return;
+    if (!isAutoMode || !hasControl || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching || pendingRemoteSyncCount > 0) return;
 
     const hasEmptyCourt = courts.some(c => c.players.every(p => p === null));
     const isRecommendedFull = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p !== null && p !== undefined);
     const isRecommendedEmpty = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p === null || p === undefined);
 
-    if (hasEmptyCourt && isRecommendedFull) {
+    if (autoActionReady && hasEmptyCourt && isRecommendedFull) {
       handleGoToCourt();
       return;
     }
@@ -249,6 +261,26 @@ export function useCourts({
       }
     }
   }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching, pendingRemoteSyncCount]);
+  
+  // 【核心優化】：抽離共用的「即時排點」邏輯，確保取消與結束比賽的行為完全一致
+  const getInstantMatchmaking = useCallback((readyIds: string[]) => {
+    if (readyIds.length < 4) return [null, null, null, null];
+    try {
+      const suggestions = matchEngine.matchmake(
+        players as matchEngine.DerivedPlayer[],
+        readyIds,
+        matchHistory,
+        ignoreFatigue,
+        targetDate
+      );
+      if (suggestions.length > 0) {
+        return [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
+      }
+      return [null, null, null, null];
+    } catch (e) {
+      return [null, null, null, null];
+    }
+  }, [players, matchHistory, ignoreFatigue, targetDate]);
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
@@ -461,6 +493,7 @@ export function useCourts({
     try {
       setIsMatchmaking(true);
       setError(null);
+      
       const suggestions = matchEngine.matchmake(
         players as matchEngine.DerivedPlayer[],
         readyPlayerIds,
@@ -472,9 +505,9 @@ export function useCourts({
       if (suggestions.length > 0) {
         const newRecs = [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
         // 不配對推薦卡 loading：備戰區已有「配對中...」遮罩
-        await syncToRemote(courts, newRecs as Player[], {}, []);
+        await syncToRemote(courtsRef.current, newRecs as Player[], {}, []);
       } else {
-        await syncToRemote(courts, [null, null, null, null], {}, []);
+        await syncToRemote(courtsRef.current, [null, null, null, null], {}, []);
         setError("排點失敗：找不到合適的配對，已自動關閉自動上場模式");
         setIsAutoMode(false);
       }
@@ -579,26 +612,22 @@ export function useCourts({
     }
 
     const matchId = Date.now().toString();
-    const newCourts = [...courts];
+    const newCourts = [...courtsRef.current];
     newCourts[emptyCourtIndex] = {
       ...newCourts[emptyCourtIndex],
-      players: [...recommendedPlayers] as Player[],
+      players: [...recommendedPlayersRef.current] as Player[],
       startTime: new Date(),
       matchId
     };
 
     const newStatus: Record<string, PlayerStatus> = {};
-    recommendedPlayers.forEach((p) => { if (p) newStatus[p.id] = "playing"; });
+    recommendedPlayersRef.current.forEach((p) => { if (p) newStatus[p.id] = "playing"; });
 
     setSelectedCourtSlot(null);
     await syncToRemote(newCourts, [null, null, null, null], newStatus, ['recommended', newCourts[emptyCourtIndex].id]);
     
     if (isAutoMode) {
       triggerCooldown();
-      // 在上場清空後，延遲一下下立刻為預告場重新排點
-      setTimeout(() => {
-        handleMatchmake();
-      }, 500);
     }
   };
 
@@ -647,14 +676,31 @@ export function useCourts({
       const finStatus: Record<string, PlayerStatus> = {};
       participants.forEach(p => { finStatus[p.id] = "finishing"; });
 
-      const newCourts = courts.map(c =>
+      const newCourts = courtsRef.current.map(c =>
         c.id === activeCourtForWinner
           ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
           : c
       );
 
+      // 【極速優化】：改為「樂觀即時排點」，將剛結束的人也直接納入可用人選中計算
+      const wasRecPopulated = recommendedPlayers.some(p => p !== null);
       const affectedCourtIds = [activeCourtForWinner];
-      await syncToRemote(newCourts, recommendedPlayers, finStatus, affectedCourtIds);
+      let nextRecs = recommendedPlayers;
+
+      if (wasRecPopulated) {
+        affectedCourtIds.push('recommended');
+        const currentReadyIds = Object.entries(playerStatusRef.current)
+          .filter(([_, s]) => s === "ready")
+          .map(([id]) => id);
+        
+        // 【極致優化】：把剛結束比賽的人也直接納入可用人選中計算，達成「一鍵到位」的零延遲體驗
+        const poolWithFinishing = Array.from(new Set([...currentReadyIds, ...participants.map(p => p.id)]));
+        nextRecs = getInstantMatchmaking(poolWithFinishing) as Player[];
+      }
+
+      if (isAutoMode) triggerCooldown();
+
+      await syncToRemote(newCourts, nextRecs as Player[], finStatus, affectedCourtIds);
       setWinnerModalOpen(false);
 
       // 3. 寫入 GAS 對戰紀錄
@@ -674,20 +720,16 @@ export function useCourts({
 
       // 4. 清理：1.5秒後把球員狀態從 finishing 轉回 ready 並同步
       setTimeout(() => {
-        const currentRefStatus = playerStatusRef.current;
+        const latestCourts = courtsRef.current;
+        const latestRecs = recommendedPlayersRef.current;
+        
         const releases: Record<string, PlayerStatus> = {};
         participants.forEach((p) => { releases[p.id] = "ready"; });
         
-        // 只同步狀態，不重複觸發該場地/備戰區的 loading 動畫
-        syncToRemote(newCourts, recommendedPlayers, releases, []);
+        // 只同步狀態，不重重複觸發該場地/備戰區的 loading 動畫
+        syncToRemote(latestCourts, latestRecs, releases, []);
 
-        // 【核心優化】: 如果開啟自動模式，當球員回歸 ready 時，立刻觸發重新排點（洗牌預告場）
-        if (isAutoMode) {
-          // 這裡我們需要短暫延時確保上面的 syncToRemote 已經反應到最新的 playerStatus
-          setTimeout(() => {
-            handleMatchmake();
-          }, 300);
-        }
+        // 此處不再需要呼叫 handleMatchmake，因為在結束瞬間已經「樂觀排點」過最終名單了
       }, 1500);
 
     } catch (err: any) {
@@ -710,13 +752,26 @@ export function useCourts({
     const newStatus: Record<string, PlayerStatus> = {};
     participants.forEach(p => { newStatus[p.id] = "ready"; });
 
-    const newCourts = courts.map(c =>
+    const newCourts = courtsRef.current.map(c =>
       c.id === courtId
         ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
         : c
     );
 
-    await syncToRemote(newCourts, recommendedPlayers, newStatus, [courtId]);
+    // 【核心優化】：只有當預告區目前「有人」時，才在取消比賽時立即執行排點
+    const wasRecPopulated = recommendedPlayersRef.current.some(p => p !== null);
+    let nextRecs = recommendedPlayersRef.current;
+    const affectedCourtIds = [courtId];
+    if (wasRecPopulated) affectedCourtIds.push('recommended');
+
+    if (wasRecPopulated) {
+      const tempReadyIds = Object.entries({ ...playerStatus, ...newStatus })
+        .filter(([_, s]) => s === "ready")
+        .map(([id]) => id);
+      nextRecs = getInstantMatchmaking(tempReadyIds) as Player[];
+    }
+
+    await syncToRemote(newCourts, nextRecs as Player[], newStatus, affectedCourtIds);
   };
 
   const getPlayerTeamColor = (playerId: string): "red" | "blue" | undefined => {

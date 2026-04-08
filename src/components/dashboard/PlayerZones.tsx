@@ -26,6 +26,7 @@ interface PlayerZonesProps {
   onAllReady: () => void;
   onAllResting: () => void;
   hasControl: boolean;
+  playerCourtMap?: Record<string, string>;
 }
 
 const EMPTY_STATE = (
@@ -42,6 +43,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   getPlayerTeamColor, onToggleManualSelection, onTogglePlayerStatus,
   onProfileClick, onSetIgnoreFatigue, onAllReady, onAllResting,
   hasControl,
+  playerCourtMap = {},
 }) => {
   return (
     <>
@@ -110,6 +112,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 player={p}
                 status={playerStatus[p.id]}
                 teamColor={getPlayerTeamColor(p.id)}
+                courtName={playerCourtMap[p.id]}
                 onClick={() => {}}
                 onProfileClick={() => onProfileClick(p.id)}
                 hasControl={hasControl}
