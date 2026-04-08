@@ -147,19 +147,20 @@ export function GeminiBot({ players = [], playerStatus = {}, courts = [], recomm
 
 【當前環境上下文 (內部數據)】
 - 用戶: ${currentUser?.name || '匿名球友'}
-- 當前戰力值: ${profile?.instantMu ? (profile.instantMu * 10).toFixed(0) : '250'}
+- 用戶生涯戰力: ${profile?.comprehensiveMu ? (profile.comprehensiveMu * 10).toFixed(0) : '250'}
+- 用戶內容即時戰力: ${profile?.instantMu ? (profile.instantMu * 10).toFixed(0) : '250'}
 - 今日紀錄: ${userWins}勝 ${userLosses}敗
-- 備戰區玩家: ${readyList.length > 0 ? readyList.join(', ') : '無'}
+- 備戰區玩家(即時): ${readyList.length > 0 ? readyList.join(', ') : '無'}
 - 球場狀態: ${activeCourts.map(c => `${c.name}號場(${c.players.filter((p: any) => p).map((p: any) => p.name).join('&')})`).join(', ') || '目前全空'}
-- 推薦組合: ${recommended.length === 4 ? recommended.join('&') : '計算中'}
+- 推薦組合(即時): ${recommended.length === 4 ? recommended.join('&') : '計算中'}
 
 【教練準則】
-1. **戰力至上**：在球場上，實力（戰力值）是判斷標準。性別修正不影響戰力計算，但應調整你的稱呼與指導語氣（例如更注重技術細節、靈活性與體能分配）。
-2. **術語限制**：嚴禁提及 "Mu", "Mu值" 或 "CP"。一律稱為「戰力」或「戰力值」。
-3. **隱私守則**：嚴禁在正式回覆中 echo 或羅列我提供的後端上下文（如：User Name: XX, CP: XX）。這些數據應轉化為自然的教練建議。
-4. **思考規範**：若你需要進行分析（思考），請務必在回應的最開始使用 <thought> 標籤，嚴禁在 <thought> 之前輸出任何文字。
-5. **標籤規範**：所有分析、模擬、推導必須放在 <thought> 標籤內。正式回覆僅保留具有溫度的、高品質的建議。
-6. **行動導向**：如果球場目前全空，請主動詢問用戶是否要安排下一場對戰，並根據對手戰力給出建議。
+1. **戰力至上**：在球場上，實力（戰力值）是唯一標準。性別修正不影響戰力計算，但應調整你的指導語氣。
+2. **術語限制**：嚴禁提及 "Mu", "Mu值" 或 "CP"。一律稱為「戰力值」。
+3. **即時性原則**：**生涯戰力**代表球員的長期底蘊；**即時戰力**代表球員今日的手感與爆發力。在分析「今日推薦隊友」、「勝率預測」或「對戰點評」時，**請務必以「即時戰力」為核心判斷依據**。
+4. **隱私守則**：嚴禁在正式回覆中 echo 或羅列後端上下文。將數據轉化為自然的專業建議。
+5. **思考規範**：所有分析推導必須放在 <thought> 標籤內，且在標籤前嚴禁輸出任何文字。
+6. **行動導向**：如果球場目前全空，請主動詢問用戶是否要安排下一場對戰。
 `;
 
       const MODELS = ["gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -399,8 +400,8 @@ export function GeminiBot({ players = [], playerStatus = {}, courts = [], recomm
         )}
       </AnimatePresence>
 
-      <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setIsOpen(!isOpen)} className={clsx("flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-colors border-2 border-white/10", isOpen ? "bg-white text-black" : "bg-gradient-to-br from-amber-400 to-orange-600 text-white")}>
-        {isOpen ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+      <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setIsOpen(!isOpen)} className={clsx("flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-colors border-2 border-white/10", isOpen ? "bg-white text-amber-600" : "bg-gradient-to-br from-amber-400 to-orange-600 text-white")}>
+        <Sparkles className="h-6 w-6" />
       </motion.button>
     </div>
   );
