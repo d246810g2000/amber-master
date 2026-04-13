@@ -448,10 +448,11 @@ export function useCourts({
     }
 
     setSelectedCourtSlot(null);
-    const slotSwapAffected = Array.from(
-      new Set([sourceCourtId, courtId].filter((id) => id !== 'recommended'))
+    const slotSwapAffected = new Set(
+      [sourceCourtId, courtId].filter((id) => id !== "recommended")
     );
-    await syncToRemote(newCourts, newRecPlayers, {}, slotSwapAffected);
+    if (isSourceRec || isTargetRec) slotSwapAffected.add("recommended");
+    await syncToRemote(newCourts, newRecPlayers, {}, Array.from(slotSwapAffected));
   };
 
   const handleMatchmake = async () => {
@@ -502,7 +503,7 @@ export function useCourts({
   const handleResetRecommended = async () => {
     if (isSyncing) return;
     setSelectedCourtSlot(null);
-    await syncToRemote(courts, [null, null, null, null], {}, []);
+    await syncToRemote(courts, [null, null, null, null], {}, ["recommended"]);
   };
 
   const toggleManualSelection = async (playerId: string) => {
@@ -541,7 +542,7 @@ export function useCourts({
 
       setSelectedCourtSlot(null);
       const swapAffected =
-        courtId === 'recommended' ? [] : [courtId];
+        courtId === "recommended" ? ["recommended"] : [courtId];
       await syncToRemote(newCourts, newRecPlayers, newStatus, swapAffected);
       return;
     }
@@ -565,7 +566,7 @@ export function useCourts({
     const isFull = isRowFull(newRecs);
 
     if (isFull) {
-      await syncToRemote(courts, newRecs, {}, []);
+      await syncToRemote(courts, newRecs, {}, ["recommended"]);
     } else {
       setRecommendedPlayers(newRecs);
       localRecommendedUnsyncedRef.current = true;

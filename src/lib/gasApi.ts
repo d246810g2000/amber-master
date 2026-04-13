@@ -32,12 +32,53 @@ function createApiError(message: string, code?: string): ApiError {
   return err;
 }
 
+/** 瀏覽器 fetch 在連不上主機、CORS 失敗、連線被重置、GAS 冷啟動逾時等情況會丟 TypeError，訊息常為 "Failed to fetch"（與是否同一人操作無關） */
+function translateNetworkError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    err instanceof TypeError ||
+    /failed to fetch|load failed|networkerror|network request failed/i.test(msg)
+  ) {
+    return new Error(
+      "無法連上後端（網路不穩、連線中斷、或 Google Apps Script 冷啟動／執行逾時）。請稍候再試；若經常發生請確認 VITE_GAS_URL、部署為「以我的身分執行」且已授權，並避免在無痕或阻擋第三方請求的環境操作。"
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+async function fetchWithRetry(
+  input: string,
+  init: RequestInit,
+  opts?: { retries?: number; baseDelayMs?: number }
+): Promise<Response> {
+  const retries = opts?.retries ?? 2;
+  const base = opts?.baseDelayMs ?? 600;
+  let last: unknown;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fetch(input, init);
+    } catch (e) {
+      last = e;
+      if (i < retries) {
+        await new Promise((r) => setTimeout(r, base * (i + 1)));
+      }
+    }
+  }
+  throw last;
+}
+
 async function gasGet<T>(params: Record<string, string> | undefined, schema: z.ZodType<T>): Promise<T> {
+  if (!GAS_URL) throw new Error("未設定 VITE_GAS_URL");
   const url = new URL(GAS_URL);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
-  const res = await fetch(url.toString());
+  let res: Response;
+  try {
+    res = await fetch(url.toString());
+  } catch (e) {
+    throw translateNetworkError(e);
+  }
   const json = await res.json();
   const parsed = GasResponseSchema(schema).safeParse(json);
   
@@ -53,11 +94,17 @@ async function gasGet<T>(params: Record<string, string> | undefined, schema: z.Z
 }
 
 async function gasPost<T>(body: Record<string, unknown>, schema: z.ZodType<T>): Promise<T> {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(body),
-  });
+  if (!GAS_URL) throw new Error("未設定 VITE_GAS_URL");
+  let res: Response;
+  try {
+    res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw translateNetworkError(e);
+  }
   const json = await res.json();
   const parsed = GasResponseSchema(schema).safeParse(json);
 
@@ -173,13 +220,28 @@ export async function getCourtState(date?: string) {
 }
 
 export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string; takeover?: boolean; updaterName?: string; enableLine?: boolean }) {
-  // 這裡不使用 gasPost 解析 success/error，因為 conflict 時我們也要拿 data
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'updateCourtState', ...data }),
-  });
-  const json = await res.json();
+  if (!GAS_URL) throw new Error("未設定 VITE_GAS_URL");
+  // 上場／同步寫入較容易撞到 GAS 冷啟動或瞬断；短重試可明顯降低 Failed to fetch
+  let res: Response;
+  try {
+    res = await fetchWithRetry(
+      GAS_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'updateCourtState', ...data }),
+      },
+      { retries: 2, baseDelayMs: 700 }
+    );
+  } catch (e) {
+    throw translateNetworkError(e);
+  }
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    throw new Error("後端回應無法解析（可能逾時或中斷），請重試。");
+  }
   const parsed = GasResponseSchema(z.any()).safeParse(json);
   
   if (!parsed.success) {
