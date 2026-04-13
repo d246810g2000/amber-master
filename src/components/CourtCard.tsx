@@ -5,6 +5,7 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Zap from "lucide-react/dist/esm/icons/zap";
 import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
+import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 
 interface CourtCardProps {
   title: string;
@@ -25,6 +26,8 @@ interface CourtCardProps {
   onCancel?: () => void;
   isAutoMode?: boolean;
   onToggleAuto?: () => void;
+  /** 連續未上場場次（僅 Target 推薦卡傳入時，格內顯示「休x」角標） */
+  missedStreakByPlayerId?: Record<string, number>;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -32,19 +35,24 @@ const PlayerSlot = React.memo(({
   teamColor, 
   onClick, 
   isSelected,
-  className
+  className,
+  restStreakCount = 0,
 }: { 
   player: Player | null; 
   teamColor?: "red" | "blue";
   onClick?: () => void;
   isSelected?: boolean;
   className?: string;
+  restStreakCount?: number;
 }) => {
   return (
     <button 
       onClick={onClick}
+      type="button"
       className={cn(
-        "flex flex-col items-center justify-center p-0.5 md:p-1 rounded-xl transition-all duration-300 absolute overflow-hidden shadow-sm hover:z-20",
+        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm hover:z-20",
+        /* 有球員時勿在 button 上 overflow-hidden：Safari 對 button + 子層 backdrop 等合成層裁切有 bug；改由內層 div 裁切 */
+        player ? "overflow-visible p-0" : "overflow-hidden p-0.5 md:p-1",
         player 
           ? "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10" 
           : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10",
@@ -56,7 +64,8 @@ const PlayerSlot = React.memo(({
       )}
     >
       {player ? (
-        <>
+        <div className="absolute inset-0 isolate flex flex-col items-center justify-center overflow-clip rounded-xl p-0.5 md:p-1">
+          <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
           <img
             src={getAvatarUrl(player.avatar, player.name)}
             alt={player.name}
@@ -74,7 +83,7 @@ const PlayerSlot = React.memo(({
                {Math.round(player.mu * 10)}
              </span>
           </div>
-        </>
+        </div>
       ) : (
         <div className="flex flex-col items-center opacity-40">
            <Users size={16} className="hidden md:block text-white mb-0.5" />
@@ -103,6 +112,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onCancel,
   isAutoMode,
   onToggleAuto,
+  missedStreakByPlayerId,
 }) => {
   const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
@@ -214,6 +224,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(0)}
           isSelected={selectedSlotIndex === 0}
           className="left-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
+          restStreakCount={players[0] ? (missedStreakByPlayerId?.[players[0].id] ?? 0) : 0}
         />
         <PlayerSlot 
           player={players[1]} 
@@ -221,6 +232,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(1)}
           isSelected={selectedSlotIndex === 1}
           className="right-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
+          restStreakCount={players[1] ? (missedStreakByPlayerId?.[players[1].id] ?? 0) : 0}
         />
 
         {/* Center VS & Points */}
@@ -248,6 +260,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(2)}
           isSelected={selectedSlotIndex === 2}
           className="left-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
+          restStreakCount={players[2] ? (missedStreakByPlayerId?.[players[2].id] ?? 0) : 0}
         />
         <PlayerSlot 
           player={players[3]} 
@@ -255,6 +268,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(3)}
           isSelected={selectedSlotIndex === 3}
           className="right-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
+          restStreakCount={players[3] ? (missedStreakByPlayerId?.[players[3].id] ?? 0) : 0}
         />
 
         {/* Loading Spinner */}

@@ -121,6 +121,66 @@ function getCourtState(targetDate) {
   }
 }
 
+/**
+ * 對戰／戰力寫入完成後遞增當日 CourtState version，讓前端輪詢在「資料已落地」後才 refetch。
+ * 不修改 state JSON、不覆寫 UpdatedBy（與 getCourtState 相同：取該曆日最後一列）。
+ * 與 updateCourtState 共用 ScriptLock，避免並行寫入同一列。
+ * @param {string} dayStr YYYY-MM-DD（台北曆日）
+ */
+function bumpCourtStateVersionForDate_(dayStr) {
+  if (!dayStr) return;
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+  } catch (e) {
+    console.error('bumpCourtStateVersionForDate_: lock timeout', e);
+    return;
+  }
+
+  try {
+    const sheet = ensureCourtStateSheet();
+    const allData = sheet.getDataRange().getValues();
+
+    let foundRowIndex = -1;
+    for (let i = allData.length - 1; i >= 1; i--) {
+      const rowDate = allData[i][0];
+      const rowDateStr = (rowDate instanceof Date)
+        ? Utilities.formatDate(rowDate, CONFIG.TIMEZONE, 'yyyy-MM-dd')
+        : formatDate(rowDate);
+
+      if (rowDateStr === dayStr) {
+        foundRowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (foundRowIndex === -1) {
+      return;
+    }
+
+    const row = allData[foundRowIndex - 1];
+    const currentVersion = Number(row[1]) || 0;
+    const newVersion = currentVersion + 1;
+    const nowStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    const stateCell = row[2];
+    const prevBy = row[4] != null && row[4] !== '' ? String(row[4]) : 'system';
+
+    const rowValues = [
+      dayStr,
+      newVersion,
+      stateCell,
+      "'" + nowStr,
+      prevBy
+    ];
+    sheet.getRange(foundRowIndex, 1, 1, 5).setValues([rowValues]);
+  } catch (e) {
+    console.error('bumpCourtStateVersionForDate_', e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** 更新場地狀態（含樂觀鎖與正規化） */
 function updateCourtState(data) {
   const lock = LockService.getScriptLock();

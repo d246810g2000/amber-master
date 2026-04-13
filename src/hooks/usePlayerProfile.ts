@@ -36,6 +36,7 @@ export function usePlayerProfile(playerId: string) {
 
   return useQuery<PlayerProfileData>({
     queryKey: ['playerProfile', playerId],
+    enabled: Boolean(playerId),
     queryFn: async () => {
       const [basePlayers, allMatches, snapshots] = await Promise.all([
         // 重複利用已快取的球員資料

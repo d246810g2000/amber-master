@@ -50,7 +50,6 @@ interface UseCourtsDeps {
   recordMatch: (data: any) => Promise<any>;
   addLocalMatch: (match: any) => void;
   updateLocalPlayers: (updates: any[]) => void;
-  ignoreFatigue: boolean;
   syncState: CourtSyncState;
   isFetching: boolean;
   isPushing: boolean;
@@ -66,7 +65,7 @@ interface UseCourtsDeps {
 
 export function useCourts({
   players, playerStatus, setMultipleStatus, matchHistory,
-  recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
+  recordMatch, addLocalMatch, updateLocalPlayers,
   syncState, isFetching, isPushing, pushState, targetDate
 }: UseCourtsDeps) {
 
@@ -261,26 +260,6 @@ export function useCourts({
       }
     }
   }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching, pendingRemoteSyncCount]);
-  
-  // 【核心優化】：抽離共用的「即時排點」邏輯，確保取消與結束比賽的行為完全一致
-  const getInstantMatchmaking = useCallback((readyIds: string[]) => {
-    if (readyIds.length < 4) return [null, null, null, null];
-    try {
-      const suggestions = matchEngine.matchmake(
-        players as matchEngine.DerivedPlayer[],
-        readyIds,
-        matchHistory,
-        ignoreFatigue,
-        targetDate
-      );
-      if (suggestions.length > 0) {
-        return [suggestions[0].team1[0], suggestions[0].team1[1], suggestions[0].team2[0], suggestions[0].team2[1]];
-      }
-      return [null, null, null, null];
-    } catch (e) {
-      return [null, null, null, null];
-    }
-  }, [players, matchHistory, ignoreFatigue, targetDate]);
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
@@ -498,7 +477,7 @@ export function useCourts({
         players as matchEngine.DerivedPlayer[],
         readyPlayerIds,
         matchHistory,
-        ignoreFatigue,
+        false,
         targetDate
       );
 
@@ -682,21 +661,9 @@ export function useCourts({
           : c
       );
 
-      // 【極速優化】：改為「樂觀即時排點」，將剛結束的人也直接納入可用人選中計算
-      const wasRecPopulated = recommendedPlayers.some(p => p !== null);
+      // 結束比賽時不重算推薦／下一場 target，維持目前備戰區四人組
       const affectedCourtIds = [activeCourtForWinner];
-      let nextRecs = recommendedPlayers;
-
-      if (wasRecPopulated) {
-        affectedCourtIds.push('recommended');
-        const currentReadyIds = Object.entries(playerStatusRef.current)
-          .filter(([_, s]) => s === "ready")
-          .map(([id]) => id);
-        
-        // 【極致優化】：把剛結束比賽的人也直接納入可用人選中計算，達成「一鍵到位」的零延遲體驗
-        const poolWithFinishing = Array.from(new Set([...currentReadyIds, ...participants.map(p => p.id)]));
-        nextRecs = getInstantMatchmaking(poolWithFinishing) as Player[];
-      }
+      const nextRecs = recommendedPlayers;
 
       if (isAutoMode) triggerCooldown();
 
@@ -728,8 +695,6 @@ export function useCourts({
         
         // 只同步狀態，不重重複觸發該場地/備戰區的 loading 動畫
         syncToRemote(latestCourts, latestRecs, releases, []);
-
-        // 此處不再需要呼叫 handleMatchmake，因為在結束瞬間已經「樂觀排點」過最終名單了
       }, 1500);
 
     } catch (err: any) {
@@ -758,20 +723,9 @@ export function useCourts({
         : c
     );
 
-    // 【核心優化】：只有當預告區目前「有人」時，才在取消比賽時立即執行排點
-    const wasRecPopulated = recommendedPlayersRef.current.some(p => p !== null);
-    let nextRecs = recommendedPlayersRef.current;
-    const affectedCourtIds = [courtId];
-    if (wasRecPopulated) affectedCourtIds.push('recommended');
-
-    if (wasRecPopulated) {
-      const tempReadyIds = Object.entries({ ...playerStatus, ...newStatus })
-        .filter(([_, s]) => s === "ready")
-        .map(([id]) => id);
-      nextRecs = getInstantMatchmaking(tempReadyIds) as Player[];
-    }
-
-    await syncToRemote(newCourts, nextRecs as Player[], newStatus, affectedCourtIds);
+    // 取消在場比賽：只清空該場、把球員改回 ready；不重算 Target／推薦四人（與結束比賽後行為一致）
+    const nextRecs = recommendedPlayersRef.current;
+    await syncToRemote(newCourts, nextRecs as Player[], newStatus, [courtId]);
   };
 
   const getPlayerTeamColor = (playerId: string): "red" | "blue" | undefined => {

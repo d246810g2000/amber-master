@@ -244,5 +244,11 @@ function recordMatchAndUpdate(data) {
     });
   }
 
+  // 對戰與戰力已寫入試算表：遞增當日 CourtState version，讓所有人透過 getCourtState 輪詢對齊分數／紀錄
+  var bumpDay = data.matchDate ? formatDate(data.matchDate) : dayStr;
+  if (bumpDay) {
+    bumpCourtStateVersionForDate_(bumpDay);
+  }
+
   return { status: 'success', matchId };
 }

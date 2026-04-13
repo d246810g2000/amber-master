@@ -37,13 +37,10 @@ interface SettingsModalProps {
   onUpdate: () => void;
   onSelectPlayer: (id: string) => void;
   onClose: () => void;
-  ignoreFatigue: boolean;
-  onSetIgnoreFatigue: (value: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   players, onUpdate, onSelectPlayer, onClose,
-  ignoreFatigue, onSetIgnoreFatigue
 }) => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('general');
@@ -360,15 +357,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </span>
                       <ChevronRight size={16} className="text-slate-300" />
                     </div>
-                  </div>
-
-                  {/* Fatigue */}
-                  <div className="flex items-center justify-between py-5 md:py-6 border-b border-slate-100 dark:border-slate-800/50">
-                    <span className="text-base md:text-[17px] font-bold text-slate-800 dark:text-slate-200">忽略疲勞限制</span>
-                    <button onClick={() => onSetIgnoreFatigue(!ignoreFatigue)}
-                      className={cn("w-12 h-6 rounded-full relative transition-all", ignoreFatigue ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800")}>
-                      <div className={cn("w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm", ignoreFatigue ? "translate-x-7" : "translate-x-1")} />
-                    </button>
                   </div>
 
                   {/* Recalculate */}

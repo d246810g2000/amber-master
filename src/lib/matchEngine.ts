@@ -209,6 +209,23 @@ export const ENGINE_CONFIG = {
   FATIGUE_PENALTY_PER_GAME: 2, // 每多連打一場，戰力計算時扣除的分數
 };
 
+/**
+ * 從「最新一場」往回數，連續幾場比賽未上場（`matches` 須為新→舊，與 `mapAndSortMatches` 一致）。
+ */
+export function getConsecutiveMissedMatches(
+  playerId: string,
+  matchesNewestFirst: MatchRecord[],
+): number {
+  const id = String(playerId);
+  let n = 0;
+  for (const m of matchesNewestFirst) {
+    const inMatch = [...m.team1, ...m.team2].some((p) => String(p.id) === id);
+    if (inMatch) break;
+    n++;
+  }
+  return n;
+}
+
 export function matchmake(
   allPlayers: DerivedPlayer[], 
   playerIds: string[], 

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { getTaipeiDateString } from "../lib/utils";
+import * as matchEngine from "../lib/matchEngine";
 import type { DerivedPlayer } from "../lib/matchEngine";
 import { usePlayers, type PlayerStatus } from "../hooks/usePlayers";
 import { useMatches } from "../hooks/useMatches";
@@ -20,7 +21,6 @@ export function DashboardPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentFilterDate, setCurrentFilterDate] = useState(getTaipeiDateString());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [ignoreFatigue, setIgnoreFatigue] = useState(false);
   const [filterPlayerIds, setFilterPlayerIds] = useState<string[]>([]);
   const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
@@ -91,22 +91,17 @@ export function DashboardPage() {
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
-    isRemoteSyncPending,
     syncToRemote,
     isAutoMode, setIsAutoMode
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
-    recordMatch, addLocalMatch, updateLocalPlayers, ignoreFatigue,
+    recordMatch, addLocalMatch, updateLocalPlayers,
     syncState, isFetching, isPushing, pushState,
     targetDate: currentFilterDate
   });
 
   const isInitialLoading = playersLoading || historyLoading || !isSyncInitialized;
-
-  const isRecommendedFull =
-    recommendedPlayers.length === 4 &&
-    recommendedPlayers.every((p) => p !== null && p !== undefined);
 
   const readyPlayers: typeof players = [];
   const restingPlayers: typeof players = [];
@@ -118,10 +113,14 @@ export function DashboardPage() {
     else if (status === "playing" || status === "finishing") playingPlayers.push(p);
   }
 
-  const fatiguedPlayerIds = new Set<string>();
-  matchHistory.slice(0, 2).forEach(match => {
-    [...match.team1, ...match.team2].forEach(p => fatiguedPlayerIds.add(p.id));
-  });
+  const fatiguedPlayerIds = useMemo(() => {
+    const set = new Set<string>();
+    const latest = matchHistory[0];
+    if (latest) {
+      [...latest.team1, ...latest.team2].forEach((p) => set.add(p.id));
+    }
+    return set;
+  }, [matchHistory]);
 
   const playerCourtMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -132,6 +131,15 @@ export function DashboardPage() {
     });
     return map;
   }, [courts]);
+
+  const missedStreakByPlayerId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of players) {
+      map[p.id] = matchEngine.getConsecutiveMissedMatches(p.id, matchHistory);
+    }
+    return map;
+  }, [players, matchHistory]);
+
   
   const handleAllReady = () => {
     const updates: Record<string, PlayerStatus> = {};
@@ -247,16 +255,18 @@ export function DashboardPage() {
                     onReset={handleResetRecommended}
                     isLoading={
                       isMatchmaking ||
-                      syncingCourtIds.includes('recommended') ||
-                      (isRecommendedFull && isRemoteSyncPending)
+                      syncingCourtIds.includes('recommended')
                     }
                     isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
-                    isPrimaryActionLocked={isRemoteSyncPending}
+                    isPrimaryActionLocked={
+                      isMatchmaking || syncingCourtIds.includes('recommended')
+                    }
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
                     selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
                     hasControl={hasControl}
                     isAutoMode={isAutoMode}
                     onToggleAuto={() => setIsAutoMode(!isAutoMode)}
+                    missedStreakByPlayerId={missedStreakByPlayerId}
                   />
                 </div>
               </>
@@ -273,18 +283,17 @@ export function DashboardPage() {
               playerStatus={playerStatus}
               recommendedPlayers={recommendedPlayers}
               fatiguedPlayerIds={fatiguedPlayerIds}
-              ignoreFatigue={ignoreFatigue}
               isMatchmaking={isMatchmaking}
               submittingMatch={submittingMatch}
               getPlayerTeamColor={getPlayerTeamColor}
               onToggleManualSelection={toggleManualSelection}
               onTogglePlayerStatus={handleTogglePlayerStatus}
               onProfileClick={(id) => navigate(`/players/${id}`)}
-              onSetIgnoreFatigue={setIgnoreFatigue}
               onAllReady={handleAllReady}
               onAllResting={handleAllResting}
               hasControl={hasControl}
               playerCourtMap={playerCourtMap}
+              missedStreakByPlayerId={missedStreakByPlayerId}
             />
           )}
         </div>
@@ -323,8 +332,6 @@ export function DashboardPage() {
           onUpdate={() => { refetchPlayers(); refetchMatches(); }}
           onSelectPlayer={(id) => navigate(`/players/${id}`)}
           onClose={() => setIsSettingsOpen(false)}
-          ignoreFatigue={ignoreFatigue}
-          onSetIgnoreFatigue={setIgnoreFatigue}
         />
       )}
 

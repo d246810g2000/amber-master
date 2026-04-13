@@ -1,9 +1,6 @@
 import React from 'react';
 import Users from "lucide-react/dist/esm/icons/users";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import Zap from "lucide-react/dist/esm/icons/zap";
-import Coffee from "lucide-react/dist/esm/icons/coffee";
-import { cn } from '../../lib/utils';
 import { PlayerPill } from '../PlayerPill';
 import type { Player } from '../../types';
 import type { PlayerStatus } from '../../hooks/usePlayers';
@@ -15,18 +12,18 @@ interface PlayerZonesProps {
   playerStatus: Record<string, PlayerStatus>;
   recommendedPlayers: (Player | null)[];
   fatiguedPlayerIds: Set<string>;
-  ignoreFatigue: boolean;
   isMatchmaking: boolean;
   submittingMatch: boolean;
   getPlayerTeamColor: (id: string) => "red" | "blue" | undefined;
   onToggleManualSelection: (id: string) => void;
   onTogglePlayerStatus: (id: string) => void;
   onProfileClick: (id: string) => void;
-  onSetIgnoreFatigue: (v: boolean) => void;
   onAllReady: () => void;
   onAllResting: () => void;
   hasControl: boolean;
   playerCourtMap?: Record<string, string>;
+  /** 依當日對戰紀錄（新→舊）計算：連續幾場沒上場 */
+  missedStreakByPlayerId?: Record<string, number>;
 }
 
 const EMPTY_STATE = (
@@ -38,12 +35,13 @@ const EMPTY_STATE = (
 
 export const PlayerZones: React.FC<PlayerZonesProps> = ({
   readyPlayers, restingPlayers, playingPlayers, playerStatus,
-  recommendedPlayers, fatiguedPlayerIds, ignoreFatigue,
+  recommendedPlayers, fatiguedPlayerIds,
   isMatchmaking, submittingMatch,
   getPlayerTeamColor, onToggleManualSelection, onTogglePlayerStatus,
-  onProfileClick, onSetIgnoreFatigue, onAllReady, onAllResting,
+  onProfileClick, onAllReady, onAllResting,
   hasControl,
   playerCourtMap = {},
+  missedStreakByPlayerId = {},
 }) => {
   return (
     <>
@@ -68,20 +66,6 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => hasControl && onSetIgnoreFatigue(!ignoreFatigue)}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
-                ignoreFatigue
-                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
-                  : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-100 dark:border-slate-700",
-                !hasControl && "opacity-50 cursor-not-allowed"
-              )}
-              title={ignoreFatigue ? "無視疲勞已開啟 (不再避開連場球員)" : "忽視疲勞已關閉"}
-            >
-              {ignoreFatigue ? <Zap size={12} fill="currentColor" /> : <Coffee size={12} />}
-              無視疲勞
-            </button>
-            <button
               onClick={onAllResting}
               disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking || !hasControl}
               className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
@@ -98,7 +82,8 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 player={p}
                 status="ready"
                 isSelected={recommendedPlayers.some((rp) => rp?.id === p.id)}
-                isFatigued={!ignoreFatigue && fatiguedPlayerIds.has(p.id)}
+                isFatigued={fatiguedPlayerIds.has(p.id)}
+                consecutiveMissed={missedStreakByPlayerId[p.id] ?? 0}
                 teamColor={getPlayerTeamColor(p.id)}
                 onClick={() => hasControl && onToggleManualSelection(p.id)}
                 onStatusToggle={() => hasControl && onTogglePlayerStatus(p.id)}
@@ -113,6 +98,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 status={playerStatus[p.id]}
                 teamColor={getPlayerTeamColor(p.id)}
                 courtName={playerCourtMap[p.id]}
+                consecutiveMissed={missedStreakByPlayerId[p.id] ?? 0}
                 onClick={() => {}}
                 onProfileClick={() => onProfileClick(p.id)}
                 hasControl={hasControl}

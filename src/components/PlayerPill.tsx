@@ -3,6 +3,7 @@ import { Player } from "../types";
 import { cn, getAvatarUrl } from "../lib/utils";
 import Moon from "lucide-react/dist/esm/icons/moon";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 
 interface PlayerPillProps {
   player: Player;
@@ -16,6 +17,8 @@ interface PlayerPillProps {
   isGolden?: boolean;
   hasControl?: boolean;
   courtName?: string;
+  /** 當日對戰由新到舊，連續幾場沒上場（僅備戰區 ready／finishing 顯示） */
+  consecutiveMissed?: number;
 }
 
 export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
@@ -30,6 +33,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   isGolden,
   hasControl = true,
   courtName,
+  consecutiveMissed = 0,
 }) => {
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
@@ -65,6 +69,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         }}
         disabled={status === "playing" || status === "finishing" || !hasControl}
         className={cn(
+          /* overflow-hidden：裁切「休x」角標，使右上角沿 rounded-2xl 與卡片邊界一致（单靠子元素 rounded-tr 無法對齊 border 外緣） */
           "flex flex-col items-center justify-center p-2 rounded-2xl border-2 transition-all duration-300 shadow-sm w-[68px] h-[80px] md:w-20 md:h-24 relative overflow-hidden",
           (status === "playing" || !hasControl)
             ? "bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-800 cursor-not-allowed opacity-80"
@@ -87,19 +92,6 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                   : "bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-white/50 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:shadow-md hover:-translate-y-0.5",
         )}
       >
-        {isGolden && isSelected && (
-          <div className="absolute -top-2 -right-1 bg-amber-400 text-white p-1 rounded-full shadow-lg animate-bounce-slow">
-            <span className="text-[10px] leading-none">👑</span>
-          </div>
-        )}
-        {isFatigued && status !== "playing" && (
-          <div className={cn(
-            "absolute top-1 flex items-center gap-0.5 transition-all",
-            (isGolden && isSelected) ? "right-5" : "right-1.5"
-          )}>
-            <span className="text-[10px] grayscale-0">☕</span>
-          </div>
-        )}
         {status === "finishing" && (
           <div className="absolute inset-0 bg-amber-400/10 dark:bg-amber-400/20 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
             <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded shadow-sm rotate-3 scale-110">
@@ -114,16 +106,31 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/40 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
             <div className="bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded shadow-sm rotate-[-12deg]">
               <span className="text-[10px] font-black text-slate-700 dark:text-slate-100 uppercase tracking-tighter">
-                {courtName ? `${courtName} 場` : "On Court"}
+                {courtName ? `場地${courtName}` : "On Court"}
               </span>
             </div>
           </div>
         )}
-        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-1 overflow-hidden">
+        {isGolden && isSelected && (
+          <div
+            className={cn(
+              "pointer-events-none absolute top-1 z-[36] rounded-full bg-amber-400 p-0.5 text-white shadow-md ring-1 ring-amber-200/80 animate-bounce-slow dark:ring-amber-600/50",
+              (status === "ready" || status === "finishing") && consecutiveMissed > 0
+                ? "right-6 md:right-7"
+                : "right-1"
+            )}
+          >
+            <span className="block text-[9px] leading-none">👑</span>
+          </div>
+        )}
+        {(status === "ready" || status === "finishing") && (
+          <RestStreakCornerBadge count={consecutiveMissed} />
+        )}
+        <div className="mb-1 h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700 md:h-10 md:w-10">
           <img
             src={getAvatarUrl(player.avatar, player.name)}
             alt={player.name}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
           />
         </div>
         <span className="text-[10px] md:text-[11px] font-black truncate w-full text-center leading-tight dark:text-slate-200">

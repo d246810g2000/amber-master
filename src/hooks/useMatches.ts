@@ -44,7 +44,13 @@ export function useMatches(targetDate: string) {
 
   const recordMatchMutation = useMutation({
     mutationFn: gasApi.recordMatchAndUpdate,
-    // 不再自動 invalidate — 由使用者手動重新整理來同步後端資料
+    onSuccess: () => {
+      // GAS 已持久化：重抓戰力／對戰／個人檔案，讓排點、儀表板與安柏教練與後端一致
+      void queryClient.invalidateQueries({ queryKey: ['matches'] });
+      void queryClient.invalidateQueries({ queryKey: ['players'] });
+      void queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      void queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
+    },
     onError: (err) => {
       console.error('GAS 寫入失敗:', err);
       // 寫入失敗時，強制重新抓取以回復正確狀態
