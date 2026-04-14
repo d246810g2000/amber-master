@@ -245,19 +245,27 @@ export const MatchHistoryTable: React.FC<MatchHistoryTableProps> = ({
                    </div>
                    <span className="text-[13px] sm:text-sm font-bold text-slate-800 dark:text-zinc-100 sm:truncate pb-0.5 text-balance">{m.teammate}</span>
                  </div>
-                 <div className={`mx-auto sm:mx-0 sm:self-auto flex items-center gap-1.5 px-2 py-0.5 rounded-lg border transition-all shrink-0 w-fit ${
-                   m.myTeamScore > m.oppTeamScore
-                   ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                   : "text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800/50 border-slate-200 dark:border-white/5"
-                 }`}>
-                   <span className="hidden sm:inline text-[8px] font-black uppercase tracking-tighter opacity-50">戰力總和</span>
-                   <span className="text-[9px] sm:text-[10px] font-black tabular-nums">{m.myTeamScore}</span>
+                 <div
+                   className="mx-auto sm:mx-0 sm:self-auto hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-zinc-800/50 text-slate-600 dark:text-zinc-400 transition-all shrink-0 w-fit"
+                   title="賽前戰力總和"
+                 >
+                   <span className="text-[10px] font-black tabular-nums">{m.myTeamScore}</span>
                  </div>
                </div>
 
-               {/* VS (Mobile only) */}
-               <div className="sm:hidden shrink-0 px-1 text-[9px] font-black text-slate-400 dark:text-zinc-600 opacity-60">
-                 VS
+               {/* 窄螢幕：戰力總和緊貼 VS 兩側（與儀表板對戰紀錄一致，無「總和」文案） */}
+               <div className="sm:hidden shrink-0 flex items-center justify-center px-0.5" title="賽前戰力總和">
+                 <div className="flex items-center justify-center gap-0.5 leading-none">
+                   <span className="text-[9px] font-black tabular-nums shrink-0 text-slate-600 dark:text-zinc-400">
+                     {m.myTeamScore}
+                   </span>
+                   <span className="text-[7px] font-black text-slate-400 dark:text-zinc-600 opacity-70 shrink-0 px-px">
+                     VS
+                   </span>
+                   <span className="text-[9px] font-black tabular-nums shrink-0 text-slate-600 dark:text-zinc-400">
+                     {m.oppTeamScore}
+                   </span>
+                 </div>
                </div>
 
                {/* Team 2 (Opponents) */}
@@ -268,13 +276,11 @@ export const MatchHistoryTable: React.FC<MatchHistoryTableProps> = ({
                    </div>
                    <span className="text-[13px] sm:text-[11px] font-bold text-slate-500 dark:text-zinc-400 sm:truncate pb-0.5 text-balance max-w-full">{m.opponents}</span>
                  </div>
-                 <div className={`mx-auto sm:mx-0 sm:self-auto flex items-center gap-1.5 px-2 py-0.5 rounded-lg border transition-all shrink-0 w-fit ${
-                   m.oppTeamScore > m.myTeamScore
-                   ? "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-400/20"
-                   : "text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800/50 border-slate-200 dark:border-white/5"
-                 }`}>
-                   <span className="hidden sm:inline text-[8px] font-black uppercase tracking-tighter opacity-50">戰力總和</span>
-                   <span className="text-[9px] sm:text-[10px] font-black tabular-nums">{m.oppTeamScore}</span>
+                 <div
+                   className="mx-auto sm:mx-0 sm:self-auto hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-zinc-800/50 text-slate-600 dark:text-zinc-400 transition-all shrink-0 w-fit"
+                   title="賽前戰力總和"
+                 >
+                   <span className="text-[10px] font-black tabular-nums">{m.oppTeamScore}</span>
                  </div>
                </div>
             </div>

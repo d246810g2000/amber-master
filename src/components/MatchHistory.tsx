@@ -5,7 +5,7 @@ import Clock from "lucide-react/dist/esm/icons/clock";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Users from "lucide-react/dist/esm/icons/users";
 import X from "lucide-react/dist/esm/icons/x";
-import { MatchRecord, Player } from "../types";
+import { MatchPlayer, MatchRecord, Player } from "../types";
 import { cn, parseLocalDateTime, getAvatarUrl } from "../lib/utils";
 import { CustomCalendar } from "./common/CustomCalendar";
 
@@ -32,6 +32,18 @@ const getDiff = (p: any) => {
   }
   return "";
 };
+
+/** 與單人列相同：顯示用戰力為 μ×10 四捨五入；總和為各員該值相加（賽前 μ 優先）。 */
+function sumTeamDisplayCp(team: MatchPlayer[]): string {
+  if (team.length === 0) return "—";
+  let sum = 0;
+  for (const p of team) {
+    const raw = p.muBefore ?? p.mu ?? p.muAfter;
+    if (raw === undefined) return "—";
+    sum += Math.round(raw * 10);
+  }
+  return String(sum);
+}
 
 const PlayerItem = React.memo(({ 
   p, 
@@ -272,8 +284,8 @@ export function MatchHistory({
 
                   {/* Main Grid Content */}
                   <div className="flex-1 py-3 px-2 md:px-5 flex flex-row items-center justify-between gap-1.5 md:gap-3 min-w-0">
-                    {/* Team 1 */}
-                    <div className="flex flex-col gap-1.5 w-[38%] md:flex-1 min-w-0">
+                    {/* Team 1：flex-1 讓中欄維持貼齊 VS 的寬度（手機／寬螢幕一致） */}
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                       {match.team1.map((p, idx) => (
                         <PlayerItem 
                           key={`${match.id}-t1-${idx}`} 
@@ -286,26 +298,40 @@ export function MatchHistory({
                       ))}
                     </div>
 
-                    {/* Highly Compact VS Center */}
-                    <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-1 md:px-2 min-w-0 w-[24%] border-x border-slate-50/60 dark:border-slate-800/60">
-                      <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-1.5 py-[2px] rounded-sm text-[7px] md:text-[8px] font-black tracking-widest -mt-1 shadow-inner whitespace-nowrap opacity-80">
-                        MATCH {match.matchNo}
-                      </div>
-                      <div className="text-[10px] md:text-[12px] font-black text-slate-700 dark:text-slate-200 shadow-sm tracking-tight leading-none bg-slate-50 dark:bg-slate-800 px-2.5 py-0.5 mx-auto rounded-full ring-1 ring-slate-200/60 dark:ring-slate-700/60 w-fit shrink-0 whitespace-nowrap z-10 my-0.5">
-                        {match.score || "VS"}
-                      </div>
-                      <span className="text-[8px] md:text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider text-center shrink-0 leading-none">
-                        {format(parseLocalDateTime(match.date), "HH:mm")}
+                    {/* VS 中欄：戰力總和緊貼比分兩側（不顯示「總和」文案） */}
+                    <div className="flex flex-row items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 shrink-0 border-x-0 sm:border-x sm:border-slate-200 sm:dark:border-slate-800/70 px-1 sm:px-2 md:px-4">
+                      <span
+                        title="賽前戰力總和"
+                        className="font-black tabular-nums leading-none text-right shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
+                      >
+                        {sumTeamDisplayCp(match.team1)}
                       </span>
-                      {match.duration && (
-                        <span className="text-[6px] md:text-[7px] font-black text-emerald-500/50 uppercase tracking-[0.15em] text-center mt-0.5 max-w-[40px] truncate">
-                          {match.duration}
+                      <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-0 py-0.5">
+                        <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-1 sm:px-1.5 py-[2px] rounded-sm text-[6px] sm:text-[7px] md:text-[8px] font-black tracking-widest -mt-0.5 md:-mt-1 shadow-inner whitespace-nowrap opacity-80 max-w-full truncate">
+                          MATCH {match.matchNo}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] md:text-[12px] font-black text-slate-700 dark:text-slate-200 shadow-sm tracking-tight leading-none bg-slate-50 dark:bg-slate-800 px-1.5 sm:px-2.5 py-0.5 mx-auto rounded-full ring-1 ring-slate-200/60 dark:ring-slate-700/60 w-fit max-w-full min-w-0 truncate text-center shrink-0 z-10 my-0.5">
+                          {match.score || "VS"}
+                        </div>
+                        <span className="text-[7px] sm:text-[8px] md:text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider text-center shrink-0 leading-none">
+                          {format(parseLocalDateTime(match.date), "HH:mm")}
                         </span>
-                      )}
+                        {match.duration && (
+                          <span className="text-[5px] sm:text-[6px] md:text-[7px] font-black text-emerald-500/50 uppercase tracking-[0.12em] md:tracking-[0.15em] text-center mt-0.5 max-w-full px-0.5 truncate">
+                            {match.duration}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        title="賽前戰力總和"
+                        className="font-black tabular-nums leading-none text-left shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
+                      >
+                        {sumTeamDisplayCp(match.team2)}
+                      </span>
                     </div>
 
                     {/* Team 2 */}
-                    <div className="flex flex-col gap-1.5 w-[38%] md:flex-1 min-w-0 items-end">
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1 items-end">
                       {match.team2.map((p, idx) => (
                         <PlayerItem 
                           key={`${match.id}-t2-${idx}`} 
@@ -342,18 +368,22 @@ export const MatchHistorySkeleton: React.FC = () => (
         <div className="w-2 bg-slate-100/50 dark:bg-slate-800/50 shrink-0" />
         <div className="flex-1 py-3 px-2 flex flex-row items-center justify-between gap-2">
           {/* Team 1 Skeleton */}
-          <div className="flex flex-col gap-2 flex-1">
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
             <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-12 bg-slate-100 rounded" /></div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
           </div>
-          {/* VS Skeleton */}
-          <div className="flex flex-col items-center justify-center gap-1 w-[24%] border-x border-slate-50/60 dark:border-slate-800/60">
-            <div className="h-2 w-8 bg-slate-100 dark:bg-slate-800 rounded" />
-            <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded-full" />
-            <div className="h-2 w-6 bg-slate-100 dark:bg-slate-800 rounded" />
+          {/* VS + 戰力總和 Skeleton */}
+          <div className="flex flex-row items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 shrink-0 border-x-0 sm:border-x sm:border-slate-200 sm:dark:border-slate-800/70 px-1 sm:px-2 md:px-4">
+            <div className="h-2.5 w-5 bg-slate-100 dark:bg-slate-800 rounded shrink-0" />
+            <div className="flex flex-col items-center justify-center gap-1 shrink-0 py-0.5">
+              <div className="h-2 w-8 bg-slate-100 dark:bg-slate-800 rounded" />
+              <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded-full" />
+              <div className="h-2 w-6 bg-slate-100 dark:bg-slate-800 rounded" />
+            </div>
+            <div className="h-2.5 w-5 bg-slate-100 dark:bg-slate-800 rounded shrink-0" />
           </div>
           {/* Team 2 Skeleton */}
-          <div className="flex flex-col gap-2 flex-1 items-end">
+          <div className="flex flex-col gap-2 flex-1 min-w-0 items-end">
             <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-12 bg-slate-100 dark:bg-slate-800 rounded" /></div>
             <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-10 bg-slate-100 dark:bg-slate-800 rounded" /></div>
           </div>
