@@ -626,6 +626,9 @@ export function useCourts({
       const emptyIdx = newRecs.findIndex(p => p === null);
       if (emptyIdx !== -1) {
         newRecs[emptyIdx] = player as matchEngine.DerivedPlayer;
+      } else {
+        // 推薦列已滿且此人不在列上：無空位可塞，應先點推薦格再點備戰區換人（避免無效同步與推薦卡 loading）
+        return;
       }
     }
 
@@ -634,6 +637,7 @@ export function useCourts({
     const isFull = isRowFull(newRecs);
 
     if (isFull) {
+      // 手選湊滿四人：blocking 同步（推薦卡 loading + isPushing），仍經 pushState → updateCourtState 寫入 GAS／Sheet
       await syncToRemote(courts, newRecs, {}, ["recommended"]);
     } else {
       const d = dedupePlayersAcrossZones(courts, newRecs);
