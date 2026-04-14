@@ -42,6 +42,38 @@ function placePlayerUniqueInRow(
   return out;
 }
 
+/**
+ * 同一球員不可同時出現在「場地1 + 場地2 + Target」任兩格（依 courts 陣列順序優先保留，再處理推薦列）。
+ * 用於送出前與遠端 rehydrate，減少樂觀鎖／狀態與 playing 不一致的衝突。
+ */
+function dedupePlayersAcrossZones(
+  courts: ActiveCourt[],
+  recommended: (Player | null)[]
+): { courts: ActiveCourt[]; recommended: (Player | null)[] } {
+  const seen = new Set<string>();
+  const nextCourts = courts.map((c) => ({
+    ...c,
+    players: [...c.players] as (Player | null)[],
+  }));
+  const nextRec = [...recommended] as (Player | null)[];
+
+  for (const c of nextCourts) {
+    for (let i = 0; i < c.players.length; i++) {
+      const p = c.players[i];
+      if (!p) continue;
+      if (seen.has(p.id)) c.players[i] = null;
+      else seen.add(p.id);
+    }
+  }
+  for (let i = 0; i < nextRec.length; i++) {
+    const p = nextRec[i];
+    if (!p) continue;
+    if (seen.has(p.id)) nextRec[i] = null;
+    else seen.add(p.id);
+  }
+  return { courts: nextCourts, recommended: nextRec };
+}
+
 interface UseCourtsDeps {
   players: DerivedPlayer[];
   playerStatus: Record<string, PlayerStatus>;
@@ -60,13 +92,15 @@ interface UseCourtsDeps {
     updaterName?: string,
     options?: { silent?: boolean, enableLine?: boolean }
   ) => Promise<void>;
+  /** 賽後 recordMatch 會 bump CourtState 版本；拉一次 getCourtState 避免下一個 push 仍帶舊 expectedVersion */
+  fetchCourtState?: () => Promise<void>;
   targetDate: string;
 }
 
 export function useCourts({
   players, playerStatus, setMultipleStatus, matchHistory,
   recordMatch, addLocalMatch, updateLocalPlayers,
-  syncState, isFetching, isPushing, pushState, targetDate
+  syncState, isFetching, isPushing, pushState, fetchCourtState, targetDate
 }: UseCourtsDeps) {
 
   const { currentUser } = useAuth();
@@ -186,19 +220,39 @@ export function useCourts({
       lastHydratedVersion.current = syncState.version;
       if (players.length > 0) wasPlayersEmpty.current = false;
 
+      /** 與 setCourts 一致的去重後場地，供 playerStatus 與 playing 對齊 */
+      let dedupedCourtsForRepair: ActiveCourt[] | null = null;
+
       // Rehydrate players from ID to objects
       const rehydratePlayers = (playerIds: any[]) =>
         playerIds.map(id => id ? (players.find(p => p.id === id) || null) : null);
 
       if (syncState.state.courts) {
-        setCourts(syncState.state.courts.map(c => ({
+        const nextCourts = syncState.state.courts.map((c) => ({
           ...c,
           startTime: c.startTime ? new Date(c.startTime) : null,
-          players: rehydratePlayers(c.players)
-        })));
-      }
-
-      if (
+          players: rehydratePlayers(c.players),
+        }));
+        const canRec = Boolean(
+          syncState.state.recommendedPlayers &&
+            canApplyRecommendedFromRemote(
+              pendingRemoteMirrorRef.current,
+              localRecommendedUnsyncedRef.current
+            )
+        );
+        const nextRec = canRec
+          ? rehydratePlayers(syncState.state.recommendedPlayers)
+          : [...recommendedPlayersRef.current];
+        const d = dedupePlayersAcrossZones(nextCourts, nextRec);
+        dedupedCourtsForRepair = d.courts;
+        setCourts(d.courts);
+        const recTouched = d.recommended.some(
+          (p, i) => (p?.id ?? "") !== (nextRec[i]?.id ?? "")
+        );
+        if (canRec || recTouched) {
+          setRecommendedPlayers(d.recommended);
+        }
+      } else if (
         syncState.state.recommendedPlayers &&
         canApplyRecommendedFromRemote(
           pendingRemoteMirrorRef.current,
@@ -213,11 +267,19 @@ export function useCourts({
         const incomingStatus = { ...syncState.state.playerStatus } as Record<string, PlayerStatus>;
         const playingIds = new Set<string>();
 
-        // 從同步下來的球場資料中找出所有正在打球的人
-        if (syncState.state.courts) {
-          syncState.state.courts.forEach(c => {
+        // 從場地資料中找出所有正在打球的人（以去重後為準，與畫面一致）
+        if (dedupedCourtsForRepair) {
+          dedupedCourtsForRepair.forEach((c) => {
+            c.players.forEach((p) => {
+              if (p) playingIds.add(p.id);
+            });
+          });
+        } else if (syncState.state.courts) {
+          syncState.state.courts.forEach((c) => {
             if (c.players) {
-              c.players.forEach((pid: string) => { if (pid) playingIds.add(pid); });
+              c.players.forEach((pid: string) => {
+                if (pid) playingIds.add(pid);
+              });
             }
           });
         }
@@ -268,6 +330,10 @@ export function useCourts({
     newStatusOverrides: Record<string, PlayerStatus> = {},
     affectedCourtIds: string[] = []
   ) => {
+    const deduped = dedupePlayersAcrossZones(newCourts, newRecPlayers);
+    newCourts = deduped.courts;
+    newRecPlayers = deduped.recommended;
+
     localRecommendedUnsyncedRef.current = false;
     await enqueueRemoteWrite(async () => {
       /** 有場地／推薦卡 id 時顯示 loading（blocking）；僅改狀態時 silent push，不鎖 isPushing／整頁操作 */
@@ -337,7 +403,9 @@ export function useCourts({
         setError(null);
       } catch (err: any) {
         if (err.message === 'VERSION_CONFLICT') {
-          setError("狀態已被其他人修改，已為您同步最新狀態，請重新操作");
+          setError(
+            "與伺服器版本仍不一致（已自動重試過）。請確認畫面場地與 Target 後再操作一次；若多人同時編輯請先協調。"
+          );
         } else if (err.code === 'NOT_CONTROLLER') {
           setError(err.message || "您目前沒有控制權，請先取得主動權");
         } else {
@@ -568,7 +636,8 @@ export function useCourts({
     if (isFull) {
       await syncToRemote(courts, newRecs, {}, ["recommended"]);
     } else {
-      setRecommendedPlayers(newRecs);
+      const d = dedupePlayersAcrossZones(courts, newRecs);
+      setRecommendedPlayers(d.recommended);
       localRecommendedUnsyncedRef.current = true;
     }
   };
@@ -671,20 +740,51 @@ export function useCourts({
       await syncToRemote(newCourts, nextRecs as Player[], finStatus, affectedCourtIds);
       setWinnerModalOpen(false);
 
-      // 3. 寫入 GAS 對戰紀錄
-      recordMatch({
+      // 3. 寫入 GAS 對戰紀錄（須 await）：後端 recordMatchAndUpdate 會 bump CourtState 版本，
+      //    若與場地 push 並行或未拉最新版，下一個選人／同步會 VERSION_CONFLICT。
+      const recordPayload = {
         matchId: court.matchId,
         date: getTaipeiISOString(),
         matchDate: today,
-        t1p1: team1[0].name, t1p2: team1[1].name,
-        t2p1: team2[0].name, t2p2: team2[1].name,
-        winnerTeam: winner === 1 ? 'Team 1' : 'Team 2',
+        t1p1: team1[0].name,
+        t1p2: team1[1].name,
+        t2p1: team2[0].name,
+        t2p2: team2[1].name,
+        winnerTeam: winner === 1 ? ("Team 1" as const) : ("Team 2" as const),
         updatedPlayers: result.updatedPlayers as any,
         updatedStats: result.updatedStats as any,
-        duration, score, courtName: court.name,
-      }).catch(err => {
-        setError('寫入對戰紀錄失敗，請重新整理重試: ' + (err.message || '未知錯誤'));
-      });
+        duration,
+        score,
+        courtName: court.name,
+      };
+
+      let wroteRecord = false;
+      try {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await recordMatch(recordPayload);
+            wroteRecord = true;
+            break;
+          } catch (e) {
+            if (attempt === 2) throw e;
+            await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+          }
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(
+          "場地已清空，但對戰紀錄尚未寫入後端（可能網路不穩）。畫面上的本場為暫存；請稍後再操作一次或檢查網路後重試。"
+          + (msg ? `（${msg}）` : "")
+        );
+      }
+
+      if (wroteRecord && fetchCourtState) {
+        try {
+          await fetchCourtState();
+        } catch {
+          // 輪詢稍後也會對齊版本
+        }
+      }
 
       // 4. 清理：1.5秒後把球員狀態從 finishing 轉回 ready 並同步
       setTimeout(() => {

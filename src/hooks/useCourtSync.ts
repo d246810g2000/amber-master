@@ -100,7 +100,7 @@ export function useCourtSync({
     return () => clearInterval(timer);
   }, [enabled, pollingInterval, fetchState]);
 
-  // 更新狀態到後端 (樂觀鎖；衝突時由外層處理)
+  // 更新狀態到後端 (樂觀鎖)；VERSION_CONFLICT 時先併入伺服器快照再自動重送一次（常見於賽後 bump 版號與手動操作競態）
   // silent: 不觸發 isPushing，供僅改 playerStatus 等輕量同步，避免整頁鎖操作
   const pushState = useCallback(async (
     newState: NonNullable<CourtSyncState['state']>,
@@ -113,38 +113,60 @@ export function useCourtSync({
     if (!silent) setIsPushing(true);
     setSyncError(null);
     try {
-      const expectedVersion = stateRef.current.version;
-      const response = await gasApi.updateCourtState({
-        expectedVersion,
-        state: newState,
-        updatedBy,
-        takeover,
-        updaterName,
-        enableLine: options?.enableLine
-      });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const expectedVersion = stateRef.current.version;
+        const response = await gasApi.updateCourtState({
+          expectedVersion,
+          state: newState,
+          updatedBy,
+          takeover,
+          updaterName,
+          enableLine: options?.enableLine
+        });
 
-      if (response.status === 'success') {
-        commitSyncState({
-          version: response.data.version,
-          state: response.data.state || newState,
-          updatedAt: response.data.updatedAt || new Date().toISOString(),
-          updatedBy: response.data.updatedBy || updatedBy
-        });
-      } else if (response.status === 'conflict' || response.status === 'error' && response.message === 'VERSION_CONFLICT') {
-        console.warn('Court state conflict! Local state updated to server version.');
-        commitSyncState({
-          version: response.data.version,
-          state: response.data.state,
-          updatedAt: response.data.updatedAt,
-          updatedBy: response.data.updatedBy
-        });
-        throw new Error('VERSION_CONFLICT');
-      } else {
+        if (response.status === 'success') {
+          commitSyncState({
+            version: response.data.version,
+            state: response.data.state || newState,
+            updatedAt: response.data.updatedAt || new Date().toISOString(),
+            updatedBy: response.data.updatedBy || updatedBy
+          });
+          setSyncError(null);
+          return;
+        }
+
+        const isVersionConflict =
+          response.status === 'conflict' ||
+          (response.status === 'error' && response.message === 'VERSION_CONFLICT');
+
+        if (isVersionConflict && response.data) {
+          console.warn(
+            attempt === 0
+              ? '[Sync] VERSION_CONFLICT：已套用伺服器版本並將自動重試同一筆寫入'
+              : '[Sync] VERSION_CONFLICT：重試後仍衝突'
+          );
+          commitSyncState({
+            version: response.data.version,
+            state: response.data.state,
+            updatedAt: response.data.updatedAt,
+            updatedBy: response.data.updatedBy
+          });
+          if (attempt === 0) {
+            try {
+              await fetchState();
+            } catch {
+              /* 重試 push 不依賴 GET 成功 */
+            }
+            continue;
+          }
+          throw new Error('VERSION_CONFLICT');
+        }
+
         throw new Error(response.message || 'Unknown sync error');
       }
     } catch (err: any) {
       if (err.message === 'VERSION_CONFLICT') {
-        throw err; // 讓外層處理
+        throw err;
       }
       console.error('Push state failed:', err);
       setSyncError(err.message || 'Sync failed');
@@ -152,7 +174,7 @@ export function useCourtSync({
     } finally {
       if (!silent) setIsPushing(false);
     }
-  }, [commitSyncState]);
+  }, [commitSyncState, fetchState]);
 
   return {
     syncState,

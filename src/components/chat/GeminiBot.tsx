@@ -7,8 +7,10 @@ import {
 } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useAuth } from '@/src/context/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMatches } from '@/src/hooks/useMatches';
-import { usePlayerProfile } from '@/src/hooks/usePlayerProfile';
+import { usePlayerProfile, type PlayerProfileData } from '@/src/hooks/usePlayerProfile';
+import type { MatchRecord } from '@/src/types';
 import { getUserBinding, type UserBinding } from '@/src/lib/gasApi';
 import { getTaipeiDateString, getAvatarUrl } from '@/src/lib/utils';
 import { clsx } from 'clsx';
@@ -60,6 +62,7 @@ const FUN_QUESTIONS = [
 ];
 
 export function GeminiBot({ players = [], playerStatus = {}, courts = [], recommendedPlayers = [] }: GeminiBotProps) {
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -130,14 +133,49 @@ export function GeminiBot({ players = [], playerStatus = {}, courts = [], recomm
     abortControllerRef.current = controller;
 
     try {
-      const readyList = players.filter(p => playerStatus[p.id] === 'ready').map(p => `${p.name}(戰力:${(p.mu * 10).toFixed(0)})`);
-      const restingList = players.filter(p => playerStatus[p.id] === 'resting').map(p => `${p.name}(戰力:${(p.mu * 10).toFixed(0)})`);
+      // 發送前強制與後端對齊，避免閉包內仍是賽前／舊 GAS 快取（結束比賽後不必手動重整）
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['matches', today], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['players', today], type: 'active' }),
+        boundPlayerId
+          ? queryClient.refetchQueries({ queryKey: ['playerProfile', boundPlayerId], type: 'active' })
+          : Promise.resolve(),
+      ]);
+      const matchesForPrompt =
+        queryClient.getQueryData<MatchRecord[]>(['matches', today]) ?? matches;
+      const profileForPrompt = boundPlayerId
+        ? queryClient.getQueryData<PlayerProfileData>(['playerProfile', boundPlayerId]) ?? profile
+        : profile;
+      const playersForPrompt =
+        queryClient.getQueryData<DerivedPlayer[]>(['players', today]) ?? players;
+
+      const readyList = playersForPrompt.filter(p => playerStatus[p.id] === 'ready').map(p => `${p.name}(戰力:${(p.mu * 10).toFixed(0)})`);
+      const restingList = playersForPrompt.filter(p => playerStatus[p.id] === 'resting').map(p => `${p.name}(戰力:${(p.mu * 10).toFixed(0)})`);
       const activeCourts = courts.filter(c => c.players.some((p: any) => p !== null));
       const recommended = recommendedPlayers.filter(p => p !== null).map(p => p?.name);
 
-      const userMatches = matches.filter(m => m.team1.some(p => p.name === currentUser?.name) || m.team2.some(p => p.name === currentUser?.name));
-      const userWins = userMatches.filter(m => {
-        const isTeam1 = m.team1.some(p => p.name === currentUser?.name);
+      const selfName =
+        binding?.playerName ||
+        profileForPrompt?.data?.player?.name ||
+        currentUser?.name;
+      const userMatches = matchesForPrompt.filter((m) => {
+        if (boundPlayerId) {
+          return (
+            m.team1.some((p) => String(p.id) === boundPlayerId) ||
+            m.team2.some((p) => String(p.id) === boundPlayerId)
+          );
+        }
+        if (selfName) {
+          return m.team1.some((p) => p.name === selfName) || m.team2.some((p) => p.name === selfName);
+        }
+        return false;
+      });
+      const userWins = userMatches.filter((m) => {
+        const isTeam1 = boundPlayerId
+          ? m.team1.some((p) => String(p.id) === boundPlayerId)
+          : selfName
+            ? m.team1.some((p) => p.name === selfName)
+            : false;
         return (isTeam1 && m.winner === 1) || (!isTeam1 && m.winner === 2);
       }).length;
       const userLosses = userMatches.length - userWins;
@@ -146,11 +184,12 @@ export function GeminiBot({ players = [], playerStatus = {}, courts = [], recomm
 你是一位精英級羽球教練（安柏 | Coach Amber）。你的風格冷靜、專業、以戰力數據為核心，但對球友持有專業的尊重與支持。
 
 【當前環境上下文 (內部數據)】
-- 用戶: ${currentUser?.name || '匿名球友'}
-- 用戶生涯戰力: ${profile?.comprehensiveMu ? (profile.comprehensiveMu * 10).toFixed(0) : '250'}
-- 用戶今日即時戰力: ${profile?.instantMu ? (profile.instantMu * 10).toFixed(0) : '250'} (若為250且今日無紀錄，代表今日首場尚未開始)
+- 用戶: ${selfName || currentUser?.name || '匿名球友'}
+- 用戶生涯戰力: ${profileForPrompt?.comprehensiveMu ? (profileForPrompt.comprehensiveMu * 10).toFixed(0) : '250'}
+- 用戶今日即時戰力: ${profileForPrompt?.instantMu ? (profileForPrompt.instantMu * 10).toFixed(0) : '250'} (若為250且今日無紀錄，代表今日首場尚未開始)
 - 今日紀錄: ${userWins}勝 ${userLosses}敗
 - 備戰區玩家(即時): ${readyList.length > 0 ? readyList.join(', ') : '無'}
+- 休息中玩家(即時): ${restingList.length > 0 ? restingList.join(', ') : '無'}
 - 球場狀態: ${activeCourts.map(c => `${c.name}號場(${c.players.filter((p: any) => p).map((p: any) => p.name).join('&')})`).join(', ') || '目前全空'}
 - 推薦組合(即時): ${recommended.length === 4 ? recommended.join('&') : '計算中'}
 

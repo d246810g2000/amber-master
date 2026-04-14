@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import * as gasApi from '../lib/gasApi';
 import * as matchEngine from '../lib/matchEngine';
 import type { PlayerHistoryResult } from '../lib/matchEngine';
-import type { RawPlayer, RawPlayerStat } from '../lib/gasApi';
+import type { RawPlayer } from '../lib/gasApi';
 
 import { getTaipeiDateString } from '../lib/utils';
 
@@ -32,19 +32,14 @@ export interface PlayerProfileData {
  * 自動獲得快取、重試、stale 管理等益處。
  */
 export function usePlayerProfile(playerId: string) {
-  const queryClient = useQueryClient();
-
   return useQuery<PlayerProfileData>({
     queryKey: ['playerProfile', playerId],
     enabled: Boolean(playerId),
     queryFn: async () => {
+      // 一律直接打 GAS，勿經 ensureQueryData(['players-base'])：該 key 常被 useMatches 以較長 staleTime 註冊，
+      // 賽後 invalidate 仍可能短暫回傳舊的 fetchPlayers／stats，導致球員頁戰力與 Sheet 不一致。
       const [basePlayers, allMatches, snapshots] = await Promise.all([
-        // 重複利用已快取的球員資料
-        queryClient.ensureQueryData({
-          queryKey: ['players-base'],
-          queryFn: gasApi.fetchPlayers,
-          staleTime: 60_000,
-        }),
+        gasApi.fetchPlayers(),
         gasApi.fetchMatches(),
         gasApi.fetchPlayerStats(),
       ]);
@@ -109,6 +104,11 @@ export function usePlayerProfile(playerId: string) {
         playerMap,
       };
     },
-    staleTime: 120_000, // 2 分鐘內重複使用快取
+    // 0：賽後 invalidate／Court 版號 bump 後立刻視為 stale，避免「Sheet 已更新畫面仍舊」
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    // 球員頁常開著不操作；Court 輪詢若與版號競態遺漏時，仍會在數秒內對齊後端
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: false,
   });
 }

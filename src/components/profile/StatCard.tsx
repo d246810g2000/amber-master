@@ -48,7 +48,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`${valueFontSize} font-black text-slate-900 dark:text-white tracking-tighter tabular-nums ${isPlayerName ? 'truncate max-w-full' : ''}`}
+            className={`${valueFontSize} font-black text-slate-900 dark:text-white tracking-tighter tabular-nums ${isPlayerName ? 'line-clamp-2 min-w-0 break-words' : ''}`}
           >
             {value}
           </motion.span>
@@ -56,7 +56,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         </div>
         <div className="mt-auto pt-1.5 sm:pt-2">
           {subValue ? (
-            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-zinc-600 truncate">{subValue}</p>
+            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-zinc-600 line-clamp-2 break-words">{subValue}</p>
           ) : (
             <div className="h-[13.5px] sm:h-[15px]" />
           )}

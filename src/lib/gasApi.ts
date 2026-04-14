@@ -67,15 +67,26 @@ async function fetchWithRetry(
   throw last;
 }
 
-async function gasGet<T>(params: Record<string, string> | undefined, schema: z.ZodType<T>): Promise<T> {
+async function gasGet<T>(
+  params: Record<string, string | undefined> | undefined,
+  schema: z.ZodType<T>,
+  netOpts?: { retries?: number; baseDelayMs?: number }
+): Promise<T> {
   if (!GAS_URL) throw new Error("未設定 VITE_GAS_URL");
   const url = new URL(GAS_URL);
   if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
+    });
   }
+  const urlStr = url.toString();
   let res: Response;
   try {
-    res = await fetch(url.toString());
+    const r = netOpts?.retries ?? 0;
+    res =
+      r > 0
+        ? await fetchWithRetry(urlStr, { method: "GET" }, { retries: r, baseDelayMs: netOpts?.baseDelayMs ?? 450 })
+        : await fetch(urlStr);
   } catch (e) {
     throw translateNetworkError(e);
   }
@@ -171,7 +182,7 @@ export async function deletePlayersBatch(ids: string[]) {
   return gasPost({ action: 'deletePlayersBatch', ids }, z.any());
 }
 
-/** 記錄比賽結果並更新 GAS */
+/** 記錄比賽結果並更新 GAS（寫入較重，與 updateCourtState 分開；加重試） */
 export async function recordMatchAndUpdate(data: {
   matchId?: string;
   date: string;
@@ -188,7 +199,32 @@ export async function recordMatchAndUpdate(data: {
   courtName?: string;
   matchNo?: number;
 }) {
-  return gasPost({ action: 'recordMatchAndUpdate', ...data }, z.any());
+  if (!GAS_URL) throw new Error("未設定 VITE_GAS_URL");
+  const body = { action: "recordMatchAndUpdate" as const, ...data };
+  let res: Response;
+  try {
+    res = await fetchWithRetry(
+      GAS_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(body),
+      },
+      { retries: 2, baseDelayMs: 700 }
+    );
+  } catch (e) {
+    throw translateNetworkError(e);
+  }
+  const json = await res.json();
+  const parsed = GasResponseSchema(z.any()).safeParse(json);
+  if (!parsed.success) {
+    console.error("API Parse Error:", parsed.error);
+    throw new Error("API Response format invalid");
+  }
+  if (parsed.data.status === "success") {
+    return parsed.data.data as any;
+  }
+  throw createApiError(parsed.data.message || "API Error", (parsed.data as any).code);
 }
 
 /** 批次更新球員屬性 (對應 GAS 的 batchUpdatePlayers) */
@@ -214,9 +250,8 @@ export async function getUserBinding(userEmail: string) {
 
 
 export async function getCourtState(date?: string) {
-  const params: Record<string, any> = { action: 'getCourtState' };
-  if (date) params.date = date;
-  return gasGet(params, z.any());
+  const params: Record<string, string | undefined> = { action: "getCourtState", date };
+  return gasGet(params, z.any(), { retries: 1, baseDelayMs: 450 });
 }
 
 export async function updateCourtState(data: { expectedVersion: number; state: any; updatedBy: string; takeover?: boolean; updaterName?: string; enableLine?: boolean }) {

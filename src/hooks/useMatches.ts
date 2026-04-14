@@ -44,18 +44,28 @@ export function useMatches(targetDate: string) {
 
   const recordMatchMutation = useMutation({
     mutationFn: gasApi.recordMatchAndUpdate,
-    onSuccess: () => {
-      // GAS 已持久化：重抓戰力／對戰／個人檔案，讓排點、儀表板與安柏教練與後端一致
-      void queryClient.invalidateQueries({ queryKey: ['matches'] });
-      void queryClient.invalidateQueries({ queryKey: ['players'] });
-      void queryClient.invalidateQueries({ queryKey: ['players-base'] });
-      void queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
+    /** 須 await：confirmWinner 的 mutateAsync 會等 onSuccess 跑完，球員頁／安柏教練才能讀到與 Sheet 一致的快取 */
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['matches'] }),
+        queryClient.invalidateQueries({ queryKey: ['players'] }),
+        queryClient.invalidateQueries({ queryKey: ['players-base'] }),
+        queryClient.invalidateQueries({ queryKey: ['playerStats'] }),
+        queryClient.invalidateQueries({ queryKey: ['playerProfile'] }),
+      ]);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['matches', targetDate], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['matches', 'all'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['players'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['players-base'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['playerStats'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['playerProfile'], type: 'active' }),
+      ]);
     },
     onError: (err) => {
       console.error('GAS 寫入失敗:', err);
-      // 寫入失敗時，強制重新抓取以回復正確狀態
-      queryClient.invalidateQueries({ queryKey: ['players'] });
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      // 勿在此 invalidate matches：會把 confirmWinner 的樂觀對戰沖掉，使用者以為紀錄憑空消失。
+      // 場地／分數仍以樂觀更新為準，待網路恢復後使用者可重新整理或重試寫入。
     },
   });
 

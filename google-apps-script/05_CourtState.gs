@@ -28,16 +28,53 @@ function ensureCourtStateSheet() {
   return sheet;
 }
 
-/** 內部 Helper: 強制修正不該存檔的狀態 (如 finishing) */
-function normalizeState_(state) {
-  if (!state || !state.playerStatus) return state;
-  const statusKeys = Object.keys(state.playerStatus);
-  for (let i = 0; i < statusKeys.length; i++) {
-    const key = statusKeys[i];
-    if (state.playerStatus[key] === 'finishing') {
-      state.playerStatus[key] = 'ready';
+/**
+ * 同一球員不可同時佔多格（各場地 players + recommendedPlayers）。
+ * 依 courts 陣列順序保留第一次出現的 id，其餘格清空。
+ */
+function dedupeOccupancyAcrossCourts_(state) {
+  if (!state) return state;
+  var seen = {};
+  var j, i, pid;
+  if (state.courts && Array.isArray(state.courts)) {
+    for (j = 0; j < state.courts.length; j++) {
+      var row = state.courts[j].players;
+      if (!row) continue;
+      for (i = 0; i < row.length; i++) {
+        pid = row[i];
+        if (!pid) continue;
+        var sid = String(pid);
+        if (seen[sid]) row[i] = null;
+        else seen[sid] = true;
+      }
     }
   }
+  if (state.recommendedPlayers && Array.isArray(state.recommendedPlayers)) {
+    var rec = state.recommendedPlayers;
+    for (i = 0; i < rec.length; i++) {
+      pid = rec[i];
+      if (!pid) continue;
+      var sid2 = String(pid);
+      if (seen[sid2]) rec[i] = null;
+      else seen[sid2] = true;
+    }
+  }
+  return state;
+}
+
+/** 內部 Helper: 強制修正不該存檔的狀態 (如 finishing)，並清除跨區重複佔位 */
+function normalizeState_(state) {
+  if (!state) return state;
+  if (state.playerStatus) {
+    const statusKeys = Object.keys(state.playerStatus);
+    for (let i = 0; i < statusKeys.length; i++) {
+      const key = statusKeys[i];
+      if (state.playerStatus[key] === 'finishing') {
+        state.playerStatus[key] = 'ready';
+      }
+    }
+  }
+  dedupeOccupancyAcrossCourts_(state);
   return state;
 }
 

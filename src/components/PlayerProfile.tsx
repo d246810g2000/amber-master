@@ -4,18 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDialog } from '../context/DialogContext';
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import Trophy from "lucide-react/dist/esm/icons/trophy";
 import Target from "lucide-react/dist/esm/icons/target";
 import Activity from "lucide-react/dist/esm/icons/activity";
 import Calendar from "lucide-react/dist/esm/icons/calendar";
-import Hash from "lucide-react/dist/esm/icons/hash";
-import Crown from "lucide-react/dist/esm/icons/crown";
-import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Lock from "lucide-react/dist/esm/icons/lock";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus";
 import Share2 from "lucide-react/dist/esm/icons/share-2";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
@@ -23,7 +20,7 @@ import { getAvatarUrl, isGoogleAvatarString, cn, getTaipeiDateString } from '../
 import { usePlayerProfile } from '../hooks/usePlayerProfile';
 
 // Sub-components
-import { StatCard } from './profile/StatCard';
+import { ProfileRecordSummary } from './profile/ProfileRecordSummary';
 const CpTrendChart = React.lazy(() => import('./profile/CpTrendChart').then(m => ({ default: m.CpTrendChart })));
 import { PartnerTable } from './profile/PartnerTable';
 import { MatchHistoryTable } from './profile/MatchHistoryTable';
@@ -154,6 +151,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [manualProfileSync, setManualProfileSync] = useState(false);
   // 從 query 中提取
   const profileData = profileQuery.data;
   const data = profileData?.data ?? null;
@@ -212,6 +210,34 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       showAlert('更新失敗', '無法儲存 Google 頭像設定。');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSyncProfileData = async () => {
+    if (!playerId || manualProfileSync) return;
+    setManualProfileSync(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['playerProfile', playerId] }),
+        queryClient.invalidateQueries({ queryKey: ['matches'] }),
+        queryClient.invalidateQueries({ queryKey: ['players-base'] }),
+        queryClient.invalidateQueries({ queryKey: ['playerStats'] }),
+        queryClient.invalidateQueries({ queryKey: ['players'] }),
+      ]);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['playerProfile', playerId], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['matches'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['players-base'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['playerStats'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['players'], type: 'active' }),
+      ]);
+      showAlert("同步完成", "已從後端重新載入此球員與對戰相關資料。");
+      onUpdate?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showAlert("同步失敗", msg || "請檢查網路後再試。");
+    } finally {
+      setManualProfileSync(false);
     }
   };
 
@@ -403,7 +429,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     );
   }
 
-  const { player, stats } = data;
+  const { player, stats, todayStats } = data;
 
   const isGoogleAvatar = isGoogleAvatarString(currentAvatarFull);
   const currentStyle = isGoogleAvatar
@@ -567,6 +593,20 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             />
           </div>
           <button
+            type="button"
+            onClick={() => void handleSyncProfileData()}
+            disabled={manualProfileSync || profileQuery.isFetching}
+            className={cn(
+              "p-2 md:p-3 rounded-xl md:rounded-2xl transition-all border flex items-center gap-2 shrink-0",
+              "bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-white/10",
+              "disabled:opacity-50 disabled:cursor-wait"
+            )}
+            title="從後端重新抓取球員戰力、對戰紀錄與統計"
+          >
+            <RefreshCw className={cn("w-5 h-5", (manualProfileSync || profileQuery.isFetching) && "animate-spin")} />
+            <span className="hidden sm:inline text-xs font-black uppercase">同步資訊</span>
+          </button>
+          <button
             onClick={() => setIsShareModalOpen(true)}
             disabled={!isOwner}
             className={cn(
@@ -586,61 +626,23 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
 
 
-      {/* Stats Grid */}
-      <div className="flex overflow-x-auto md:grid md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 pb-4 sm:pb-0 scrollbar-hide snap-x snap-mandatory px-6 -mx-6 sm:px-0 sm:mx-0 touch-pan-x">
-        <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard 
-            icon={<Hash className={`${isOwner ? 'text-zinc-600' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
-            label="總場次" 
-            value={isOwner ? stats.totalMatches : "---"} 
-            unit={isOwner ? "場" : ""} 
-            subValue={isOwner ? `W:${stats.winCount} / L:${stats.lossCount}` : "受保護數據"} 
-            theme={isOwner ? "zinc" : "zinc"}
-          />
-        </div>
-        <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard 
-            icon={<Trophy className={`${isOwner ? 'text-emerald-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
-            label="勝率" 
-            value={isOwner ? stats.winRate : "---"} 
-            unit={isOwner ? "%" : ""} 
-            subValue={!isOwner ? "請先解鎖" : undefined}
-            theme={isOwner ? "emerald" : "zinc"}
-          />
-        </div>
-        <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard 
-            icon={<Activity className={`${isOwner ? 'text-amber-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
-            label="即時戰力" 
-            value={isOwner ? currentStats.instant : "---"} 
-            subValue={isOwner ? "當前手感與競技狀態" : "暫無權限查看"} 
-            unit={isOwner ? "CP" : ""} 
-            theme={isOwner ? "amber" : "zinc"} 
-          />
-        </div>
-        <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard 
-            icon={<Sparkles className={`${isOwner ? 'text-emerald-500' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
-            label="生涯戰力" 
-            value={isOwner ? currentStats.career : "---"} 
-            subValue={isOwner ? "長期穩定的技術累積" : "請先登入帳號以解鎖"} 
-            unit={isOwner ? "CP" : ""}
-            theme={isOwner ? "emerald" : "zinc"} 
-          />
-        </div>
-        <div className="snap-center shrink-0 w-[30vw] md:w-auto max-w-[200px] md:max-w-none">
-          <StatCard 
-            icon={<Crown className={`${isOwner ? 'text-amber-400 saturate-150' : 'text-slate-400'} sm:w-6 sm:h-6 w-5 h-5`} />} 
-            label="最佳拍檔" 
-            value={isOwner ? (teammateStats[0]?.name || "無") : "---"} 
-            subValue={isOwner ? `${teammateStats[0]?.winRate.toFixed(1) || 0}% 共同勝率` : "需本人解鎖"} 
-            unit="" 
-            theme={isOwner ? "amber" : "zinc"}
-          />
-        </div>
-        {/* Mobile scroll spacer */}
-        <div className="w-2 sm:hidden shrink-0" />
-      </div>
+      {/* 球員總覽：場次／勝率、即時／生涯戰力、最佳拍檔同一區塊 */}
+      <ProfileRecordSummary
+        isOwner={isOwner}
+        stats={stats}
+        todayStats={todayStats}
+        extras={
+          isOwner
+            ? {
+                instantCp: currentStats.instant,
+                careerCp: currentStats.career,
+                bestPartner: teammateStats[0]
+                  ? { name: teammateStats[0].name, winRate: teammateStats[0].winRate }
+                  : null,
+              }
+            : null
+        }
+      />
 
       {/* Tab Bar */}
       <div className="flex bg-slate-100/80 dark:bg-zinc-950/50 p-1.5 rounded-3xl border border-slate-200 dark:border-white/5 w-fit gap-1 sticky top-[88px] z-40 backdrop-blur-lg mx-auto md:mx-0 shadow-xl dark:shadow-2xl transition-all">

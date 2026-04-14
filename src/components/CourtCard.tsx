@@ -37,6 +37,7 @@ const PlayerSlot = React.memo(({
   isSelected,
   className,
   restStreakCount = 0,
+  interactive = true,
 }: { 
   player: Player | null; 
   teamColor?: "red" | "blue";
@@ -44,22 +45,27 @@ const PlayerSlot = React.memo(({
   isSelected?: boolean;
   className?: string;
   restStreakCount?: number;
+  /** 無控制權時改為純展示，避免誤觸與「以為能點」 */
+  interactive?: boolean;
 }) => {
   return (
     <button 
-      onClick={onClick}
+      onClick={interactive ? onClick : undefined}
       type="button"
+      tabIndex={interactive ? undefined : -1}
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm hover:z-20",
+        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm",
+        interactive && "hover:z-20",
+        !interactive && "pointer-events-none cursor-default",
         /* 有球員時勿在 button 上 overflow-hidden：Safari 對 button + 子層 backdrop 等合成層裁切有 bug；改由內層 div 裁切 */
         player ? "overflow-visible p-0" : "overflow-hidden p-0.5 md:p-1",
         player 
           ? "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10" 
           : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10",
-        isSelected && player && "ring-4 ring-amber-400 z-30 shadow-2xl scale-[1.03]",
+        isSelected && player && interactive && "ring-4 ring-amber-400 z-30 shadow-2xl scale-[1.03]",
         !isSelected && teamColor === "red" && player && "bg-rose-50/95 dark:bg-rose-950/80 ring-rose-200/50 dark:ring-rose-900/50",
         !isSelected && teamColor === "blue" && player && "bg-blue-50/95 dark:bg-blue-950/80 ring-blue-200/50 dark:ring-blue-900/50",
-        "active:scale-95 group/slot",
+        interactive && "active:scale-95 group/slot",
         className
       )}
     >
@@ -114,6 +120,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onToggleAuto,
   missedStreakByPlayerId,
 }) => {
+  const readOnly = hasControl === false;
   const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
 
@@ -155,37 +162,31 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             </span>
           </div>
         )}
-        {isRecommended && onReset && (
+        {isRecommended && onReset && !readOnly && (
           <div className="flex items-center gap-1.5 md:gap-2">
             <button
                onClick={(e) => {
-                  if (!hasControl) return;
                   e.stopPropagation();
                   onToggleAuto?.();
                }}
                className={cn(
-                 "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border",
-                 hasControl ? "cursor-pointer active:scale-95" : "cursor-not-allowed opacity-50",
+                 "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer active:scale-95",
                  isAutoMode 
                    ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 shadow-sm shadow-indigo-200/50 animate-pulse-subtle" 
                    : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                )}
-               title={hasControl ? (isAutoMode ? "自動模式已開啟" : "開啟自動模式") : "無控制權"}
+               title={isAutoMode ? "自動模式已開啟" : "開啟自動模式"}
             >
               <Zap size={10} className={isAutoMode ? "fill-indigo-500" : ""} />
               Auto
             </button>
             <button 
               onClick={(e) => {
-                if (!hasControl) return;
                 e.stopPropagation();
                 onReset();
               }}
-              className={cn(
-                "p-1 transition-colors",
-                hasControl ? "text-slate-300 hover:text-indigo-500" : "text-slate-200 cursor-not-allowed"
-              )}
-              title={hasControl ? "重置名單" : "無控制權"}
+              className="p-1 transition-colors text-slate-300 hover:text-indigo-500"
+              title="重置名單"
             >
               <RotateCcw size={12} strokeWidth={3} />
             </button>
@@ -225,6 +226,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           isSelected={selectedSlotIndex === 0}
           className="left-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
           restStreakCount={players[0] ? (missedStreakByPlayerId?.[players[0].id] ?? 0) : 0}
+          interactive={!readOnly}
         />
         <PlayerSlot 
           player={players[1]} 
@@ -233,6 +235,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           isSelected={selectedSlotIndex === 1}
           className="right-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
           restStreakCount={players[1] ? (missedStreakByPlayerId?.[players[1].id] ?? 0) : 0}
+          interactive={!readOnly}
         />
 
         {/* Center VS & Points */}
@@ -261,6 +264,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           isSelected={selectedSlotIndex === 2}
           className="left-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
           restStreakCount={players[2] ? (missedStreakByPlayerId?.[players[2].id] ?? 0) : 0}
+          interactive={!readOnly}
         />
         <PlayerSlot 
           player={players[3]} 
@@ -269,6 +273,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           isSelected={selectedSlotIndex === 3}
           className="right-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
           restStreakCount={players[3] ? (missedStreakByPlayerId?.[players[3].id] ?? 0) : 0}
+          interactive={!readOnly}
         />
 
         {/* Loading Spinner */}
@@ -279,9 +284,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
         )}
       </div>
 
-      {/* Footer */}
-      {/* Footer - CENTERED & BALANCED ACTION AREA */}
-      <div className="p-2 bg-white dark:bg-slate-900 flex items-center justify-center h-[52px] shrink-0 border-t border-slate-50/50 dark:border-slate-800/50">
+      {/* Footer：無控制權時不顯示操作鈕，避免只看不操作的人誤觸與困惑 */}
+      <div className="p-2 bg-white dark:bg-slate-900 flex items-center justify-center min-h-[52px] shrink-0 border-t border-slate-50/50 dark:border-slate-800/50">
+        {readOnly ? (
+          <p className="text-center text-[10px] font-bold leading-snug text-slate-400 dark:text-slate-500 px-1">
+            僅供觀看 · 場地與名單會自動更新
+          </p>
+        ) : (
         <div className={cn(
           "w-full px-1",
           (isRecommended || (actionText === "結束" && onCancel && players.some(p => p !== null))) ? "grid grid-cols-2 gap-2" : "flex justify-center"
@@ -289,8 +298,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           {isRecommended && onSelectPlayers && (
             <button
               onClick={onSelectPlayers}
-              title={!hasControl ? "請先登入取得控制權" : undefined}
-              disabled={isLoading || isActionDisabled || !hasControl}
+              disabled={isLoading || isActionDisabled}
               className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black hover:border-black dark:hover:border-white rounded-xl transition-all active:scale-95 bg-indigo-50/30 dark:bg-indigo-950/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
@@ -311,7 +319,6 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
               <button
                 onClick={onAction}
-                title={!hasControl ? "請先登入取得控制權" : undefined}
                 disabled={isLoading || isActionDisabled || !!isPrimaryActionLocked}
                 className={cn(
                   "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center gap-2",
@@ -330,6 +337,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   );

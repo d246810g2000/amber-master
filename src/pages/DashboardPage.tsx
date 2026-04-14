@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getTaipeiDateString } from "../lib/utils";
 import * as matchEngine from "../lib/matchEngine";
 import type { DerivedPlayer } from "../lib/matchEngine";
@@ -17,6 +18,7 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { GeminiBot } from "../components/chat/GeminiBot";
 
 export function DashboardPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentFilterDate, setCurrentFilterDate] = useState(getTaipeiDateString());
@@ -78,8 +80,10 @@ export function DashboardPage() {
     if (syncState.version > 0 && isSyncInitialized) {
       refetchPlayers();
       refetchMatches();
+      // recordMatch 會 bump CourtState 版本；球員頁若未掛 Dashboard 需靠此無效化才會跟上
+      void queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
     }
-  }, [syncState.version, isSyncInitialized, refetchPlayers, refetchMatches]);
+  }, [syncState.version, isSyncInitialized, refetchPlayers, refetchMatches, queryClient]);
 
   const loading = playersLoading || historyLoading || playersFetching || historyFetching;
 
@@ -98,8 +102,16 @@ export function DashboardPage() {
     playerStatus, setMultipleStatus, matchHistory,
     recordMatch, addLocalMatch, updateLocalPlayers,
     syncState, isFetching, isPushing, pushState,
+    fetchCourtState: fetchState,
     targetDate: currentFilterDate
   });
+
+  // 錯誤橫幅多數人只會忽略；自動關閉減少必須手動點「關閉」
+  React.useEffect(() => {
+    if (!error) return;
+    const id = window.setTimeout(() => setError(null), 14_000);
+    return () => window.clearTimeout(id);
+  }, [error, setError]);
 
   const isInitialLoading = playersLoading || historyLoading || !isSyncInitialized;
 
@@ -206,7 +218,7 @@ export function DashboardPage() {
       {error && (
         <div className="bg-red-500/90 dark:bg-red-900/90 text-white p-4 rounded-xl mb-6 shadow-lg backdrop-blur-sm flex justify-between items-center border border-red-400 dark:border-red-700 shrink-0">
           <span className="font-medium">{error}</span>
-          <button onClick={() => setError(null)} className="text-white/80 hover:text-white bg-red-600/50 dark:bg-red-800/50 px-3 py-1 rounded-lg">關閉</button>
+          <button type="button" onClick={() => setError(null)} className="text-white/80 hover:text-white bg-red-600/50 dark:bg-red-800/50 px-3 py-1 rounded-lg shrink-0">關閉</button>
         </div>
       )}
 
@@ -239,7 +251,11 @@ export function DashboardPage() {
                       isLoading={syncingCourtIds.includes(court.id) || submittingMatch && activeCourt?.id === court.id}
                       isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
                       onSlotClick={(idx) => hasControl && handleCourtSlotClick(court.id, idx)}
-                      selectedSlotIndex={selectedCourtSlot?.courtId === court.id ? selectedCourtSlot.index : null}
+                      selectedSlotIndex={
+                        hasControl && selectedCourtSlot?.courtId === court.id
+                          ? selectedCourtSlot.index
+                          : null
+                      }
                       hasControl={hasControl}
                     />
                   </div>
@@ -262,7 +278,11 @@ export function DashboardPage() {
                       isMatchmaking || syncingCourtIds.includes('recommended')
                     }
                     onSlotClick={(idx) => hasControl && handleCourtSlotClick('recommended', idx)}
-                    selectedSlotIndex={selectedCourtSlot?.courtId === 'recommended' ? selectedCourtSlot.index : null}
+                    selectedSlotIndex={
+                      hasControl && selectedCourtSlot?.courtId === 'recommended'
+                        ? selectedCourtSlot.index
+                        : null
+                    }
                     hasControl={hasControl}
                     isAutoMode={isAutoMode}
                     onToggleAuto={() => setIsAutoMode(!isAutoMode)}

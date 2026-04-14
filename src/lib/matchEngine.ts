@@ -497,6 +497,8 @@ export function calculateMatchResult(
 export interface PlayerHistoryResult {
   player: RawPlayer & { mu?: number; sigma?: number };
   stats: { totalMatches: number; winCount: number; lossCount: number; winRate: string };
+  /** 以台北日曆「今天」為準的對戰統計（與即時戰力同日定義一致） */
+  todayStats: { date: string; totalMatches: number; winCount: number; lossCount: number; winRate: string };
   history: MatchRecord[];
   trend: { date: string; mu: number; matchId: string }[];
 }
@@ -542,6 +544,17 @@ export function getPlayerHistory(
   // 排序：由舊到新
   playerMatches.sort((a, b) => getSafeTime(a.date) - getSafeTime(b.date));
 
+  const todayStr = getTaipeiDateString();
+  const todayMatches = playerMatches.filter(
+    (m) => (m.matchDate || getLocalDateString(m.date)) === todayStr,
+  );
+  let todayWinCount = 0;
+  todayMatches.forEach((m) => {
+    const isTeam1Today = m.team1.some((p) => String(p.id) === playerId || p.name === player.name);
+    const wToday = Number(m.winner);
+    if ((wToday === 1 && isTeam1Today) || (wToday === 2 && !isTeam1Today)) todayWinCount++;
+  });
+
   let winCount = 0;
   const trend: { date: string; mu: number; matchId: string }[] = [];
 
@@ -569,6 +582,14 @@ export function getPlayerHistory(
       winCount,
       lossCount: playerMatches.length - winCount,
       winRate: playerMatches.length > 0 ? (winCount / playerMatches.length * 100).toFixed(1) : '0',
+    },
+    todayStats: {
+      date: todayStr,
+      totalMatches: todayMatches.length,
+      winCount: todayWinCount,
+      lossCount: todayMatches.length - todayWinCount,
+      winRate:
+        todayMatches.length > 0 ? (todayWinCount / todayMatches.length * 100).toFixed(1) : '0',
     },
     history: sortedHistory,
     trend,

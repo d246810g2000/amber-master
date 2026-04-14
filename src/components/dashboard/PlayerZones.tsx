@@ -26,12 +26,18 @@ interface PlayerZonesProps {
   missedStreakByPlayerId?: Record<string, number>;
 }
 
-const EMPTY_STATE = (
-  <div className="w-full h-48 flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 gap-2 opacity-50">
-    <Users size={40} strokeWidth={1.5} />
-    <p className="text-sm font-bold">點擊下方球員開始備戰</p>
-  </div>
-);
+function EmptyReadyHint({ readOnly }: { readOnly: boolean }) {
+  return (
+    <div className="w-full h-48 flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 gap-2 opacity-50">
+      <Users size={40} strokeWidth={1.5} />
+      <p className="text-sm font-bold text-center px-4">
+        {readOnly
+          ? "此區由控制者編排；您為觀看模式，畫面會自動更新"
+          : "點擊下方球員開始備戰"}
+      </p>
+    </div>
+  );
+}
 
 export const PlayerZones: React.FC<PlayerZonesProps> = ({
   readyPlayers, restingPlayers, playingPlayers, playerStatus,
@@ -43,6 +49,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   playerCourtMap = {},
   missedStreakByPlayerId = {},
 }) => {
+  const readOnly = hasControl === false;
   return (
     <>
       {/* Ready Zone */}
@@ -64,14 +71,20 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
               {readyPlayers.length} PLAYERS
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onAllResting}
-              disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking || !hasControl}
-              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
-            >
-              全員休息
-            </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {readOnly ? (
+              <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                觀看中
+              </span>
+            ) : (
+              <button
+                onClick={onAllResting}
+                disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+              >
+                全員休息
+              </button>
+            )}
           </div>
         </div>
         <div className="flex-1">
@@ -104,7 +117,9 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 hasControl={hasControl}
               />
             ))}
-            {readyPlayers.length === 0 && playingPlayers.length === 0 && EMPTY_STATE}
+            {readyPlayers.length === 0 && playingPlayers.length === 0 && (
+              <EmptyReadyHint readOnly={readOnly} />
+            )}
           </div>
         </div>
       </div>
@@ -118,13 +133,19 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
               {restingPlayers.length} TOTAL
             </div>
           </div>
-          <button
-            onClick={onAllReady}
-            disabled={restingPlayers.length === 0 || submittingMatch || isMatchmaking || !hasControl}
-            className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
-          >
-            全員備戰
-          </button>
+          {readOnly ? (
+            <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              觀看中
+            </span>
+          ) : (
+            <button
+              onClick={onAllReady}
+              disabled={restingPlayers.length === 0 || submittingMatch || isMatchmaking}
+              className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+            >
+              全員備戰
+            </button>
+          )}
         </div>
         <div className="flex-1">
           <div className="flex flex-wrap gap-3 content-start p-2 pb-4">
