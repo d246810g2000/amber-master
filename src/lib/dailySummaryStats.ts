@@ -48,6 +48,7 @@ function pickName(p: MatchPlayer, playerLookup: Map<string, Pick<Player, 'name'>
 
 /**
  * 依當日對戰紀錄（可為新→舊，內部會轉成時間序）彙整每位有上場球員的摘要列。
+ * 回傳列依戰力（powerCp）高→低，同戰力再依勝率、勝場、姓名。
  */
 export function computeDailyPlayerSummary(
   matchesNewestFirst: MatchRecord[],
@@ -196,6 +197,7 @@ export function computeDailyPlayerSummary(
   }
 
   rows.sort((a, b) => {
+    if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
     if (b.winRate !== a.winRate) return b.winRate - a.winRate;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return a.name.localeCompare(b.name, 'zh-Hant');

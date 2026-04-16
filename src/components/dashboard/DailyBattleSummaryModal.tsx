@@ -265,7 +265,7 @@ export const DailyBattleSummaryModal: React.FC<DailyBattleSummaryModalProps> = (
     if (displayRows.length >= rows.length) {
       return `依「前 ${topN} 名」篩選 · 共 ${rows.length} 人已全部列出`;
     }
-    return `依「前 ${topN} 名」篩選 · 第 1–${displayRows.length} 名（共 ${rows.length} 人，依勝率等排序）`;
+    return `依「前 ${topN} 名」篩選 · 第 1–${displayRows.length} 名（共 ${rows.length} 人，依戰力排序）`;
   }, [limitTopEnabled, rows.length, displayRows.length, topN]);
 
   /** 常駐球員中，當日 matchHistory 完全未上場者 */
