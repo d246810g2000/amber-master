@@ -26,8 +26,8 @@ interface CourtCardProps {
   onCancel?: () => void;
   isAutoMode?: boolean;
   onToggleAuto?: () => void;
-  /** 連續未上場場次（僅 Target 推薦卡傳入時，格內顯示「休x」角標） */
-  missedStreakByPlayerId?: Record<string, number>;
+  /** 連續未上場場次（僅 Target 推薦卡傳入）；`null` 表示當日尚未上場，角標顯示「無」 */
+  missedStreakByPlayerId?: Record<string, number | null>;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -44,7 +44,8 @@ const PlayerSlot = React.memo(({
   onClick?: () => void;
   isSelected?: boolean;
   className?: string;
-  restStreakCount?: number;
+  /** 未上場連續場次；`null` 顯示「無」（當日尚未上場）。空位請傳 `0` */
+  restStreakCount?: number | null;
   /** 無控制權時改為純展示，避免誤觸與「以為能點」 */
   interactive?: boolean;
 }) => {
@@ -225,7 +226,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(0)}
           isSelected={selectedSlotIndex === 0}
           className="left-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
-          restStreakCount={players[0] ? (missedStreakByPlayerId?.[players[0].id] ?? 0) : 0}
+          restStreakCount={
+            players[0]
+              ? missedStreakByPlayerId?.[players[0].id] === undefined
+                ? 0
+                : missedStreakByPlayerId[players[0].id]!
+              : 0
+          }
           interactive={!readOnly}
         />
         <PlayerSlot 
@@ -234,7 +241,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(1)}
           isSelected={selectedSlotIndex === 1}
           className="right-[calc(7.5%+4px)] top-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
-          restStreakCount={players[1] ? (missedStreakByPlayerId?.[players[1].id] ?? 0) : 0}
+          restStreakCount={
+            players[1]
+              ? missedStreakByPlayerId?.[players[1].id] === undefined
+                ? 0
+                : missedStreakByPlayerId[players[1].id]!
+              : 0
+          }
           interactive={!readOnly}
         />
 
@@ -263,7 +276,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(2)}
           isSelected={selectedSlotIndex === 2}
           className="left-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
-          restStreakCount={players[2] ? (missedStreakByPlayerId?.[players[2].id] ?? 0) : 0}
+          restStreakCount={
+            players[2]
+              ? missedStreakByPlayerId?.[players[2].id] === undefined
+                ? 0
+                : missedStreakByPlayerId[players[2].id]!
+              : 0
+          }
           interactive={!readOnly}
         />
         <PlayerSlot 
@@ -272,7 +291,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           onClick={() => onSlotClick?.(3)}
           isSelected={selectedSlotIndex === 3}
           className="right-[calc(7.5%+4px)] bottom-[calc(5.7%+4px)] w-[calc(42.5%-8px)] h-[calc(29.6%-8px)]"
-          restStreakCount={players[3] ? (missedStreakByPlayerId?.[players[3].id] ?? 0) : 0}
+          restStreakCount={
+            players[3]
+              ? missedStreakByPlayerId?.[players[3].id] === undefined
+                ? 0
+                : missedStreakByPlayerId[players[3].id]!
+              : 0
+          }
           interactive={!readOnly}
         />
 

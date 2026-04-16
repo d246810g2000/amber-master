@@ -148,9 +148,12 @@ export function DashboardPage() {
   }, [courts]);
 
   const missedStreakByPlayerId = useMemo(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, number | null> = {};
     for (const p of players) {
-      map[p.id] = matchEngine.getConsecutiveMissedMatches(p.id, matchHistory);
+      const playedToday = matchHistory.some((m) =>
+        [...m.team1, ...m.team2].some((x) => String(x.id) === String(p.id)),
+      );
+      map[p.id] = playedToday ? matchEngine.getConsecutiveMissedMatches(p.id, matchHistory) : null;
     }
     return map;
   }, [players, matchHistory]);

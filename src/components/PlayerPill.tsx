@@ -17,8 +17,8 @@ interface PlayerPillProps {
   isGolden?: boolean;
   hasControl?: boolean;
   courtName?: string;
-  /** 當日對戰由新到舊，連續幾場沒上場（僅備戰區 ready／finishing 顯示） */
-  consecutiveMissed?: number;
+  /** 當日對戰由新到舊，連續幾場沒上場（僅備戰區 ready／finishing 顯示）；`null` 表示當日尚未上場，角標顯示「無」 */
+  consecutiveMissed?: number | null;
 }
 
 export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
@@ -33,8 +33,12 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   isGolden,
   hasControl = true,
   courtName,
-  consecutiveMissed = 0,
+  consecutiveMissed,
 }) => {
+  const cornerMissed: number | null =
+    consecutiveMissed === undefined ? 0 : consecutiveMissed;
+  const showRestCornerBadge =
+    cornerMissed === null || cornerMissed > 0;
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
 
@@ -115,7 +119,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           <div
             className={cn(
               "pointer-events-none absolute top-1 z-[36] rounded-full bg-amber-400 p-0.5 text-white shadow-md ring-1 ring-amber-200/80 animate-bounce-slow dark:ring-amber-600/50",
-              (status === "ready" || status === "finishing") && consecutiveMissed > 0
+              (status === "ready" || status === "finishing") && showRestCornerBadge
                 ? "right-6 md:right-7"
                 : "right-1"
             )}
@@ -124,7 +128,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           </div>
         )}
         {(status === "ready" || status === "finishing") && (
-          <RestStreakCornerBadge count={consecutiveMissed} />
+          <RestStreakCornerBadge count={cornerMissed} />
         )}
         <div className="mb-1 h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700 md:h-10 md:w-10">
           <img

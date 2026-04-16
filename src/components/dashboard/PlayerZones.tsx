@@ -23,7 +23,7 @@ interface PlayerZonesProps {
   hasControl: boolean;
   playerCourtMap?: Record<string, string>;
   /** 依當日對戰紀錄（新→舊）計算：連續幾場沒上場 */
-  missedStreakByPlayerId?: Record<string, number>;
+  missedStreakByPlayerId?: Record<string, number | null>;
 }
 
 function EmptyReadyHint({ readOnly }: { readOnly: boolean }) {
@@ -96,7 +96,9 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 status="ready"
                 isSelected={recommendedPlayers.some((rp) => rp?.id === p.id)}
                 isFatigued={fatiguedPlayerIds.has(p.id)}
-                consecutiveMissed={missedStreakByPlayerId[p.id] ?? 0}
+                consecutiveMissed={
+                  missedStreakByPlayerId[p.id] === undefined ? 0 : missedStreakByPlayerId[p.id]!
+                }
                 teamColor={getPlayerTeamColor(p.id)}
                 onClick={() => hasControl && onToggleManualSelection(p.id)}
                 onStatusToggle={() => hasControl && onTogglePlayerStatus(p.id)}
@@ -111,7 +113,9 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 status={playerStatus[p.id]}
                 teamColor={getPlayerTeamColor(p.id)}
                 courtName={playerCourtMap[p.id]}
-                consecutiveMissed={missedStreakByPlayerId[p.id] ?? 0}
+                consecutiveMissed={
+                  missedStreakByPlayerId[p.id] === undefined ? 0 : missedStreakByPlayerId[p.id]!
+                }
                 onClick={() => {}}
                 onProfileClick={() => onProfileClick(p.id)}
                 hasControl={hasControl}
