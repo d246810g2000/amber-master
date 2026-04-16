@@ -23,7 +23,7 @@ export interface DailyPlayerSummaryRow {
   winRate: number;
   /** 顯示用整數 CP（μ×10 四捨五入） */
   powerCp: number;
-  /** 當日賽程（時間序）中，連續未上場的「場次」最多幾場 */
+  /** 當日賽程（時間序）中，相鄰兩次上場之間最多間隔幾場（不含首尾未上場） */
   maxRestMatches: number;
   bestPartner: DailyPartnerNemesisInfo | null;
   nemesis: DailyNemesisSummary | null;
@@ -119,18 +119,18 @@ export function computeDailyPlayerSummary(
       }
     }
 
+    const playedIndices: number[] = [];
+    for (let i = 0; i < chronological.length; i++) {
+      const m = chronological[i];
+      if (inTeam(pid, m.team1) || inTeam(pid, m.team2)) playedIndices.push(i);
+    }
     let maxRest = 0;
-    let restStreak = 0;
-    for (const m of chronological) {
-      const played = inTeam(pid, m.team1) || inTeam(pid, m.team2);
-      if (played) {
-        maxRest = Math.max(maxRest, restStreak);
-        restStreak = 0;
-      } else {
-        restStreak++;
+    if (playedIndices.length >= 2) {
+      for (let k = 0; k < playedIndices.length - 1; k++) {
+        const gap = playedIndices[k + 1] - playedIndices[k] - 1;
+        if (gap > maxRest) maxRest = gap;
       }
     }
-    maxRest = Math.max(maxRest, restStreak);
 
     const total = wins + losses;
     const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
