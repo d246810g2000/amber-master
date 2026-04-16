@@ -16,6 +16,8 @@ import { CourtCard, CourtCardSkeleton } from "../components/CourtCard";
 import { useNavigate } from 'react-router-dom';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { GeminiBot } from "../components/chat/GeminiBot";
+import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
+import ImageDown from "lucide-react/dist/esm/icons/image-down";
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -25,6 +27,7 @@ export function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [filterPlayerIds, setFilterPlayerIds] = useState<string[]>([]);
   const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [dailySummaryOpen, setDailySummaryOpen] = useState(false);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -319,11 +322,22 @@ export function DashboardPage() {
         </div>
 
         <div className="w-full md:w-[40%] bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col h-auto min-h-[400px] md:h-full relative shrink-0">
-          <div className="flex items-center justify-between mb-2 shrink-0">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-2 shrink-0 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">對戰紀錄</h2>
               <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">History</span>
             </div>
+            {!isInitialLoading && (
+              <button
+                type="button"
+                onClick={() => setDailySummaryOpen(true)}
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-[10px] sm:text-[11px] font-black tracking-tight hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors shadow-sm"
+              >
+                <ImageDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden sm:inline">匯出摘要圖</span>
+                <span className="sm:hidden">匯出</span>
+              </button>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             {isInitialLoading ? (
@@ -371,6 +385,14 @@ export function DashboardPage() {
         playerStatus={playerStatus}
         courts={courts}
         recommendedPlayers={recommendedPlayers as any}
+      />
+
+      <DailyBattleSummaryModal
+        isOpen={dailySummaryOpen}
+        onClose={() => setDailySummaryOpen(false)}
+        filterDate={currentFilterDate}
+        matchHistory={matchHistory}
+        players={players}
       />
     </div>
   );
