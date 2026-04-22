@@ -18,15 +18,27 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
     queryKey: ['players', targetDate],
     queryFn: async () => {
       const [basePlayers, stats, matches] = await Promise.all([
-        gasApi.fetchPlayers(),
-        gasApi.fetchPlayerStats(),
-        gasApi.fetchMatches(targetDate),
+        queryClient.ensureQueryData({
+          queryKey: ['players-base'],
+          queryFn: gasApi.fetchPlayers,
+          staleTime: 2000,
+        }),
+        queryClient.ensureQueryData({
+          queryKey: ['playerStats'],
+          queryFn: gasApi.fetchPlayerStats,
+          staleTime: 2000,
+        }),
+        queryClient.ensureQueryData({
+          queryKey: ['matches-raw', targetDate],
+          queryFn: () => gasApi.fetchMatches(targetDate),
+          staleTime: 2000,
+        }),
       ]);
       
       const derived = matchEngine.getDerivedPlayers(basePlayers, stats, matches, targetDate);
       return derived.sort((a, b) => b.mu - a.mu);
     },
-    refetchInterval: 30000, 
+    refetchInterval: 60000, 
   });
 
   const players = playersQuery.data || EMPTY_PLAYERS;
@@ -97,7 +109,7 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
     });
   }, [queryClient, targetDate]);
 
-  return {
+  return useMemo(() => ({
     players,
     playerStatus,
     setPlayerStatus,
@@ -109,5 +121,9 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
     error: playersQuery.error,
     refetch: playersQuery.refetch,
     updateLocalPlayers,
-  };
+  }), [
+    players, playerStatus, togglePlayerStatus, setStatus, setMultipleStatus,
+    playersQuery.isLoading, playersQuery.isFetching, playersQuery.error,
+    playersQuery.refetch, updateLocalPlayers
+  ]);
 }

@@ -78,15 +78,16 @@ export function DashboardPage() {
     targetDate: currentFilterDate
   });
 
-  // 當遠端同步狀態的版本號更新時，主動重新整理球員數據與對戰紀錄，達成即時同步分數
+  // 當遠端同步狀態的版本號更新時，主動無效化快取，達成即時同步
   React.useEffect(() => {
     if (syncState.version > 0 && isSyncInitialized) {
-      refetchPlayers();
-      refetchMatches();
-      // recordMatch 會 bump CourtState 版本；球員頁若未掛 Dashboard 需靠此無效化才會跟上
-      void queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
+      // 使用 invalidateQueries 讓 React Query 自動處理「在畫面上」的組件更新
+      // 這比直接呼叫 refetch() 更穩定，且能自動合併極短時間內的重複請求
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
     }
-  }, [syncState.version, isSyncInitialized, refetchPlayers, refetchMatches, queryClient]);
+  }, [syncState.version, isSyncInitialized, queryClient]);
 
   const loading = playersLoading || historyLoading || playersFetching || historyFetching;
 

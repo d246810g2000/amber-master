@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as gasApi from '../lib/gasApi';
 import { buildPlayerMap, mapAndSortMatches, mapRawMatchToRecord } from '../lib/mappers';
@@ -10,19 +11,22 @@ export function useMatches(targetDate: string) {
     queryKey: ['matches', targetDate],
     queryFn: async () => {
       const [rawMatches, basePlayers] = await Promise.all([
-        gasApi.fetchMatches(targetDate),
-        // 使用 ensureQueryData 重複利用已快取的球員資料，避免重複 API 呼叫
+        queryClient.ensureQueryData({
+          queryKey: ['matches-raw', targetDate],
+          queryFn: () => gasApi.fetchMatches(targetDate),
+          staleTime: 2000,
+        }),
         queryClient.ensureQueryData({
           queryKey: ['players-base'],
           queryFn: gasApi.fetchPlayers,
-          staleTime: 60_000, // 1 分鐘內重複使用快取
+          staleTime: 2000,
         }),
       ]);
 
       const playerMap = buildPlayerMap(basePlayers);
       return mapAndSortMatches(rawMatches, playerMap);
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
   const allMatchesQuery = useQuery({
@@ -46,21 +50,16 @@ export function useMatches(targetDate: string) {
     mutationFn: gasApi.recordMatchAndUpdate,
     /** 須 await：confirmWinner 的 mutateAsync 會等 onSuccess 跑完，球員頁／安柏教練才能讀到與 Sheet 一致的快取 */
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['matches'] }),
-        queryClient.invalidateQueries({ queryKey: ['players'] }),
-        queryClient.invalidateQueries({ queryKey: ['players-base'] }),
-        queryClient.invalidateQueries({ queryKey: ['playerStats'] }),
-        queryClient.invalidateQueries({ queryKey: ['playerProfile'] }),
-      ]);
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['matches', targetDate], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['matches', 'all'], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['players'], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['players-base'], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['playerStats'], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['playerProfile'], type: 'active' }),
-      ]);
+      // 僅 invalidate，React Query 會自動針對畫面上 active 的組件進行重新整理
+      // 且因為我們在各 Hook 內使用了 ensureQueryData + staleTime，這波重新整理會自動合併請求
+      await queryClient.invalidateQueries({ queryKey: ['matches-raw'] });
+      await queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      await queryClient.invalidateQueries({ queryKey: ['playerStats'] });
+      
+      // 最後 invalidate 衍生資料
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
     },
     onError: (err) => {
       console.error('GAS 寫入失敗:', err);
@@ -86,18 +85,24 @@ export function useMatches(targetDate: string) {
     queryClient.setQueryData<MatchRecord[]>(['matches', 'all'], (old) => [match, ...(old || [])]);
   };
 
-  return {
+  const refetch = useCallback(() => {
+    matchesQuery.refetch();
+    allMatchesQuery.refetch();
+  }, [matchesQuery.refetch, allMatchesQuery.refetch]);
+
+  return useMemo(() => ({
     matches: matchesQuery.data || [],
     allMatches: allMatchesQuery.data || [],
     isLoading: matchesQuery.isLoading || allMatchesQuery.isLoading,
     isFetching: matchesQuery.isFetching || allMatchesQuery.isFetching,
     error: matchesQuery.error,
-    refetch: () => {
-      matchesQuery.refetch();
-      allMatchesQuery.refetch();
-    },
+    refetch,
     recordMatch: recordMatchMutation.mutateAsync,
     isSubmitting: recordMatchMutation.isPending,
     addLocalMatch,
-  };
+  }), [
+    matchesQuery.data, matchesQuery.isLoading, matchesQuery.isFetching, matchesQuery.error,
+    allMatchesQuery.data, allMatchesQuery.isLoading, allMatchesQuery.isFetching,
+    refetch, recordMatchMutation.mutateAsync, recordMatchMutation.isPending
+  ]);
 }

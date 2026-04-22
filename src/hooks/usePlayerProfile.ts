@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as gasApi from '../lib/gasApi';
 import * as matchEngine from '../lib/matchEngine';
 import type { PlayerHistoryResult } from '../lib/matchEngine';
@@ -32,16 +32,29 @@ export interface PlayerProfileData {
  * 自動獲得快取、重試、stale 管理等益處。
  */
 export function usePlayerProfile(playerId: string) {
+  const queryClient = useQueryClient();
+
   return useQuery<PlayerProfileData>({
     queryKey: ['playerProfile', playerId],
     enabled: Boolean(playerId),
     queryFn: async () => {
-      // 一律直接打 GAS，勿經 ensureQueryData(['players-base'])：該 key 常被 useMatches 以較長 staleTime 註冊，
-      // 賽後 invalidate 仍可能短暫回傳舊的 fetchPlayers／stats，導致球員頁戰力與 Sheet 不一致。
+      // 使用 ensureQueryData 確保與 Dashboard 共享相同的 API 呼叫，避免重複請求
       const [basePlayers, allMatches, snapshots] = await Promise.all([
-        gasApi.fetchPlayers(),
-        gasApi.fetchMatches(),
-        gasApi.fetchPlayerStats(),
+        queryClient.ensureQueryData({
+          queryKey: ['players-base'],
+          queryFn: gasApi.fetchPlayers,
+          staleTime: 2000,
+        }),
+        queryClient.ensureQueryData({
+          queryKey: ['matches-raw', 'all'],
+          queryFn: gasApi.fetchMatches,
+          staleTime: 2000,
+        }),
+        queryClient.ensureQueryData({
+          queryKey: ['playerStats'],
+          queryFn: gasApi.fetchPlayerStats,
+          staleTime: 2000,
+        }),
       ]);
 
       const result = matchEngine.getPlayerHistory(playerId, basePlayers, allMatches);
