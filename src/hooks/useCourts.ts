@@ -726,74 +726,98 @@ export function useCourts({
         matchCount: s.MatchCount, winCount: s.WinCount, winRate: s.WinRate,
       })));
 
-      // 2. 更新同步狀態 (清空場地，球員狀態設為 finishing)
-      const finStatus: Record<string, PlayerStatus> = {};
-      participants.forEach(p => { finStatus[p.id] = "finishing"; });
+      // 【核心修正】：將同步場地與寫入紀錄封裝在同一個序列化佇列中
+      await enqueueRemoteWrite(async () => {
+        // 2. 更新同步狀態 (清空場地，球員狀態設為 finishing)
+        const finStatus: Record<string, PlayerStatus> = {};
+        participants.forEach(p => { finStatus[p.id] = "finishing"; });
 
-      const newCourts = courtsRef.current.map(c =>
-        c.id === activeCourtForWinner
-          ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
-          : c
-      );
-
-      // 結束比賽時不重算推薦／下一場 target，維持目前備戰區四人組
-      const affectedCourtIds = [activeCourtForWinner];
-      const nextRecs = recommendedPlayers;
-
-      if (isAutoMode) triggerCooldown();
-
-      await syncToRemote(newCourts, nextRecs as Player[], finStatus, affectedCourtIds);
-      setWinnerModalOpen(false);
-
-      // 【優化】立即清除場地鎖定與 Loading 狀態，不等待後續緩慢的對戰紀錄寫入
-      setActiveCourtForWinner(null);
-      setSubmittingMatch(false);
-
-      // 3. 寫入 GAS 對戰紀錄（須 await）：後端 recordMatchAndUpdate 會 bump CourtState 版本，
-      //    若與場地 push 並行或未拉最新版，下一個選人／同步會 VERSION_CONFLICT。
-      const recordPayload = {
-        matchId: court.matchId,
-        date: getTaipeiISOString(),
-        matchDate: today,
-        t1p1: team1[0].name,
-        t1p2: team1[1].name,
-        t2p1: team2[0].name,
-        t2p2: team2[1].name,
-        winnerTeam: winner === 1 ? ("Team 1" as const) : ("Team 2" as const),
-        updatedPlayers: result.updatedPlayers as any,
-        updatedStats: result.updatedStats as any,
-        duration,
-        score,
-        courtName: court.name,
-      };
-
-      let wroteRecord = false;
-      try {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await recordMatch(recordPayload);
-            wroteRecord = true;
-            break;
-          } catch (e) {
-            if (attempt === 2) throw e;
-            await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
-          }
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(
-          "場地已清空，但對戰紀錄尚未寫入後端（可能網路不穩）。畫面上的本場為暫存；請稍後再操作一次或檢查網路後重試。"
-          + (msg ? `（${msg}）` : "")
+        const newCourts = courtsRef.current.map(c =>
+          c.id === activeCourtForWinner
+            ? { ...c, players: [null, null, null, null], startTime: null, matchId: undefined }
+            : c
         );
-      }
 
-      if (wroteRecord && fetchCourtState) {
-        try {
-          await fetchCourtState();
-        } catch {
-          // 輪詢稍後也會對齊版本
+        // 結束比賽時不重算推薦／下一場 target，維持目前備戰區四人組
+        const affectedCourtIds = [activeCourtForWinner];
+        const nextRecs = recommendedPlayers;
+
+        if (isAutoMode) triggerCooldown();
+
+        // A. 先同步場地狀態 (清空場地)
+        // 注意：這裡直接呼叫內部的 push 邏輯，避免再次進入 enqueueRemoteWrite 造成死結
+        setIsLocalSyncing(true);
+        if (affectedCourtIds.length > 0) {
+          setSyncingCourtIds(prev => Array.from(new Set([...prev, ...affectedCourtIds])));
         }
-      }
+        
+        try {
+          const remoteStatus: Record<string, PlayerStatus> = {};
+          Object.entries({ ...playerStatusRef.current, ...finStatus }).forEach(([id, status]) => {
+            remoteStatus[id] = status === "finishing" ? "ready" : (status as PlayerStatus);
+          });
+
+          await pushState(
+            {
+              courts: newCourts.map(c => ({
+                ...c,
+                startTime: c.startTime?.toISOString() || null,
+                players: c.players.map(p => p?.id || null)
+              })),
+              recommendedPlayers: (nextRecs as Player[]).map(p => p?.id || null),
+              playerStatus: remoteStatus,
+              controller: syncState.state?.controller || currentUser?.email,
+              controllerName: syncState.state?.controllerName || currentUser?.name || currentUser?.email
+            },
+            currentUser?.email || 'unknown',
+            false,
+            currentUser?.name,
+            { silent: false, enableLine: localStorage.getItem('lineNotifications') !== 'false' }
+          );
+
+          // B. 接著在同一個序列中寫入對戰紀錄 (確保 version 對齊)
+          const recordPayload = {
+            matchId: court.matchId,
+            date: getTaipeiISOString(),
+            matchDate: today,
+            t1p1: team1[0].name,
+            t1p2: team1[1].name,
+            t2p1: team2[0].name,
+            t2p2: team2[1].name,
+            winnerTeam: winner === 1 ? ("Team 1" as const) : ("Team 2" as const),
+            updatedPlayers: result.updatedPlayers as any,
+            updatedStats: result.updatedStats as any,
+            duration,
+            score,
+            courtName: court.name,
+          };
+
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              await recordMatch(recordPayload);
+              break;
+            } catch (e) {
+              if (attempt === 2) throw e;
+              await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            }
+          }
+
+          if (fetchCourtState) {
+            await fetchCourtState();
+          }
+          setError(null);
+        } catch (err: any) {
+          const msg = err.message || String(err);
+          setError(`結束比賽失敗：${msg}`);
+          throw err;
+        } finally {
+          setIsLocalSyncing(false);
+          setSyncingCourtIds(prev => prev.filter(id => !affectedCourtIds.includes(id)));
+          setSubmittingMatch(false);
+          setActiveCourtForWinner(null);
+          setWinnerModalOpen(false);
+        }
+      });
 
       // 4. 清理：1.5秒後把球員狀態從 finishing 轉回 ready 並同步
       setTimeout(() => {
