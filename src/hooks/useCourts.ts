@@ -122,6 +122,7 @@ export function useCourts({
 
   // Auto mode states
   const [isAutoMode, setIsAutoMode] = useState(false);
+  const [ignoreFatigue, setIgnoreFatigue] = useState(false);
   const [autoActionReady, setAutoActionReady] = useState(true);
   const autoCooldownTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -546,7 +547,7 @@ export function useCourts({
         players as matchEngine.DerivedPlayer[],
         readyPlayerIds,
         matchHistory,
-        false,
+        ignoreFatigue,
         targetDate
       );
 
@@ -744,6 +745,10 @@ export function useCourts({
       await syncToRemote(newCourts, nextRecs as Player[], finStatus, affectedCourtIds);
       setWinnerModalOpen(false);
 
+      // 【優化】立即清除場地鎖定與 Loading 狀態，不等待後續緩慢的對戰紀錄寫入
+      setActiveCourtForWinner(null);
+      setSubmittingMatch(false);
+
       // 3. 寫入 GAS 對戰紀錄（須 await）：後端 recordMatchAndUpdate 會 bump CourtState 版本，
       //    若與場地 push 並行或未拉最新版，下一個選人／同步會 VERSION_CONFLICT。
       const recordPayload = {
@@ -851,6 +856,7 @@ export function useCourts({
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
     isRemoteSyncPending: pendingRemoteSyncCount > 0,
     syncToRemote, // Expose for Dashboard to update global player zones
-    isAutoMode, setIsAutoMode
+    isAutoMode, setIsAutoMode,
+    ignoreFatigue, setIgnoreFatigue
   };
 }

@@ -29,8 +29,6 @@ export function RestStreakCornerBadge({
     );
   }
 
-  if (count <= 0) return null;
-
   return (
     <div
       className={cn(

@@ -99,7 +99,8 @@ export function DashboardPage() {
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
     syncToRemote,
-    isAutoMode, setIsAutoMode
+    isAutoMode, setIsAutoMode,
+    ignoreFatigue, setIgnoreFatigue
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
@@ -320,6 +321,8 @@ export function DashboardPage() {
               hasControl={hasControl}
               playerCourtMap={playerCourtMap}
               missedStreakByPlayerId={missedStreakByPlayerId}
+              ignoreFatigue={ignoreFatigue}
+              onToggleIgnoreFatigue={() => setIgnoreFatigue(!ignoreFatigue)}
             />
           )}
         </div>

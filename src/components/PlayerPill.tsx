@@ -38,7 +38,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   const cornerMissed: number | null =
     consecutiveMissed === undefined ? 0 : consecutiveMissed;
   const showRestCornerBadge =
-    cornerMissed === null || cornerMissed > 0;
+    cornerMissed === null || cornerMissed >= 0;
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
 

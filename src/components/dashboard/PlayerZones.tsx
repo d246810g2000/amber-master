@@ -1,6 +1,7 @@
 import React from 'react';
 import Users from "lucide-react/dist/esm/icons/users";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import { cn } from "../../lib/utils";
 import { PlayerPill } from '../PlayerPill';
 import type { Player } from '../../types';
 import type { PlayerStatus } from '../../hooks/usePlayers';
@@ -24,6 +25,8 @@ interface PlayerZonesProps {
   playerCourtMap?: Record<string, string>;
   /** 依當日對戰紀錄（新→舊）計算：連續幾場沒上場 */
   missedStreakByPlayerId?: Record<string, number | null>;
+  ignoreFatigue?: boolean;
+  onToggleIgnoreFatigue?: () => void;
 }
 
 function EmptyReadyHint({ readOnly }: { readOnly: boolean }) {
@@ -48,6 +51,8 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   hasControl,
   playerCourtMap = {},
   missedStreakByPlayerId = {},
+  ignoreFatigue = false,
+  onToggleIgnoreFatigue,
 }) => {
   const readOnly = hasControl === false;
   return (
@@ -71,21 +76,32 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
               {readyPlayers.length} PLAYERS
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
             {readOnly ? (
               <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 觀看中
               </span>
             ) : (
-              <button
-                onClick={onAllResting}
-                disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking}
-                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
-              >
-                全員休息
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onToggleIgnoreFatigue}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
+                    ignoreFatigue 
+                      ? "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 shadow-sm shadow-rose-100 dark:shadow-none" 
+                      : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  )}
+                >
+                  無視疲勞
+                </button>
+                <button
+                  onClick={onAllResting}
+                  disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+                >
+                  全員休息
+                </button>
+              </div>
             )}
-          </div>
         </div>
         <div className="flex-1">
           <div className="flex flex-wrap gap-3 content-start h-full p-2 pb-4">
@@ -95,7 +111,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 player={p}
                 status="ready"
                 isSelected={recommendedPlayers.some((rp) => rp?.id === p.id)}
-                isFatigued={fatiguedPlayerIds.has(p.id)}
+                isFatigued={!ignoreFatigue && fatiguedPlayerIds.has(p.id)}
                 consecutiveMissed={
                   missedStreakByPlayerId[p.id] === undefined ? 0 : missedStreakByPlayerId[p.id]!
                 }
@@ -161,6 +177,9 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 isFatigued={false}
                 onClick={() => hasControl && onTogglePlayerStatus(p.id)}
                 onProfileClick={() => onProfileClick(p.id)}
+                consecutiveMissed={
+                  missedStreakByPlayerId[p.id] === undefined ? 0 : missedStreakByPlayerId[p.id]!
+                }
                 hasControl={hasControl}
               />
             ))}
