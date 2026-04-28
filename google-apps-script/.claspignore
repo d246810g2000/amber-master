@@ -1,5 +1,0 @@
-# 不上傳至 Google Apps Script（僅本機／repo 用）
-.claspignore
-clasp.test.json
-clasp.prod.json
-*.md

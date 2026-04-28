@@ -1,5 +1,0 @@
-{
-  "name": "Badminton Matchmaking",
-  "description": "A matchmaking system for badminton doubles using the TrueSkill algorithm.",
-  "requestFramePermissions": []
-}

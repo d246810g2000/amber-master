@@ -1,0 +1,468 @@
+import React from "react";
+import { format } from "date-fns";
+import Trophy from "lucide-react/dist/esm/icons/trophy";
+import Clock from "lucide-react/dist/esm/icons/clock";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Users from "lucide-react/dist/esm/icons/users";
+import X from "lucide-react/dist/esm/icons/x";
+import Edit2 from "lucide-react/dist/esm/icons/edit-2";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import { MatchPlayer, MatchRecord, Player } from "../types";
+import { cn, parseLocalDateTime, getAvatarUrl } from "../lib/utils";
+import { CustomCalendar } from "./common/CustomCalendar";
+import { useAuth } from "../context/AuthContext";
+import { useDialog } from "../context/DialogContext";
+import { updateMatch, deleteMatch } from "../lib/gasApi";
+import { AdminMatchEditModal } from "./AdminMatchEditModal";
+
+// --- Sub-components (Moved Outside for Clarity) ---
+
+const getPowerBefore = (p: any) => {
+  if (p.muBefore !== undefined) {
+    return Math.round(p.muBefore * 10);
+  }
+  return "";
+};
+
+const getPowerAfter = (p: any) => {
+  if (p.muAfter !== undefined) {
+    return Math.round(p.muAfter * 10);
+  }
+  return "";
+};
+
+const getDiff = (p: any) => {
+  if (p.muAfter !== undefined && p.muBefore !== undefined) {
+    const diff = Math.round((p.muAfter - p.muBefore) * 10);
+    return diff >= 0 ? `+${diff}` : `${diff}`;
+  }
+  return "";
+};
+
+/** 與單人列相同：顯示用戰力為 μ×10 四捨五入；總和為各員該值相加（賽前 μ 優先）。 */
+function sumTeamDisplayCp(team: MatchPlayer[]): string {
+  const safeTeam = team || [];
+  if (safeTeam.length === 0) return "—";
+  let sum = 0;
+  for (const p of team) {
+    const raw = p.muBefore ?? p.mu ?? p.muAfter;
+    if (raw === undefined) return "—";
+    sum += Math.round(raw * 10);
+  }
+  return String(sum);
+}
+
+const PlayerItem = React.memo(({ 
+  p, 
+  isWinner, 
+  isRight, 
+  selectedPlayerIds, 
+  onPlayerClick,
+  allPlayers
+}: { 
+  p: any; 
+  isWinner: boolean; 
+  isRight?: boolean; 
+  selectedPlayerIds: string[]; 
+  onPlayerClick?: (id: string) => void;
+  allPlayers: Player[];
+  key?: React.Key;
+}) => {
+  // Use avatar from p, fallback to finding player in allPlayers list (by ID or Name)
+  const playerInList = allPlayers.find(ap => 
+    (p.id && ap.id === p.id) || (ap.name === p.name)
+  );
+  const avatar = p.avatar || playerInList?.avatar || '';
+  
+  const avatarUrl = getAvatarUrl(avatar, p.name);
+
+  return (
+    <div className={cn(
+      "flex flex-col min-w-0 flex-1 group/player gap-0.5",
+      isRight ? "items-end" : "items-start"
+    )}>
+      {/* Top row: Avatar + Name */}
+      <div className={cn("flex items-center gap-1.5 min-w-0 w-full", isRight ? "flex-row-reverse" : "flex-row")}>
+        <div className={cn(
+          "w-5 h-5 md:w-6 md:h-6 rounded-full border shadow-sm shrink-0 p-0.5 transition-transform group-hover/player:scale-110",
+          isWinner 
+            ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" 
+            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900"
+        )}>
+          <img src={avatarUrl} alt={p.name} className="w-full h-full rounded-full object-cover" />
+        </div>
+        <span 
+          onClick={() => onPlayerClick?.(p.id)}
+          className={cn(
+            "text-[11px] md:text-[12px] font-black cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 truncate px-0.5 rounded transition-colors leading-tight min-w-0",
+            selectedPlayerIds.includes(p.id) ? "text-blue-500 bg-blue-50 dark:bg-blue-900/40" : "text-slate-800 dark:text-slate-200"
+          )}
+        >
+          {p?.name}
+        </span>
+      </div>
+
+      {/* Bottom row: CP Info */}
+      <div className={cn("flex items-center gap-1 md:gap-1.5 border border-slate-100/30 dark:border-slate-800/50 px-1 py-[2px] w-fit rounded-lg", isRight ? "flex-row-reverse" : "flex-row")}>
+        <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 tabular-nums leading-none opacity-70">{getPowerBefore(p)}</span>
+        <span className={cn("text-[6px] leading-none", isWinner ? "text-emerald-400" : "text-rose-400")}>{isRight ? "◀" : "▶"}</span>
+        <span className="text-[10px] md:text-[12px] font-black text-slate-800 dark:text-slate-200 tabular-nums leading-none drop-shadow-sm">{getPowerAfter(p)}</span>
+        <div className={cn("px-1 py-[2px] rounded text-[8px] font-black tabular-nums leading-none ml-0.5 flex items-center justify-center -mt-[1px]", isWinner ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800" : "bg-rose-50 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400 border border-rose-100 dark:border-rose-800")}>
+          {getDiff(p)}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// --- Main component ---
+
+export interface MatchHistoryProps {
+  history: MatchRecord[];
+  loading: boolean;
+  filterDate: string;
+  players: Player[];
+  selectedPlayerIds: string[];
+  onTogglePlayerId: (id: string) => void;
+  onClearPlayers: () => void;
+  onDateChange?: (date: string) => void;
+  onPlayerClick?: (playerId: string) => void;
+  allMatchDates?: Set<string>;
+}
+
+export function MatchHistory({ 
+  history,
+  loading,
+  filterDate,
+  players,
+  selectedPlayerIds,
+  onTogglePlayerId,
+  onClearPlayers,
+  onDateChange,
+  onPlayerClick,
+  allMatchDates
+}: MatchHistoryProps) {
+  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+  const selectedSet = React.useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
+
+  const { currentUser } = useAuth();
+  const { showConfirm, showAlert, showLoading, hideDialog } = useDialog();
+  const [editingMatch, setEditingMatch] = React.useState<MatchRecord | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const isAdmin = currentUser?.isAdmin;
+
+  const handleDeleteMatch = (matchId: string) => {
+    showConfirm(
+      "刪除比賽紀錄",
+      "確定要刪除這場比賽嗎？刪除後將自動重新計算所有人的戰力數據。",
+      async () => {
+        try {
+          showLoading("刪除中", "正在刪除紀錄並重新計算戰力...");
+          await deleteMatch(matchId);
+          showAlert("成功", "紀錄已刪除，數據已重新校準。");
+          window.location.reload(); // Quick way to refresh data
+        } catch (err: any) {
+          showAlert("錯誤", err.message || "刪除失敗");
+        }
+      }
+    );
+  };
+
+  const handleUpdateMatch = async (matchId: string, data: any) => {
+    try {
+      setIsSubmitting(true);
+      await updateMatch(matchId, data);
+      setEditingMatch(null);
+      showAlert("成功", "紀錄已更新，數據已重新校準。");
+      window.location.reload();
+    } catch (err: any) {
+      showAlert("錯誤", err.message || "更新失敗");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    if (onDateChange) onDateChange(newDate);
+  };
+
+  const filteredHistory = selectedSet.size > 0
+    ? history.filter(match => 
+        [...(match.team1 || []), ...(match.team2 || [])].some(p => selectedSet.has(p.id))
+      )
+    : history;
+
+  // Filter players to show only those present in the current history
+  const activePlayers = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    history.forEach(m => {
+      [...(m.team1 || []), ...(m.team2 || [])].forEach(p => {
+        if (p.id) counts.set(p.id, (counts.get(p.id) || 0) + 1);
+      });
+    });
+    return players
+      .filter(p => counts.has(p.id))
+      .map(p => ({ ...p, localCount: counts.get(p.id)! }))
+      .sort((a, b) => b.localCount - a.localCount);
+  }, [history, players]);
+
+  return (
+    <div className="flex flex-col h-full space-y-3">
+      {/* Search & Filter Header (Premium Interaction) */}
+      <div className="space-y-2 px-1">
+        <div className="flex flex-row gap-2 justify-between md:justify-center">
+          {/* Date Picker (Left) - Compact spacing */}
+          <div className="flex-1 md:flex-none md:w-[180px] flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 focus-within:ring-2 focus-within:ring-emerald-500/20 min-w-0">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[10px] shrink-0 ml-1">
+              <Clock className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="tracking-tight uppercase">日期</span>
+            </div>
+            <CustomCalendar 
+              value={filterDate}
+              onChange={(date) => onDateChange?.(date)}
+              highlightedDates={allMatchDates}
+              className="flex-1"
+              variant="light"
+            />
+          </div>
+
+          {/* Player Filter Toggle (Right) - Compact & Consistent */}
+          <button 
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className={cn(
+              "flex-1 md:flex-none md:w-[180px] flex items-center gap-1.5 px-3 py-2 rounded-2xl border transition-all duration-300 justify-center group relative overflow-hidden min-w-0",
+              isFilterOpen || selectedPlayerIds.length > 0
+                ? "bg-[#0f172a] dark:bg-slate-100 border-slate-800 dark:border-white text-white dark:text-slate-900 shadow-lg shadow-blue-500/20 dark:shadow-none"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+            )}
+          >
+            <Users className={cn("w-4 h-4 transition-transform group-hover:scale-110", isFilterOpen ? "text-blue-400" : "text-blue-500")} />
+            <span className="text-[11px] font-black tracking-tight">球員篩選</span>
+            {selectedPlayerIds.length > 0 && (
+              <span className="bg-blue-500 text-white text-[9px] min-w-[18px] h-4.5 flex items-center justify-center rounded-full font-black px-1.5 shadow-sm">
+                {selectedPlayerIds.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Expandable Player List (Glassmorphism Styled, Simplified) */}
+        {isFilterOpen && (
+          <div className="bg-[#0f172a]/95 backdrop-blur-md rounded-[1.5rem] p-3 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-3 duration-500 border border-white/5">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[60px] -mr-16 -mt-16 pointer-events-none" />
+            
+            {/* Clear Button (Absolute positioned to save space) */}
+            {selectedPlayerIds.length > 0 && (
+              <button 
+                onClick={onClearPlayers}
+                className="absolute top-3 right-3 z-10 text-[9px] font-black text-rose-400 hover:text-white transition-all flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-full backdrop-blur-sm border border-rose-500/20"
+              >
+                清除重置 <X size={10} />
+              </button>
+            )}
+
+            <div className="flex gap-4 overflow-x-auto pt-2 pb-2 scrollbar-subtle scroll-smooth">
+              {activePlayers.map(p => {
+                const isSelected = selectedSet.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => onTogglePlayerId(p.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 shrink-0 transition-all duration-300 group/item",
+                      isSelected ? "scale-105" : "hover:scale-105"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-10 h-10 rounded-full border-2 p-0.5 transition-all duration-300",
+                      isSelected 
+                        ? "border-blue-400 bg-blue-400/20 shadow-[0_0_15px_rgba(59,130,246,0.4)]" 
+                        : "border-slate-700 dark:border-slate-600 bg-slate-800 dark:bg-slate-700 shadow-inner group-hover/item:border-slate-500"
+                    )}>
+                      <img
+                        src={getAvatarUrl(p.avatar, p.name)}
+                        alt={p.name}
+                        className="w-full h-full rounded-full object-cover transition-transform group-hover/item:scale-105"
+                      />
+                    </div>
+                    <span className={cn(
+                      "text-[9px] font-black truncate w-12 text-center transition-colors",
+                      isSelected ? "text-blue-400" : "text-slate-400 dark:text-slate-500"
+                    )}>
+                      {p.name}
+                    </span>
+                    <span className="text-[8px] font-bold text-slate-500/60 dark:text-slate-600/60 -mt-1">{p.localCount} 場</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-3">
+            <div className="animate-spin flex"><RefreshCw className="w-6 h-6 text-emerald-500" /></div>
+            <p className="text-[10px] font-black uppercase tracking-widest">載入中...</p>
+          </div>
+        ) : filteredHistory.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+            <Trophy className="w-8 h-8 mb-2 opacity-20 text-slate-400 dark:text-slate-600" />
+            <p className="text-xs font-medium">查無對戰紀錄</p>
+          </div>
+        ) : (
+          <div className="space-y-3 pb-6 px-1">
+            {filteredHistory.map((match) => (
+              <div key={match.id} className="match-history-item group flex items-center mb-1.5 md:mb-2 px-1">
+                {/* Refined Main Card with Integrated Badge */}
+                <div className={cn(
+                  "w-full bg-white dark:bg-slate-900 rounded-[1.2rem] flex items-stretch shadow-sm hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none transition-all duration-500 relative overflow-hidden h-auto border border-slate-100 dark:border-slate-800"
+                )}>
+                  {/* Vertical Progress Bar Style Left Team Indicator */}
+                  <div className={cn(
+                    "w-2 shrink-0 transition-all duration-500",
+                    match.winner === 1 ? "bg-emerald-500 shadow-[2px_0_8px_rgba(16,185,129,0.3)]" : "bg-rose-500/10"
+                  )}></div>
+
+                  {/* Main Grid Content */}
+                  <div className="flex-1 py-3 px-2 md:px-5 flex flex-row items-center justify-between gap-1.5 md:gap-3 min-w-0">
+                    {/* Team 1：flex-1 讓中欄維持貼齊 VS 的寬度（手機／寬螢幕一致） */}
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                      {(match.team1 || []).map((p, idx) => (
+                        <PlayerItem 
+                          key={`${match.id}-t1-${idx}`} 
+                          p={p} 
+                          isWinner={match.winner === 1} 
+                          selectedPlayerIds={selectedPlayerIds}
+                          onPlayerClick={onPlayerClick}
+                          allPlayers={players}
+                        />
+                      ))}
+                    </div>
+
+                    {/* VS 中欄：戰力總和緊貼比分兩側（不顯示「總和」文案） */}
+                    <div className="flex flex-row items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 shrink-0 border-x-0 sm:border-x sm:border-slate-200 sm:dark:border-slate-800/70 px-1 sm:px-2 md:px-4">
+                      <span
+                        title="賽前戰力總和"
+                        className="font-black tabular-nums leading-none text-right shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
+                      >
+                        {sumTeamDisplayCp(match.team1 || [])}
+                      </span>
+                      <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-0 py-0.5">
+                        <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-1 sm:px-1.5 py-[2px] rounded-sm text-[6px] sm:text-[7px] md:text-[8px] font-black tracking-widest -mt-0.5 md:-mt-1 shadow-inner whitespace-nowrap opacity-80 max-w-full truncate">
+                          MATCH {match.matchNo}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] md:text-[12px] font-black text-slate-700 dark:text-slate-200 shadow-sm tracking-tight leading-none bg-slate-50 dark:bg-slate-800 px-1.5 sm:px-2.5 py-0.5 mx-auto rounded-full ring-1 ring-slate-200/60 dark:ring-slate-700/60 w-fit max-w-full min-w-0 truncate text-center shrink-0 z-10 my-0.5">
+                          {match.score || "VS"}
+                        </div>
+                        <span className="text-[7px] sm:text-[8px] md:text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider text-center shrink-0 leading-none">
+                          {format(parseLocalDateTime(match.date), "HH:mm")}
+                        </span>
+                        {match.duration && (
+                          <span className="text-[5px] sm:text-[6px] md:text-[7px] font-black text-emerald-500/50 uppercase tracking-[0.12em] md:tracking-[0.15em] text-center mt-0.5 max-w-full px-0.5 truncate">
+                            {match.duration}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        title="賽前戰力總和"
+                        className="font-black tabular-nums leading-none text-left shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
+                      >
+                        {sumTeamDisplayCp(match.team2 || [])}
+                      </span>
+                    </div>
+
+                    {/* Team 2 */}
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1 items-end">
+                      {(match.team2 || []).map((p, idx) => (
+                        <PlayerItem 
+                          key={`${match.id}-t2-${idx}`} 
+                          p={p} 
+                          isWinner={match.winner === 2} 
+                          isRight 
+                          selectedPlayerIds={selectedPlayerIds}
+                          onPlayerClick={onPlayerClick}
+                          allPlayers={players}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Vertical Progress Bar Style Right Team Indicator */}
+                  <div className={cn(
+                    "w-2 shrink-0 transition-all duration-500",
+                    match.winner === 2 ? "bg-emerald-500 shadow-[-2px_0_8px_rgba(16,185,129,0.3)]" : "bg-rose-500/10"
+                  )}></div>
+
+                  {/* Admin Actions Overlay */}
+                  {isAdmin && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-20">
+                      <button 
+                        onClick={() => setEditingMatch(match)}
+                        className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                        title="編輯紀錄"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteMatch(match.id)}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                        title="刪除紀錄"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <AdminMatchEditModal 
+        isOpen={!!editingMatch}
+        match={editingMatch}
+        onClose={() => setEditingMatch(null)}
+        onConfirm={handleUpdateMatch}
+        isSubmitting={isSubmitting}
+      />
+    </div>
+  );
+}
+
+export const MatchHistorySkeleton: React.FC = () => (
+  <div className="space-y-3 px-1 animate-pulse-heavy">
+    {[1, 2, 3, 4, 5].map(i => (
+      <div key={i} className="bg-white dark:bg-slate-900 rounded-[1.2rem] flex items-stretch h-[88px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+        <div className="w-2 bg-slate-100/50 dark:bg-slate-800/50 shrink-0" />
+        <div className="flex-1 py-3 px-2 flex flex-row items-center justify-between gap-2">
+          {/* Team 1 Skeleton */}
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-12 bg-slate-100 rounded" /></div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100" /><div className="h-2 w-10 bg-slate-100 rounded" /></div>
+          </div>
+          {/* VS + 戰力總和 Skeleton */}
+          <div className="flex flex-row items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 shrink-0 border-x-0 sm:border-x sm:border-slate-200 sm:dark:border-slate-800/70 px-1 sm:px-2 md:px-4">
+            <div className="h-2.5 w-5 bg-slate-100 dark:bg-slate-800 rounded shrink-0" />
+            <div className="flex flex-col items-center justify-center gap-1 shrink-0 py-0.5">
+              <div className="h-2 w-8 bg-slate-100 dark:bg-slate-800 rounded" />
+              <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded-full" />
+              <div className="h-2 w-6 bg-slate-100 dark:bg-slate-800 rounded" />
+            </div>
+            <div className="h-2.5 w-5 bg-slate-100 dark:bg-slate-800 rounded shrink-0" />
+          </div>
+          {/* Team 2 Skeleton */}
+          <div className="flex flex-col gap-2 flex-1 min-w-0 items-end">
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-12 bg-slate-100 dark:bg-slate-800 rounded" /></div>
+            <div className="flex flex-row-reverse items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800" /><div className="h-2 w-10 bg-slate-100 dark:bg-slate-800 rounded" /></div>
+          </div>
+        </div>
+        <div className="w-2 bg-slate-100/50 dark:bg-slate-800/50 shrink-0" />
+      </div>
+    ))}
+  </div>
+);
