@@ -1,4 +1,4 @@
-｀#!/bin/bash
+#!/bin/bash
 
 # Amber Badminton Management Script
 echo "🏸 安柏羽球社 系統管理腳本 (資源優化版)"
