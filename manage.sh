@@ -22,26 +22,22 @@ elif [ "$env_choice" == "2" ]; then
     SERVICES="api db frontend"
     STOP_SERVICES="api-dev db-dev frontend-dev"
 elif [ "$env_choice" == "3" ]; then
-    ENV_FILE=".env"
+    ENV_FILE=".env.production"
     MODE="混合 (Dev + Prod)"
     SERVICES="api db frontend api-dev db-dev frontend-dev"
     STOP_SERVICES=""
-    cat .env.production .env.development | sort -u > .env
-    echo "✅ 已生成混合環境設定 (.env)"
 else
     echo "❌ 無效選擇，退出。"
     exit 1
 fi
 
 # 2) 切換 .env 軟連結
-if [ "$env_choice" != "3" ]; then
-    if [ -f "$ENV_FILE" ]; then
-        ln -sf "$ENV_FILE" .env
-        echo "✅ 已切換至 $MODE 環境 ($ENV_FILE -> .env)"
-    else
-        echo "⚠️  錯誤: 找不到 $ENV_FILE 檔案！"
-        exit 1
-    fi
+if [ -f "$ENV_FILE" ]; then
+    ln -sf "$ENV_FILE" .env
+    echo "✅ 已切換至 $MODE 環境 ($ENV_FILE -> .env)"
+else
+    echo "⚠️  錯誤: 找不到 $ENV_FILE 檔案！"
+    exit 1
 fi
 
 echo "--------------------------------"
@@ -52,8 +48,9 @@ echo "4) 🛑 停止所有系統 (Down)"
 echo "5) 📊 查看日誌 (Logs)"
 echo "6) 🧹 清理 Docker 環境 (Prune)"
 echo "7) ❌ 結束"
+echo "8) 🔄 同步正式資料至開發區 (Sync Prod DB to Dev)"
 echo "--------------------------------"
-read -p "請選擇操作 [1-7]: " choice
+read -p "請選擇操作 [1-8]: " choice
 
 # 執行停止邏輯 (如果是 1, 2, 3 且不是混合模式)
 if [[ "$choice" =~ ^[1-3]$ ]] && [ -n "$STOP_SERVICES" ]; then
@@ -100,6 +97,13 @@ case $choice in
     7)
         echo "👋 再見！"
         exit 0
+        ;;
+    8)
+        echo "🔄 正在從正式區 (amber_db) 同步資料至開發區 (amber_db_dev)..."
+        # 嘗試從 .env 取得密碼，若無則使用預設值
+        DB_PWD=$(grep MYSQL_ROOT_PASSWORD .env | head -n 1 | cut -d'=' -f2 || echo "root_password")
+        sudo docker exec amber-master-db-1 mysqldump -u root -p${DB_PWD} --default-character-set=utf8mb4 amber_db | sudo docker exec -i amber-master-db-dev-1 mysql -u root -p${DB_PWD} --default-character-set=utf8mb4 amber_db_dev
+        echo "✅ 同步完成！建議執行「戰力校準」以更新統計數據。"
         ;;
     *)
         echo "❌ 無效的選擇"

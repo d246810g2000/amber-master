@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as gasApi from '../../lib/gasApi';
 import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
@@ -16,6 +16,8 @@ export const DailyAnalyticsWidgets: React.FC<DailyAnalyticsWidgetsProps> = ({ da
     queryFn: () => gasApi.fetchDailyAnalytics(date),
     staleTime: 60000,
   });
+  
+  const [activeTier, setActiveTier] = useState<string | null>(null);
 
   if (isLoading || !data) {
     return (
@@ -95,12 +97,17 @@ export const DailyAnalyticsWidgets: React.FC<DailyAnalyticsWidgetsProps> = ({ da
           ].map((tier, i) => {
             const dataTier = data.tiers[tier.key as keyof typeof data.tiers];
             return (
-              <div key={tier.key} className={`group relative flex-1 flex flex-col items-center justify-center ${i < 2 ? 'border-r border-slate-100 dark:border-slate-800' : ''}`}>
+              <div 
+                key={tier.key} 
+                className={`group relative flex-1 flex flex-col items-center justify-center ${i < 2 ? 'border-r border-slate-100 dark:border-slate-800' : ''}`}
+                onClick={() => setActiveTier(activeTier === tier.key ? null : tier.key)}
+                onMouseLeave={() => setActiveTier(null)}
+              >
                 <span className="text-lg font-black text-slate-900 dark:text-white cursor-help">{dataTier.count}</span>
                 <span className={`text-[8px] font-black ${tier.color} uppercase tracking-tighter`}>{tier.label}</span>
                 
                 {/* Tooltip */}
-                <div className="absolute bottom-full mb-2 hidden group-hover:block z-50 w-40 bg-slate-900 text-white p-3 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-2">
+                <div className={`absolute bottom-full mb-2 z-50 w-40 bg-slate-900 text-white p-3 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-2 ${activeTier === tier.key ? 'block' : 'hidden lg:group-hover:block'}`}>
                   <p className="text-[10px] font-black border-b border-white/10 pb-1 mb-1">{tier.key} 階級成員</p>
                   <p className="text-[9px] text-slate-400 leading-relaxed">
                     {dataTier.names.length > 0 ? dataTier.names.slice(0, 15).join(', ') : '無'}

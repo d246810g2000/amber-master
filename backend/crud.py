@@ -852,11 +852,11 @@ def get_daily_analytics(db: Session, target_date: date):
             player_diffs[p_id]["diff"] += diff
             
     sorted_diffs = sorted(player_diffs.values(), key=lambda x: x["diff"], reverse=True)
-    gainers = sorted_diffs[:3]
-    losers = sorted(sorted_diffs, key=lambda x: x["diff"])[:3]
-    # 過濾掉 diff 為 0 的 losers
-    losers = [l for l in losers if l["diff"] < 0]
-    gainers = [g for g in gainers if g["diff"] > 0]
+    gainers = [g for g in sorted_diffs[:3] if g["diff"] > 0]
+    
+    # 找出輸最多的三位，但排序改為從「輸最少」到「輸最多」
+    raw_losers = sorted(player_diffs.values(), key=lambda x: x["diff"])[:3]
+    losers = sorted([l for l in raw_losers if l["diff"] < 0], key=lambda x: x["diff"], reverse=True)
 
     # 3. 尋找今日黃金拍檔
     partnerships = {} # {"id1,id2": {names: "", wins: 0, total: 0}}
