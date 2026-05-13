@@ -38,6 +38,7 @@ export function useCourtSync({
   /** 供 UI（例如 Dashboard 初次載入）；與 fetch 邏輯解耦，不依賴於此 state 重建 fetchState */
   const [isSyncInitialized, setIsSyncInitialized] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
 
   // 用 ref 追蹤最新狀態避免 closure 裡的狀態過期
   const stateRef = useRef(syncState);
@@ -123,6 +124,8 @@ export function useCourtSync({
               console.log('[WS] Version update received:', data.version);
               // 立即觸發 fetchState
               fetchState();
+            } else if (data.type === 'online_count') {
+              setOnlineCount(data.count);
             }
           } catch (e) {
             // 忽略非 JSON 訊息
@@ -241,6 +244,7 @@ export function useCourtSync({
     isSyncing: isFetching || isPushing, // For backward compatibility if needed
     isSyncInitialized,
     syncError,
+    onlineCount,
     fetchState,
     pushState
   };

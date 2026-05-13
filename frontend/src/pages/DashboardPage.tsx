@@ -74,7 +74,8 @@ export function DashboardPage() {
     isPushing,
     isSyncInitialized,
     pushState, 
-    fetchState 
+    fetchState,
+    onlineCount
   } = useCourtSync({
     pollingInterval: 5000, 
     enabled: currentFilterDate === getTaipeiDateString(), // 只有當天需要同步狀態
@@ -99,7 +100,7 @@ export function DashboardPage() {
     submittingMatch, error, setError,
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
-    handleResetDay,
+
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
     syncToRemote,
@@ -218,7 +219,9 @@ export function DashboardPage() {
         isLockedByMe={isLockedByMe}
         isLockedByOther={isLockedByOther}
         summary={summary}
-        onResetDay={handleResetDay}
+        onlineCount={onlineCount}
+
+
       />
 
 

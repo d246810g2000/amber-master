@@ -876,25 +876,7 @@ export function useCourts({
     await syncToRemote(newCourts, nextRecs as Player[], newStatus, [courtId]);
   };
 
-  const handleResetDay = async () => {
-    if (isSyncing) return;
-    if (!window.confirm("確定要重置今天的排點狀態嗎？這會清空所有球場、推薦名單，並將所有球員恢復為預設狀態（常駐備戰、零打休息）。")) return;
 
-    const newCourts = courts.map(c => ({
-      ...c,
-      players: [null, null, null, null],
-      startTime: null,
-      matchId: undefined
-    }));
-    const newRecPlayers: (Player | null)[] = [null, null, null, null];
-    
-    const newStatus: Record<string, PlayerStatus> = {};
-    players.forEach(p => {
-      newStatus[p.id] = p.type === 'resident' ? "ready" : "resting";
-    });
-
-    await syncToRemote(newCourts, newRecPlayers, newStatus, ["1", "2", "recommended"]);
-  };
 
   const activeCourt = courts.find((c) => c.id === activeCourtForWinner);
 
@@ -910,7 +892,7 @@ export function useCourts({
     submittingMatch, error, setError,
     handleCourtSlotClick, handleMatchmake, handleResetRecommended,
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
-    handleResetDay,
+
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
     isRemoteSyncPending: pendingRemoteSyncCount > 0,

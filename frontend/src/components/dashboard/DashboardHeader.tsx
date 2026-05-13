@@ -2,11 +2,13 @@ import React from 'react';
 import Settings from "lucide-react/dist/esm/icons/settings";
 import Maximize from "lucide-react/dist/esm/icons/maximize";
 import Minimize from "lucide-react/dist/esm/icons/minimize";
+import Users from "lucide-react/dist/esm/icons/users";
+
 import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
 import { cn } from '../../lib/utils';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+
 
 const BadmintonIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
   <svg
@@ -66,7 +68,7 @@ interface DashboardHeaderProps {
     controller: string;
     waitingCount: number;
   };
-  onResetDay?: () => void;
+  onlineCount?: number;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -74,7 +76,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onToggleBanner, onToggleFullscreen, onRefresh, onSettings,
   hasControl, currentControllerName, onTakeover, isSyncing, isGuest,
   isLockedByMe, isLockedByOther,
-  summary, onResetDay
+  summary, onlineCount
+
 }) => {
   return (
     <header className="flex flex-col mb-4 md:mb-6 bg-white dark:bg-slate-900 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 shrink-0 overflow-hidden">
@@ -125,6 +128,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Controls Group (All inline) */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto pl-2">
+          {/* Online Count */}
+          <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50 transition-all shrink-0" title="當前在線人數">
+            <Users className="w-3 h-3 md:w-3.5 md:h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-[10px] md:text-[11px] font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
+              {onlineCount || 1}
+            </span>
+          </div>
+
           {/* Last Operator Status */}
           <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 transition-all mr-1 md:mr-2 shrink-0" title={isGuest ? "請先登入 Google 帳號以進行操作" : undefined}>
             <span className={cn(
@@ -145,15 +156,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           >
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 md:w-5 md:h-5" /> : <Maximize className="w-3.5 h-3.5 md:w-5 md:h-5" />}
           </button>
-          
-          <button
-            onClick={onResetDay}
-            className="flex items-center justify-center bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all active:scale-95 border border-rose-100 dark:border-rose-900/50 shrink-0"
-            title="重置今天所有狀態"
-          >
-            <Trash2 className="w-3.5 h-3.5 md:w-5 md:h-5" />
-          </button>
-
           <button
             onClick={onSettings}
             className="flex items-center justify-center bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all shadow-xl dark:shadow-none shadow-slate-200 active:scale-95 shrink-0"
