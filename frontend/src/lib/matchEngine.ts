@@ -48,6 +48,13 @@ export function formatPowerScore(mu: number): string {
 }
 
 /**
+ * 計算綜合戰力 (0.7 Daily + 0.3 Career)
+ */
+export function calculateWeightedMu(dailyMu: number, careerMu: number): number {
+  return dailyMu * 0.7 + careerMu * 0.3;
+}
+
+/**
  * 計算勝率 (0-100)
  */
 export function calculateWinRate(wins: number, total: number): number {

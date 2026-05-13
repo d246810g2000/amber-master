@@ -57,6 +57,8 @@ export const RawMatchPlayerSchema = z.object({
   avatar: z.string().optional(),
   muBefore: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   muAfter: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
+  dailyMuBefore: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
+  dailyMuAfter: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   sigma: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
 });
 

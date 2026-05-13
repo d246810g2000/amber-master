@@ -5,6 +5,7 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Zap from "lucide-react/dist/esm/icons/zap";
 import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
+import { calculateWeightedMu } from "../lib/matchEngine";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 
 interface CourtCardProps {
@@ -30,6 +31,7 @@ interface CourtCardProps {
   onToggleAuto?: () => void;
   /** 連續未上場場次（僅 Target 推薦卡傳入）；`null` 表示當日尚未上場，角標顯示「無」 */
   missedStreakByPlayerId?: Record<string, number | null>;
+  useCareerWeight?: boolean;
 }
 
 const PlayerSlot = React.memo(({ 
@@ -40,6 +42,7 @@ const PlayerSlot = React.memo(({
   className,
   restStreakCount = 0,
   interactive = true,
+  useCareerWeight,
 }: { 
   player: Player | null; 
   teamColor?: "red" | "blue";
@@ -50,6 +53,7 @@ const PlayerSlot = React.memo(({
   restStreakCount?: number | null;
   /** 無控制權時改為純展示，避免誤觸與「以為能點」 */
   interactive?: boolean;
+  useCareerWeight?: boolean;
 }) => {
   return (
     <button 
@@ -89,7 +93,8 @@ const PlayerSlot = React.memo(({
              </span>
              <span className="text-[9px] font-black text-slate-200 dark:text-slate-700">|</span>
              <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 leading-none">
-               {Math.round(player.mu * 10)}
+               {Math.round((player.mu || 0) * 10)}
+               {useCareerWeight && ` (${Math.round(calculateWeightedMu(player.mu || 0, player.career_mu || player.mu || 0) * 10)})`}
              </span>
           </div>
         </div>
@@ -123,10 +128,20 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onToggleAuto,
   missedStreakByPlayerId,
   isCalculating,
+  useCareerWeight,
 }) => {
   const readOnly = hasControl === false;
-  const team1Score = players[0] && players[1] ? Math.round((players[0].mu + players[1].mu) * 10) : 0;
-  const team2Score = players[2] && players[3] ? Math.round((players[2].mu + players[3].mu) * 10) : 0;
+  const team1Score = players[0] && players[1] ? Math.round(((players[0].mu || 0) + (players[1].mu || 0)) * 10) : 0;
+  const team2Score = players[2] && players[3] ? Math.round(((players[2].mu || 0) + (players[3].mu || 0)) * 10) : 0;
+
+  const team1Weighted = players[0] && players[1] 
+    ? Math.round((calculateWeightedMu(players[0].mu || 0, players[0].career_mu || players[0].mu || 0) + 
+                  calculateWeightedMu(players[1].mu || 0, players[1].career_mu || players[1].mu || 0)) * 10) 
+    : 0;
+  const team2Weighted = players[2] && players[3] 
+    ? Math.round((calculateWeightedMu(players[2].mu || 0, players[2].career_mu || players[2].mu || 0) + 
+                  calculateWeightedMu(players[3].mu || 0, players[3].career_mu || players[3].mu || 0)) * 10) 
+    : 0;
 
   const [elapsed, setElapsed] = useState<string>("00:00");
 
@@ -237,6 +252,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               : 0
           }
           interactive={!readOnly}
+          useCareerWeight={useCareerWeight}
         />
         <PlayerSlot 
           player={players[1]} 
@@ -252,12 +268,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               : 0
           }
           interactive={!readOnly}
+          useCareerWeight={useCareerWeight}
         />
 
         {/* Center VS & Points */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center py-1 md:py-2 z-40 pointer-events-none w-full">
           <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none mb-0.5 md:mb-1 transition-all duration-300", team1Score === 0 && "opacity-0 scale-75")}>
-            {team1Score}
+            {team1Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team1Weighted})</span>}
           </div>
           
           <div className="relative my-0.5 scale-75 md:scale-90">
@@ -268,7 +285,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           </div>
           
           <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none mt-0.5 md:mt-1 transition-all duration-300", team2Score === 0 && "opacity-0 scale-75")}>
-            {team2Score}
+            {team2Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team2Weighted})</span>}
           </div>
         </div>
 
@@ -287,6 +304,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               : 0
           }
           interactive={!readOnly}
+          useCareerWeight={useCareerWeight}
         />
         <PlayerSlot 
           player={players[3]} 
@@ -302,6 +320,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               : 0
           }
           interactive={!readOnly}
+          useCareerWeight={useCareerWeight}
         />
 
         {/* Simple Loading Spinner in center of court floor - Only for long calculations */}

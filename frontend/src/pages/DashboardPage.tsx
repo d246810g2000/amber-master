@@ -264,6 +264,7 @@ export function DashboardPage() {
                           : null
                       }
                       hasControl={hasControl}
+                      useCareerWeight={useCareerWeight}
                     />
                   </div>
                 ))}
@@ -295,6 +296,7 @@ export function DashboardPage() {
                     isAutoMode={isAutoMode}
                     onToggleAuto={() => setIsAutoMode(!isAutoMode)}
                     missedStreakByPlayerId={missedStreakByPlayerId}
+                    useCareerWeight={useCareerWeight}
                   />
                 </div>
               </>
@@ -363,6 +365,7 @@ export function DashboardPage() {
                 onDateChange={(date) => { setCurrentFilterDate(date); refetchPlayers(); refetchMatches(); }}
                 onPlayerClick={(id) => navigate(`/players/${id}`)}
                 allMatchDates={allMatchDates}
+                useCareerWeight={useCareerWeight}
               />
             )}
           </div>

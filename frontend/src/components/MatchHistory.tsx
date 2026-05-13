@@ -9,6 +9,7 @@ import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import { MatchPlayer, MatchRecord, Player } from "../types";
 import { cn, parseLocalDateTime, getAvatarUrl } from "../lib/utils";
+import { calculateWeightedMu } from "../lib/matchEngine";
 import { CustomCalendar } from "./common/CustomCalendar";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
@@ -18,38 +19,57 @@ import { AdminMatchEditModal } from "./AdminMatchEditModal";
 // --- Sub-components (Moved Outside for Clarity) ---
 
 const getPowerBefore = (p: any) => {
-  if (p.muBefore !== undefined) {
-    return Math.round(p.muBefore * 10);
+  // 優先顯示即時戰力 (Daily)，若無則顯示生涯戰力 (相容舊紀錄)
+  const val = p.dailyMuBefore ?? p.muBefore ?? p.mu;
+  if (val !== undefined) {
+    return Math.round(val * 10);
   }
   return "";
 };
 
 const getPowerAfter = (p: any) => {
-  if (p.muAfter !== undefined) {
-    return Math.round(p.muAfter * 10);
+  const val = p.dailyMuAfter ?? p.muAfter ?? p.mu;
+  if (val !== undefined) {
+    return Math.round(val * 10);
   }
   return "";
 };
 
 const getDiff = (p: any) => {
-  if (p.muAfter !== undefined && p.muBefore !== undefined) {
-    const diff = Math.round((p.muAfter - p.muBefore) * 10);
+  const after = p.dailyMuAfter ?? p.muAfter;
+  const before = p.dailyMuBefore ?? p.muBefore;
+  if (after !== undefined && before !== undefined) {
+    const diff = Math.round((after - before) * 10);
     return diff >= 0 ? `+${diff}` : `${diff}`;
   }
   return "";
 };
 
 /** 與單人列相同：顯示用戰力為 μ×10 四捨五入；總和為各員該值相加（賽前 μ 優先）。 */
-function sumTeamDisplayCp(team: MatchPlayer[]): string {
+function sumTeamDisplayCp(team: MatchPlayer[], allPlayers: Player[], useCareerWeight?: boolean): React.ReactNode {
   const safeTeam = team || [];
   if (safeTeam.length === 0) return "—";
-  let sum = 0;
-  for (const p of team) {
-    const raw = p.muBefore ?? p.mu ?? p.muAfter;
-    if (raw === undefined) return "—";
-    sum += Math.round(raw * 10);
+  let sumDaily = 0;
+  let sumWeighted = 0;
+  for (const p of safeTeam) {
+    const daily = p.dailyMuBefore ?? p.muBefore ?? p.mu ?? p.muAfter;
+    if (daily === undefined) return "—";
+    // 使用當前生涯 mu（從 allPlayers 查找），而非比賽快照
+    const currentPlayer = allPlayers.find(ap => (p.id && ap.id === p.id) || ap.name === p.name);
+    const careerMu = (currentPlayer as any)?.career_mu ?? currentPlayer?.mu ?? daily;
+    sumDaily += Math.round(daily * 10);
+    sumWeighted += Math.round(calculateWeightedMu(daily, careerMu) * 10);
   }
-  return String(sum);
+  
+  if (useCareerWeight) {
+    return (
+      <span className="flex flex-col items-center gap-0">
+        <span>{sumDaily}</span>
+        <span className="text-[7px] sm:text-[8px] opacity-60">({sumWeighted})</span>
+      </span>
+    );
+  }
+  return String(sumDaily);
 }
 
 const PlayerItem = React.memo(({ 
@@ -58,7 +78,8 @@ const PlayerItem = React.memo(({
   isRight, 
   selectedPlayerIds, 
   onPlayerClick,
-  allPlayers
+  allPlayers,
+  useCareerWeight,
 }: { 
   p: any; 
   isWinner: boolean; 
@@ -66,15 +87,16 @@ const PlayerItem = React.memo(({
   selectedPlayerIds: string[]; 
   onPlayerClick?: (id: string) => void;
   allPlayers: Player[];
-  key?: React.Key;
+  useCareerWeight?: boolean;
 }) => {
   // Use avatar from p, fallback to finding player in allPlayers list (by ID or Name)
   const playerInList = allPlayers.find(ap => 
     (p.id && ap.id === p.id) || (ap.name === p.name)
   );
   const avatar = p.avatar || playerInList?.avatar || '';
-  
   const avatarUrl = getAvatarUrl(avatar, p.name);
+  // 使用當前生涯 mu（從 allPlayers 查找），而非比賽快照的 muBefore
+  const currentCareerMu = (playerInList as any)?.career_mu ?? playerInList?.mu;
 
   return (
     <div className={cn(
@@ -104,9 +126,15 @@ const PlayerItem = React.memo(({
 
       {/* Bottom row: CP Info */}
       <div className={cn("flex items-center gap-1 md:gap-1.5 border border-slate-100/30 dark:border-slate-800/50 px-1 py-[2px] w-fit rounded-lg", isRight ? "flex-row-reverse" : "flex-row")}>
-        <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 tabular-nums leading-none opacity-70">{getPowerBefore(p)}</span>
+        <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 tabular-nums leading-none opacity-70">
+          {getPowerBefore(p)}
+          {useCareerWeight && p.dailyMuBefore !== undefined && currentCareerMu !== undefined && ` (${Math.round(calculateWeightedMu(p.dailyMuBefore, currentCareerMu) * 10)})`}
+        </span>
         <span className={cn("text-[6px] leading-none", isWinner ? "text-emerald-400" : "text-rose-400")}>{isRight ? "◀" : "▶"}</span>
-        <span className="text-[10px] md:text-[12px] font-black text-slate-800 dark:text-slate-200 tabular-nums leading-none drop-shadow-sm">{getPowerAfter(p)}</span>
+        <span className="text-[10px] md:text-[12px] font-black text-slate-800 dark:text-slate-200 tabular-nums leading-none drop-shadow-sm">
+          {getPowerAfter(p)}
+          {useCareerWeight && p.dailyMuAfter !== undefined && currentCareerMu !== undefined && ` (${Math.round(calculateWeightedMu(p.dailyMuAfter, currentCareerMu) * 10)})`}
+        </span>
         <div className={cn("px-1 py-[2px] rounded text-[8px] font-black tabular-nums leading-none ml-0.5 flex items-center justify-center -mt-[1px]", isWinner ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800" : "bg-rose-50 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400 border border-rose-100 dark:border-rose-800")}>
           {getDiff(p)}
         </div>
@@ -128,6 +156,7 @@ export interface MatchHistoryProps {
   onDateChange?: (date: string) => void;
   onPlayerClick?: (playerId: string) => void;
   allMatchDates?: Set<string>;
+  useCareerWeight?: boolean;
 }
 
 export function MatchHistory({ 
@@ -140,7 +169,8 @@ export function MatchHistory({
   onClearPlayers,
   onDateChange,
   onPlayerClick,
-  allMatchDates
+  allMatchDates,
+  useCareerWeight
 }: MatchHistoryProps) {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const selectedSet = React.useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
@@ -339,6 +369,7 @@ export function MatchHistory({
                           selectedPlayerIds={selectedPlayerIds}
                           onPlayerClick={onPlayerClick}
                           allPlayers={players}
+                          useCareerWeight={useCareerWeight}
                         />
                       ))}
                     </div>
@@ -349,7 +380,7 @@ export function MatchHistory({
                         title="賽前戰力總和"
                         className="font-black tabular-nums leading-none text-right shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
                       >
-                        {sumTeamDisplayCp(match.team1 || [])}
+                        {sumTeamDisplayCp(match.team1 || [], players, useCareerWeight)}
                       </span>
                       <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-0 py-0.5">
                         <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-1 sm:px-1.5 py-[2px] rounded-sm text-[6px] sm:text-[7px] md:text-[8px] font-black tracking-widest -mt-0.5 md:-mt-1 shadow-inner whitespace-nowrap opacity-80 max-w-full truncate">
@@ -371,7 +402,7 @@ export function MatchHistory({
                         title="賽前戰力總和"
                         className="font-black tabular-nums leading-none text-left shrink-0 text-[9px] sm:text-[10px] md:text-[12px] text-slate-600 dark:text-slate-400"
                       >
-                        {sumTeamDisplayCp(match.team2 || [])}
+                        {sumTeamDisplayCp(match.team2 || [], players, useCareerWeight)}
                       </span>
                     </div>
 
@@ -386,6 +417,7 @@ export function MatchHistory({
                           selectedPlayerIds={selectedPlayerIds}
                           onPlayerClick={onPlayerClick}
                           allPlayers={players}
+                          useCareerWeight={useCareerWeight}
                         />
                       ))}
                     </div>

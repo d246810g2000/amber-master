@@ -54,7 +54,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           disabled={!hasControl}
           className={cn(
             "absolute -top-1.5 -left-1.5 z-20 p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700 transition-all shadow-sm",
-            hasControl ? "opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200" : "opacity-0 pointer-events-none"
+            hasControl ? "opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200" : "opacity-0 pointer-events-none"
           )}
           title="回休息區"
         >

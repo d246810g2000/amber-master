@@ -3,6 +3,7 @@ export interface Player {
   name: string;
   mu?: number;
   sigma?: number;
+  career_mu?: number;
   winRate?: number;
   matchCount?: number;
   avatar?: string;
@@ -17,6 +18,8 @@ export interface MatchPlayer {
   avatar?: string;
   muBefore?: number;
   muAfter?: number;
+  dailyMuBefore?: number;
+  dailyMuAfter?: number;
   mu?: number;
   sigma?: number;
 }

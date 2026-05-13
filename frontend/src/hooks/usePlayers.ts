@@ -38,14 +38,18 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
 
     return playersBaseQuery.data.map((p: Player) => {
       const s = statsMap.get(p.id);
+      const dailyMu = s ? s.mu : (p.mu || 25.0);
+      const dailySigma = s ? s.sigma : (p.sigma || 8.333);
+      
       return {
         ...p,
-        mu: s ? s.mu : (p.mu || 25.0),
-        sigma: s ? s.sigma : (p.sigma || 8.333),
+        mu: dailyMu,
+        sigma: dailySigma,
+        career_mu: p.mu || 25.0, // 保留生涯原始戰力
         matchCount: s ? s.matchCount : 0,
         winCount: s ? s.winCount : 0,
         winRate: s ? s.winRate : 0,
-        streak: 0, // 暫不計算連勝，以後由後端提供
+        streak: 0,
       } as DerivedPlayer;
     }).sort((a: any, b: any) => b.mu - a.mu);
   }, [playersBaseQuery.data, playerStatsQuery.data]);
