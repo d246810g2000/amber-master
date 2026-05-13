@@ -20,6 +20,9 @@ export interface DerivedPlayer extends Player {
 export interface PlayerHistoryResult {
   stats: {
     totalMatches: number;
+    systemMatches?: number;
+    playedDays?: number;
+    systemDays?: number;
     winCount: number;
     lossCount: number;
     winRate: number;
@@ -27,6 +30,8 @@ export interface PlayerHistoryResult {
   todayStats: {
     date: string;
     totalMatches: number;
+    sessionMatches?: number;
+    playedToday?: number;
     winCount: number;
     lossCount: number;
     winRate: number;

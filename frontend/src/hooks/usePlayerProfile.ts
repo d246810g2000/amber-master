@@ -26,8 +26,8 @@ export function usePlayerProfile(playerId: string) {
       const profile = await gasApi.fetchPlayerProfile(playerId);
       
       // 映射到前端原有結構以相容 UI 組件
-      const today = profile.today || { totalMatches: 0, winCount: 0, winRate: 0 };
-      const career = profile.career || { totalMatches: 0, winCount: 0, lossCount: 0, winRate: 0 };
+      const today = profile.today || { totalMatches: 0, sessionMatches: 0, playedToday: 0, winCount: 0, winRate: 0 };
+      const career = profile.career || { totalMatches: 0, systemMatches: 0, playedDays: 0, systemDays: 0, winCount: 0, lossCount: 0, winRate: 0 };
       
       const result = {
         player: profile.player || { id: playerId, name: "Unknown", mu: 25, sigma: 8.333 },
@@ -60,8 +60,8 @@ export function usePlayerProfile(playerId: string) {
 
       return {
         data: result,
-        instantMu: profile.today.mu,
-        comprehensiveMu: profile.player.mu,
+        instantMu: profile.today?.mu,
+        comprehensiveMu: profile.player?.mu,
         combinedTrend,
         bestPartner: profile.bestPartner,
         worstPartner: profile.worstPartner,

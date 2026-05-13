@@ -5,6 +5,8 @@ import Activity from 'lucide-react/dist/esm/icons/activity';
 import Sparkles from 'lucide-react/dist/esm/icons/sparkles';
 import Crown from 'lucide-react/dist/esm/icons/crown';
 import Ghost from 'lucide-react/dist/esm/icons/ghost';
+import Timer from 'lucide-react/dist/esm/icons/timer';
+import Calendar from 'lucide-react/dist/esm/icons/calendar';
 import type { PlayerHistoryResult } from '../../lib/matchEngine';
 
 type Stats = PlayerHistoryResult['stats'];
@@ -22,6 +24,10 @@ interface ProfileRecordSummaryProps {
   isOwner: boolean;
   stats: Stats;
   todayStats: TodayStats;
+  availableDates?: string[];
+  selectedDate?: string;
+  onDateChange?: (date: string) => void;
+  playerType?: 'resident' | 'guest';
   /** 本人專用：即時／生涯戰力與最佳拍檔；非本人時可省略 */
   extras?: ProfileRecordSummaryExtras | null;
 }
@@ -33,6 +39,10 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
   isOwner,
   stats,
   todayStats,
+  availableDates = [],
+  selectedDate,
+  onDateChange,
+  playerType = 'guest',
   extras,
 }) => {
   if (!isOwner) {
@@ -49,6 +59,21 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
   const todayWinRateDisplay =
     todayStats.totalMatches === 0 ? '—' : todayStats.winRate;
 
+  const totalSystemDays = stats.systemDays || 0;
+  const totalPlayedDays = stats.playedDays || 0;
+  const missedDaysCareer = Math.max(0, totalSystemDays - totalPlayedDays);
+  
+  // 根據身份決定標籤與計算邏輯
+  const isResident = playerType === 'resident';
+  const indexLabel = isResident ? '請假指數' : '參與指數';
+  
+  // 請假指數 = 未出席 / 總天數；參與指數 = 出席 / 總天數
+  const mainValue = isResident ? missedDaysCareer : totalPlayedDays;
+  const indexPercentage = totalSystemDays > 0
+    ? Math.round((mainValue / totalSystemDays) * 100)
+    : 0;
+  const indexDisplay = totalSystemDays === 0 ? '—' : indexPercentage;
+
   return (
     <div className="group bg-slate-50 dark:bg-zinc-900/40 backdrop-blur-xl rounded-3xl sm:rounded-[2rem] border border-slate-100 dark:border-white/5 transition-all duration-300 hover:border-emerald-500/20 hover:shadow-lg dark:hover:shadow-none overflow-hidden">
       <div className="p-3 sm:p-6 flex flex-col gap-2.5 sm:gap-5">
@@ -62,55 +87,90 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
         </div>
 
         {/* 手機亦維持 2 欄，與桌機一致、避免直向堆疊過高 */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-6">
+        {/* 在較大螢幕 (sm) 改為 3 欄以容納新加入的參與率 */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
           {/* 生涯 */}
           <div className="rounded-2xl bg-white/70 dark:bg-black/20 border border-slate-100/80 dark:border-white/5 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
             <div className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1 sm:mb-2 truncate">
               累積（生涯）
             </div>
             <div className="flex items-baseline justify-between gap-1 min-w-0">
-              <span className="text-lg sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight truncate min-w-0">
+              <span className="text-lg sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight truncate min-w-0">
                 {stats.totalMatches}
                 <span className="text-[11px] sm:text-base font-bold text-slate-400 dark:text-zinc-500 ml-0.5">場</span>
               </span>
-              <span className="text-base sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+              <span className="text-base sm:text-xl lg:text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
                 {stats.winRate}
                 <span className="text-[10px] sm:text-sm font-bold text-emerald-600/70 dark:text-emerald-400/70">%</span>
               </span>
             </div>
-            <div className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-zinc-400 tabular-nums mt-0.5">
+            <div className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-zinc-400 tabular-nums mt-0.5 truncate">
               W {stats.winCount} · L {stats.lossCount}
             </div>
           </div>
 
-          {/* 今日 */}
+          {/* 今日 / 單日統計 */}
           <div className="rounded-2xl bg-sky-50/80 dark:bg-sky-950/25 border border-sky-100/90 dark:border-sky-500/15 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
             <div className="flex items-center justify-between gap-1 mb-1 sm:mb-2 min-w-0">
               <span className="text-[9px] sm:text-[10px] font-black text-sky-700/80 dark:text-sky-300/90 uppercase tracking-widest shrink-0">
-                今日
+                {selectedDate === new Date().toISOString().split('T')[0] ? '今日' : '單日'}
               </span>
-              <span className="text-[8px] sm:text-[10px] font-bold text-sky-600/70 dark:text-sky-400/70 tabular-nums truncate">
-                {todayStats.date}
-              </span>
+              
+              {availableDates.length > 0 && onDateChange ? (
+                <select 
+                  value={selectedDate}
+                  onChange={(e) => onDateChange(e.target.value)}
+                  className="text-[8px] sm:text-[10px] font-bold text-sky-600/70 dark:text-sky-400/70 bg-transparent border-none outline-none cursor-pointer hover:text-sky-500 transition-colors text-right max-w-[80px]"
+                >
+                  {availableDates.map(d => (
+                    <option key={d} value={d} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-[8px] sm:text-[10px] font-bold text-sky-600/70 dark:text-sky-400/70 tabular-nums truncate">
+                  {todayStats.date}
+                </span>
+              )}
             </div>
             <div className="flex items-baseline justify-between gap-1 min-w-0">
-              <span className="text-lg sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight truncate min-w-0">
+              <span className="text-lg sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight truncate min-w-0">
                 {todayStats.totalMatches}
                 <span className="text-[11px] sm:text-base font-bold text-slate-400 dark:text-zinc-500 ml-0.5">場</span>
               </span>
-              <span className="text-base sm:text-2xl font-black text-sky-600 dark:text-sky-400 tabular-nums shrink-0 inline-flex items-baseline gap-0.5">
+              <span className="text-base sm:text-xl lg:text-2xl font-black text-sky-600 dark:text-sky-400 tabular-nums shrink-0 inline-flex items-baseline gap-0.5">
                 <span>{todayWinRateDisplay}</span>
                 {todayStats.totalMatches > 0 ? (
                   <span className="text-[10px] sm:text-sm font-bold text-sky-600/70 dark:text-sky-400/70">%</span>
                 ) : null}
               </span>
             </div>
-            <div className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-zinc-400 tabular-nums mt-0.5">
+            <div className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-zinc-400 tabular-nums mt-0.5 truncate">
               {todayStats.totalMatches === 0 ? (
                 <span className="text-slate-400 dark:text-zinc-500">尚無對戰</span>
               ) : (
                 <>W {todayStats.winCount} · L {todayStats.lossCount}</>
               )}
+            </div>
+          </div>
+
+          {/* 指數卡片 (請假/參與) */}
+          <div className="rounded-2xl bg-amber-50/80 dark:bg-amber-950/25 border border-amber-100/90 dark:border-amber-500/15 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0 col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-2 min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-black text-amber-700/80 dark:text-amber-300/90 uppercase tracking-widest shrink-0">
+                {indexLabel}
+              </span>
+              <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-500/60 shrink-0" />
+            </div>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-lg sm:text-2xl lg:text-3xl font-black text-amber-600 dark:text-amber-400 tabular-nums tracking-tight">
+                {indexDisplay}
+                <span className="text-[10px] sm:text-sm font-bold ml-0.5">%</span>
+              </span>
+              <span className="text-[10px] sm:text-base font-bold text-slate-400 dark:text-zinc-500 tabular-nums truncate">
+                ({mainValue}/{totalSystemDays} 天)
+              </span>
             </div>
           </div>
         </div>

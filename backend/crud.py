@@ -326,11 +326,13 @@ def get_player_profile(db: Session, player_id: str):
     # 1. 取得生涯統計 (從 PlayerStat 聚合)
     stats_query = db.query(
         func.sum(models.PlayerStat.match_count).label('total_matches'),
-        func.sum(models.PlayerStat.win_count).label('total_wins')
+        func.sum(models.PlayerStat.win_count).label('total_wins'),
+        func.count(models.PlayerStat.date).label('played_days')
     ).filter(models.PlayerStat.player_id == player_id).first()
     
     total_m = stats_query.total_matches or 0
     total_w = stats_query.total_wins or 0
+    played_days = stats_query.played_days or 0
     
     # 2. 取得今日數據
     today = datetime.now().date()
@@ -338,6 +340,17 @@ def get_player_profile(db: Session, player_id: str):
         models.PlayerStat.player_id == player_id,
         models.PlayerStat.date == today
     ).first()
+
+    # 取得今日總場數 (用於計算參與率/請假指數)
+    session_total_matches = db.query(func.count(models.Match.id)).filter(
+        models.Match.match_date == today
+    ).scalar() or 0
+
+    # 取得生涯總場數
+    system_total_matches = db.query(func.count(models.Match.id)).scalar() or 0
+    
+    # 取得系統總天數 (開局天數)
+    system_total_days = db.query(func.count(func.distinct(models.Match.match_date))).scalar() or 0
     
     # 3. 取得戰力趨勢 (最近 15 筆統計)
     history = db.query(models.PlayerStat).filter(
@@ -475,12 +488,17 @@ def get_player_profile(db: Session, player_id: str):
         },
         "career": {
             "totalMatches": total_m,
+            "systemMatches": system_total_matches,
+            "playedDays": played_days,
+            "systemDays": system_total_days,
             "winCount": total_w,
             "lossCount": total_m - total_w,
             "winRate": round((total_w / total_m * 100) if total_m > 0 else 0, 1)
         },
         "today": {
             "totalMatches": today_stat.match_count if today_stat else 0,
+            "sessionMatches": session_total_matches,
+            "playedToday": 1 if today_stat and today_stat.match_count > 0 else 0,
             "winCount": today_stat.win_count if today_stat else 0,
             "winRate": today_stat.win_rate if today_stat else 0,
             "mu": today_stat.mu if today_stat else 25.0,

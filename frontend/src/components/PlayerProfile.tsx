@@ -163,6 +163,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const playerMap = profileData?.playerMap ?? {};
   const instantMu = profileData?.instantMu ?? null;
   const comprehensiveMu = profileData?.comprehensiveMu ?? null;
+  const todayStr = getTaipeiDateString();
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   // Admin-only global stats
   const { data: globalSummary } = useDashboardSummary(getTaipeiDateString());
@@ -296,11 +298,36 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   const activeMatchDates = useMemo(() => {
     const dates = new Set<string>();
-    matchHistory.forEach(m => {
-      if (m?.date) dates.add(m.date.split(' ')[0]);
-    });
-    return dates;
-  }, [matchHistory]);
+    // 也要把今天放進去，即使還沒打球
+    dates.add(todayStr);
+    if (matchHistory) {
+      matchHistory.forEach(m => {
+        if (m?.date) dates.add(m.date.split(' ')[0]);
+      });
+    }
+    return Array.from(dates).sort((a, b) => b.localeCompare(a));
+  }, [matchHistory, todayStr]);
+
+  const displayTodayStats = useMemo(() => {
+    if (!data) return null;
+    if (selectedDate === todayStr) return data.todayStats;
+    
+    // 從歷史紀錄中聚合特定日期的數據
+    const history = matchHistory || [];
+    const dayMatches = history.filter(m => m.date.startsWith(selectedDate));
+    const winCount = dayMatches.filter(m => m.result === 'W').length;
+    const totalMatches = dayMatches.length;
+    
+    return {
+      date: selectedDate,
+      totalMatches,
+      winCount,
+      lossCount: totalMatches - winCount,
+      winRate: totalMatches > 0 ? Math.round((winCount / totalMatches) * 100) : 0,
+      sessionMatches: 0, // 歷史數據可能拿不到當時的 sessionTotal，這裡先放 0
+      playedToday: totalMatches > 0 ? 1 : 0
+    };
+  }, [selectedDate, todayStr, data, matchHistory]);
 
   const currentStats = useMemo(() => {
     const today = getTaipeiDateString();
@@ -528,7 +555,11 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       <ProfileRecordSummary
         isOwner={isOwner}
         stats={stats}
-        todayStats={todayStats}
+        todayStats={displayTodayStats || { date: todayStr, totalMatches: 0, winCount: 0, lossCount: 0, winRate: 0 }}
+        availableDates={activeMatchDates}
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+        playerType={player.type}
         extras={
           isOwner
             ? {
