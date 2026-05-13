@@ -1,11 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Install system dependencies for MySQL client
+# Using a specific Debian version (bookworm) ensures more stable caching
 RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     build-essential \
     pkg-config \
     curl \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

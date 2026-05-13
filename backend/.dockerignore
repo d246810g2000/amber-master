@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.production
+.env.development
+scratch/
+data/*.db
+data/*.sqlite
+.git/
+.gitignore
+Dockerfile
+README.md
