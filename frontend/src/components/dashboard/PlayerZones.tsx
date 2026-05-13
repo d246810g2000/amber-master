@@ -1,6 +1,9 @@
 import React from 'react';
 import Users from "lucide-react/dist/esm/icons/users";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Zap from "lucide-react/dist/esm/icons/zap";
+import Scale from "lucide-react/dist/esm/icons/scale";
+import Moon from "lucide-react/dist/esm/icons/moon";
 import { cn } from "../../lib/utils";
 import { PlayerPill } from '../PlayerPill';
 import type { Player } from '../../types';
@@ -88,32 +91,40 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={onToggleIgnoreFatigue}
+                  title="無視疲勞"
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
+                    "px-2 sm:px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border flex items-center gap-1",
                     ignoreFatigue 
                       ? "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 shadow-sm shadow-rose-100 dark:shadow-none" 
                       : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                   )}
                 >
-                  無視疲勞
+                  <Zap size={14} className={cn(ignoreFatigue && "fill-current")} />
+                  <span className="hidden sm:inline">無視疲勞</span>
                 </button>
+
                 <button
                   onClick={onToggleUseCareerWeight}
+                  title="綜合戰力"
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
+                    "px-2 sm:px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border flex items-center gap-1",
                     useCareerWeight 
                       ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 shadow-sm shadow-amber-100 dark:shadow-none" 
                       : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                   )}
                 >
-                  綜合戰力
+                  <Scale size={14} />
+                  <span className="hidden sm:inline">綜合戰力</span>
                 </button>
+
                 <button
                   onClick={onAllResting}
+                  title="全員休息"
                   disabled={readyPlayers.length === 0 || submittingMatch || isMatchmaking}
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+                  className="px-2 sm:px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1"
                 >
-                  全員休息
+                  <Moon size={14} />
+                  <span className="hidden sm:inline">全員休息</span>
                 </button>
               </div>
             )}

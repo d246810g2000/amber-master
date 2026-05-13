@@ -4,6 +4,7 @@ import BarChart3 from 'lucide-react/dist/esm/icons/bar-chart-3';
 import Activity from 'lucide-react/dist/esm/icons/activity';
 import Sparkles from 'lucide-react/dist/esm/icons/sparkles';
 import Crown from 'lucide-react/dist/esm/icons/crown';
+import Ghost from 'lucide-react/dist/esm/icons/ghost';
 import type { PlayerHistoryResult } from '../../lib/matchEngine';
 
 type Stats = PlayerHistoryResult['stats'];
@@ -116,7 +117,8 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
 
         {extras ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3 border-t border-slate-200/70 dark:border-white/10 pt-2.5 sm:pt-5">
-            <div className="rounded-2xl bg-amber-500/[0.06] dark:bg-amber-500/10 border border-amber-200/50 dark:border-amber-500/15 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
+            {/* 即時戰力 */}
+            <div className="flex flex-col h-full rounded-2xl bg-amber-500/[0.06] dark:bg-amber-500/10 border border-amber-200/50 dark:border-amber-500/15 px-2 py-2.5 sm:px-4 sm:py-3.5 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-1.5 min-w-0">
                 <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 shrink-0" />
                 <span className="text-[8px] sm:text-[10px] font-black text-amber-800/70 dark:text-amber-400/90 uppercase tracking-tight sm:tracking-widest truncate">
@@ -127,12 +129,13 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
                 {extras.instantCp}
                 <span className="text-[10px] sm:text-sm font-bold text-slate-400 dark:text-zinc-500 ml-0.5">CP</span>
               </div>
-              <p className="hidden sm:block text-[9px] font-bold text-slate-500 dark:text-zinc-500 mt-1 leading-snug">
-                當前手感競技狀態
+              <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 dark:text-zinc-500 mt-1 sm:mt-1.5 leading-snug">
+                當前競技狀態
               </p>
             </div>
 
-            <div className="rounded-2xl bg-emerald-500/[0.06] dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/15 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
+            {/* 生涯戰力 */}
+            <div className="flex flex-col h-full rounded-2xl bg-emerald-500/[0.06] dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/15 px-2 py-2.5 sm:px-4 sm:py-3.5 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-1.5 min-w-0">
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500 shrink-0" />
                 <span className="text-[8px] sm:text-[10px] font-black text-emerald-800/70 dark:text-emerald-400/90 uppercase tracking-tight sm:tracking-widest truncate">
@@ -143,12 +146,13 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
                 {extras.careerCp}
                 <span className="text-[10px] sm:text-sm font-bold text-slate-400 dark:text-zinc-500 ml-0.5">CP</span>
               </div>
-              <p className="hidden sm:block text-[9px] font-bold text-slate-500 dark:text-zinc-500 mt-1 leading-snug">
-                長期穩定技術累積
+              <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 dark:text-zinc-500 mt-1 sm:mt-1.5 leading-snug">
+                長期技術累積
               </p>
             </div>
 
-            <div className="rounded-2xl bg-amber-400/[0.07] dark:bg-amber-400/10 border border-amber-200/60 dark:border-amber-400/15 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
+            {/* 最佳拍檔 */}
+            <div className="flex flex-col h-full rounded-2xl bg-amber-400/[0.07] dark:bg-amber-400/10 border border-amber-200/60 dark:border-amber-400/15 px-2 py-2.5 sm:px-4 sm:py-3.5 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-1.5 min-w-0">
                 <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 shrink-0 saturate-150" />
                 <span className="text-[8px] sm:text-[10px] font-black text-amber-900/65 dark:text-amber-300/90 uppercase tracking-tight sm:tracking-widest truncate">
@@ -158,11 +162,10 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
               <div className="text-sm sm:text-xl font-black text-slate-900 dark:text-white tracking-tight line-clamp-1 break-words leading-tight">
                 {extras.bestPartner?.name || '無'}
               </div>
-              <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-zinc-500 mt-0.5 sm:mt-1 tabular-nums leading-tight">
+              <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-zinc-500 mt-1 sm:mt-1.5 tabular-nums leading-tight">
                 {extras.bestPartner ? (
                   <>
-                    <span className="sm:hidden">{extras.bestPartner.winRate.toFixed(1)}% ({extras.bestPartner.count}場)</span>
-                    <span className="hidden sm:inline">{extras.bestPartner.winRate.toFixed(1)}% ({extras.bestPartner.count}場) 共同勝率</span>
+                    {extras.bestPartner.winRate.toFixed(1)}% ({extras.bestPartner.count}場)
                   </>
                 ) : (
                   '—'
@@ -170,9 +173,10 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
               </p>
             </div>
 
-            <div className="rounded-2xl bg-slate-400/[0.07] dark:bg-zinc-800/40 border border-slate-200 dark:border-white/5 px-2 py-2 sm:px-4 sm:py-3.5 min-w-0">
+            {/* 最雷拍檔 */}
+            <div className="flex flex-col h-full rounded-2xl bg-slate-400/[0.07] dark:bg-zinc-800/40 border border-slate-200 dark:border-white/5 px-2 py-2.5 sm:px-4 sm:py-3.5 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-1.5 min-w-0">
-                <span className="text-slate-400">👻</span>
+                <Ghost className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
                 <span className="text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-tight sm:tracking-widest truncate">
                   最雷拍檔
                 </span>
@@ -180,11 +184,10 @@ export const ProfileRecordSummary: React.FC<ProfileRecordSummaryProps> = ({
               <div className="text-sm sm:text-xl font-black text-slate-700 dark:text-zinc-400 tracking-tight line-clamp-1 break-words leading-tight">
                 {extras.worstPartner?.name || '無'}
               </div>
-              <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 dark:text-zinc-600 mt-0.5 sm:mt-1 tabular-nums leading-tight">
+              <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 dark:text-zinc-600 mt-1 sm:mt-1.5 tabular-nums leading-tight">
                 {extras.worstPartner ? (
                   <>
-                    <span className="sm:hidden">{extras.worstPartner.winRate.toFixed(1)}% ({extras.worstPartner.count}場)</span>
-                    <span className="hidden sm:inline">{extras.worstPartner.winRate.toFixed(1)}% ({extras.worstPartner.count}場) 共同勝率</span>
+                    {extras.worstPartner.winRate.toFixed(1)}% ({extras.worstPartner.count}場)
                   </>
                 ) : (
                   '—'
