@@ -104,7 +104,8 @@ export function DashboardPage() {
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
     syncToRemote,
     isAutoMode, setIsAutoMode,
-    ignoreFatigue, setIgnoreFatigue
+    ignoreFatigue, setIgnoreFatigue,
+    useCareerWeight, setUseCareerWeight
   } = useCourts({
     players: players as DerivedPlayer[],
     playerStatus, setMultipleStatus, matchHistory,
@@ -323,6 +324,8 @@ export function DashboardPage() {
               missedStreakByPlayerId={missedStreakByPlayerId}
               ignoreFatigue={ignoreFatigue}
               onToggleIgnoreFatigue={() => setIgnoreFatigue(!ignoreFatigue)}
+              useCareerWeight={useCareerWeight}
+              onToggleUseCareerWeight={() => setUseCareerWeight(!useCareerWeight)}
             />
           )}
         </div>

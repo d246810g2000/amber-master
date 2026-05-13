@@ -77,6 +77,7 @@ def matchmake(
     selected_ids: List[str], 
     recent_matches: List[Dict] = [], 
     ignore_fatigue: bool = False,
+    use_career_weight: bool = False,
     target_date: str = ""
 ) -> List[Dict]:
     if not target_date:
@@ -85,7 +86,7 @@ def matchmake(
     selected_id_set = set(str(sid) for sid in selected_ids)
     target_players = [p for p in all_players if str(p['id']) in selected_id_set]
     
-    print(f"[TrueSkill] selected_id_set: {selected_id_set}")
+    print(f"[TrueSkill] selected_id_set: {selected_id_set} | use_career_weight: {use_career_weight}")
     print(f"[TrueSkill] Found {len(target_players)} target players out of {len(all_players)}")
     
     if len(target_players) < 4:
@@ -108,7 +109,7 @@ def matchmake(
                 still_consecutive[pid] = False
     
     for pid in selected_ids:
-        if wait_count_map[pid] == 0: wait_count_map[pid] = 2
+        if wait_count_map[pid] == 0: wait_count_map[pid] = 1
             
     player_priorities = []
     for p in target_players:
@@ -140,7 +141,13 @@ def matchmake(
         pid = str(p['id'])
         count = consecutive_count_map.get(pid, 0)
         mu_penalty = (count * ENGINE_CONFIG['FATIGUE_PENALTY_PER_GAME']) if (not ignore_fatigue and count >= 1) else 0
-        eff_ratings[pid] = trueskill.Rating(mu=p['mu'] - mu_penalty, sigma=p['sigma'])
+        
+        # Apply Career Weighting if requested (0.7 Daily + 0.3 Career)
+        daily_mu = p['mu']
+        career_mu = p.get('career_mu', daily_mu)
+        target_mu = (daily_mu * 0.7 + career_mu * 0.3) if use_career_weight else daily_mu
+        
+        eff_ratings[pid] = trueskill.Rating(mu=target_mu - mu_penalty, sigma=p['sigma'])
 
     matches = []
     for group in itertools.combinations(finalist_pool, 4):

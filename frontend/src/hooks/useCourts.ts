@@ -124,6 +124,7 @@ export function useCourts({
   // Auto mode states
   const [isAutoMode, setIsAutoMode] = useState(false);
   const [ignoreFatigue, setIgnoreFatigue] = useState(false);
+  const [useCareerWeight, setUseCareerWeight] = useState(false);
   const [autoActionReady, setAutoActionReady] = useState(true);
   const autoCooldownTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -312,22 +313,59 @@ export function useCourts({
   useEffect(() => {
     if (!isAutoMode || !hasControl || isSyncing || isMatchmaking || submittingMatch || isLocalSyncing || isPushing || isFetching || pendingRemoteSyncCount > 0) return;
 
-    const hasEmptyCourt = courts.some(c => c.players.every(p => p === null));
-    const isRecommendedFull = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p !== null && p !== undefined);
-    const isRecommendedEmpty = recommendedPlayers.length === 4 && recommendedPlayers.every(p => p === null || p === undefined);
+    // 找出目前是否有空場地
+    const emptyCourt = courts.find(c => c.players.every(p => p === null));
+    const readyCount = Object.values(playerStatus).filter(s => s === "ready").length;
 
-    if (autoActionReady && hasEmptyCourt && isRecommendedFull) {
-      handleGoToCourt();
-      return;
-    }
+    // 當有空場地且備戰人數足夠時，執行自動上場
+    if (autoActionReady && emptyCourt && readyCount >= 4) {
+      const startAutoMatch = async () => {
+        triggerCooldown();
+        setIsMatchmaking(true);
+        try {
+          const readyPlayerIds = Object.entries(playerStatus)
+            .filter(([_, status]) => status === "ready")
+            .map(([id]) => id);
 
-    if (isRecommendedEmpty) {
-      const readyCount = Object.values(playerStatus).filter(s => s === "ready").length;
-      if (readyCount >= 4) {
-        handleMatchmake();
-      }
+          const suggestions = await gasApi.matchmake(
+            readyPlayerIds,
+            ignoreFatigue,
+            useCareerWeight,
+            targetDate
+          );
+
+          if (suggestions.length > 0) {
+            const selected = suggestions[0];
+            const matchId = Date.now().toString();
+            
+            // 直接更新場地與球員狀態，跳過推薦區 (Target)
+            const newCourts = courts.map(c => c.id === emptyCourt.id ? {
+              ...c,
+              players: [selected.team1[0], selected.team1[1], selected.team2[0], selected.team2[1]] as Player[],
+              startTime: new Date(),
+              matchId
+            } : c);
+
+            const newStatus: Record<string, PlayerStatus> = {};
+            [...selected.team1, ...selected.team2].forEach(p => { 
+              if (p) newStatus[p.id] = "playing"; 
+            });
+
+            // 同步到遠端，推薦區保持不變（除非原本就有手動放人，這裡不干涉）
+            await syncToRemote(newCourts, recommendedPlayers, newStatus, [emptyCourt.id]);
+          }
+        } catch (err: any) {
+          console.error("Auto Mode Matchmaking failed:", err);
+          setIsAutoMode(false);
+          setError("自動配對失敗，已關閉自動模式");
+        } finally {
+          setIsMatchmaking(false);
+        }
+      };
+
+      startAutoMatch();
     }
-  }, [isAutoMode, hasControl, autoActionReady, courts, recommendedPlayers, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching, pendingRemoteSyncCount]);
+  }, [isAutoMode, hasControl, autoActionReady, courts, playerStatus, isSyncing, isMatchmaking, submittingMatch, isLocalSyncing, isPushing, isFetching, pendingRemoteSyncCount]);
 
   // 統一封裝：每次狀態變更後，打包並推送到 GAS
   const syncToRemote = useCallback(async (
@@ -551,6 +589,7 @@ export function useCourts({
       const suggestions = await gasApi.matchmake(
         readyPlayerIds,
         ignoreFatigue,
+        useCareerWeight,
         targetDate
       );
 
@@ -875,8 +914,9 @@ export function useCourts({
     getPlayerTeamColor,
     handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
     isRemoteSyncPending: pendingRemoteSyncCount > 0,
-    syncToRemote, // Expose for Dashboard to update global player zones
+    syncToRemote,
     isAutoMode, setIsAutoMode,
-    ignoreFatigue, setIgnoreFatigue
+    ignoreFatigue, setIgnoreFatigue,
+    useCareerWeight, setUseCareerWeight
   };
 }

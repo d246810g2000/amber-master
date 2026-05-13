@@ -147,6 +147,7 @@ class CourtStateResponse(BaseModel):
 class MatchmakingRequest(BaseModel):
     selectedIds: List[str]
     ignoreFatigue: Optional[bool] = False
+    useCareerWeight: Optional[bool] = False
     targetDate: Optional[str] = None
 
 class AdminLoginRequest(BaseModel):

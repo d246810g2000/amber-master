@@ -513,6 +513,7 @@ def get_match_recommendations(req: schemas.MatchmakingRequest, db: Session = Dep
         selected_ids=req.selectedIds,
         recent_matches=recent_matches_dict,
         ignore_fatigue=req.ignoreFatigue,
+        use_career_weight=req.useCareerWeight,
         target_date=target_date_str
     )
     

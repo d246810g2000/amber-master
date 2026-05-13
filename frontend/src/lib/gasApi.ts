@@ -218,12 +218,14 @@ export async function fetchMatches(date?: string): Promise<RawMatch[]> {
 export async function matchmake(
   selectedIds: string[], 
   ignoreFatigue: boolean = false,
+  useCareerWeight: boolean = false,
   targetDate?: string
 ): Promise<any[]> {
   try {
     const res = await apiPost('/matchmake', {
       selectedIds,
       ignoreFatigue,
+      useCareerWeight,
       targetDate
     }, z.any());
     return (res as any) || [];

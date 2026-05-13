@@ -27,6 +27,8 @@ interface PlayerZonesProps {
   missedStreakByPlayerId?: Record<string, number | null>;
   ignoreFatigue?: boolean;
   onToggleIgnoreFatigue?: () => void;
+  useCareerWeight?: boolean;
+  onToggleUseCareerWeight?: () => void;
 }
 
 function EmptyReadyHint({ readOnly }: { readOnly: boolean }) {
@@ -53,6 +55,8 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   missedStreakByPlayerId = {},
   ignoreFatigue = false,
   onToggleIgnoreFatigue,
+  useCareerWeight = false,
+  onToggleUseCareerWeight,
 }) => {
   const readOnly = hasControl === false;
   return (
@@ -92,6 +96,17 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                   )}
                 >
                   無視疲勞
+                </button>
+                <button
+                  onClick={onToggleUseCareerWeight}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border",
+                    useCareerWeight 
+                      ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 shadow-sm shadow-amber-100 dark:shadow-none" 
+                      : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  )}
+                >
+                  綜合戰力
                 </button>
                 <button
                   onClick={onAllResting}
