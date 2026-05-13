@@ -164,7 +164,8 @@ export async function fetchDailyAnalytics(date?: string) {
     tiers: z.object({
       Elite: z.object({ count: z.number(), names: z.array(z.string()) }),
       Advanced: z.object({ count: z.number(), names: z.array(z.string()) }),
-      Normal: z.object({ count: z.number(), names: z.array(z.string()) })
+      Normal: z.object({ count: z.number(), names: z.array(z.string()) }),
+      Casual: z.object({ count: z.number(), names: z.array(z.string()) })
     })
   }));
 }

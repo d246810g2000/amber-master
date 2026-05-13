@@ -93,13 +93,14 @@ export const DailyAnalyticsWidgets: React.FC<DailyAnalyticsWidgetsProps> = ({ da
           {[
             { key: 'Elite', label: 'Elite', color: 'text-amber-500', barColor: '#f59e0b' },
             { key: 'Advanced', label: 'Adv.', color: 'text-blue-500', barColor: '#3b82f6' },
-            { key: 'Normal', label: 'Normal', color: 'text-slate-400', barColor: '#94a3b8' }
+            { key: 'Normal', label: 'Normal', color: 'text-slate-400', barColor: '#94a3b8' },
+            { key: 'Casual', label: 'Casual', color: 'text-rose-400', barColor: '#fb7185' }
           ].map((tier, i) => {
             const dataTier = data.tiers[tier.key as keyof typeof data.tiers];
             return (
               <div 
                 key={tier.key} 
-                className={`group relative flex-1 flex flex-col items-center justify-center ${i < 2 ? 'border-r border-slate-100 dark:border-slate-800' : ''}`}
+                className={`group relative flex-1 flex flex-col items-center justify-center ${i < 3 ? 'border-r border-slate-100 dark:border-slate-800' : ''}`}
                 onClick={() => setActiveTier(activeTier === tier.key ? null : tier.key)}
                 onMouseLeave={() => setActiveTier(null)}
               >
@@ -120,9 +121,9 @@ export const DailyAnalyticsWidgets: React.FC<DailyAnalyticsWidgetsProps> = ({ da
         </div>
         <div className="mt-2 flex h-1.5 rounded-full overflow-hidden">
           {Object.entries(data.tiers).map(([tier, info]) => {
-            const total = data.tiers.Elite.count + data.tiers.Advanced.count + data.tiers.Normal.count;
+            const total = data.tiers.Elite.count + data.tiers.Advanced.count + data.tiers.Normal.count + data.tiers.Casual.count;
             if (total === 0) return null;
-            const colors = { Elite: '#f59e0b', Advanced: '#3b82f6', Normal: '#94a3b8' };
+            const colors = { Elite: '#f59e0b', Advanced: '#3b82f6', Normal: '#94a3b8', Casual: '#fb7185' };
             return (
               <div 
                 key={tier}

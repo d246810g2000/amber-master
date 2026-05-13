@@ -64,6 +64,7 @@ export function usePlayerProfile(playerId: string) {
         comprehensiveMu: profile.player.mu,
         combinedTrend,
         bestPartner: profile.bestPartner,
+        worstPartner: profile.worstPartner,
         teammateStats: profile.partners || [],
         matchHistory: profile.history || [],
         playerMap: {} 

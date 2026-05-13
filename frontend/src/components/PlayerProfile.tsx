@@ -421,44 +421,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const canEdit = isOwner || !player.hasBinding;
   return (
     <div className={cn(
-      "space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 relative",
-      isAdmin && "after:content-[''] after:fixed after:inset-0 after:bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.05),transparent_50%)] after:pointer-events-none after:z-[-1]"
+      "space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 relative"
     )}>
-      {/* Admin Commander Badge */}
-      {isAdmin && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-amber-500 text-white px-6 py-1.5 rounded-full shadow-lg shadow-amber-500/20 border-2 border-white/20 flex items-center gap-2 animate-bounce-slow">
-          <Crown size={14} className="fill-white" />
-          <span className="text-[11px] font-black uppercase tracking-[0.2em]">Professional Commander</span>
-        </div>
-      )}
-
-      {/* Admin Global Stats Quick View */}
-      {isAdmin && globalSummary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <div className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-md p-4 rounded-3xl border border-amber-500/20 shadow-sm">
-            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">今日總場次</p>
-            <p className="text-xl font-black text-slate-800 dark:text-white tabular-nums">{globalSummary.totalMatches}</p>
-          </div>
-          <div className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-md p-4 rounded-3xl border border-amber-500/20 shadow-sm">
-            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">參戰人數</p>
-            <p className="text-xl font-black text-slate-800 dark:text-white tabular-nums">{globalSummary.activePlayerCount}</p>
-          </div>
-          <div className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-md p-4 rounded-3xl border border-amber-500/20 shadow-sm">
-            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1">系統平均 CP</p>
-            <p className="text-xl font-black text-emerald-500 tabular-nums">{Math.round(globalSummary.averageInstantMu * 10)}</p>
-          </div>
-          <div className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-md p-4 rounded-3xl border border-amber-500/20 shadow-sm flex flex-col justify-center gap-2">
-            <button 
-              onClick={() => navigate('/admin/matches')}
-              className="flex items-center gap-2 text-[10px] font-black text-amber-600 dark:text-amber-400 hover:scale-105 transition-transform"
-            >
-              <Rocket size={12} /> 進入後台
-            </button>
-            <div className="w-full h-px bg-slate-100 dark:bg-slate-800" />
-            <p className="text-[9px] font-bold text-slate-400 uppercase">System Active</p>
-          </div>
-        </div>
-      )}
       {/* Top Banner Header */}
       <div className="bg-slate-50/80 dark:bg-slate-950/20 backdrop-blur-xl border-b border-slate-100 dark:border-white/5 -mx-6 -mt-6 px-4 md:px-6 py-4 md:py-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3 md:gap-6">
@@ -539,20 +503,6 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               referrerPolicy="no-referrer"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => void handleSyncProfileData()}
-            disabled={manualProfileSync || profileQuery.isFetching}
-            className={cn(
-              "p-2 md:p-3 rounded-xl md:rounded-2xl transition-all border flex items-center gap-2 shrink-0",
-              "bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-white/10",
-              "disabled:opacity-50 disabled:cursor-wait"
-            )}
-            title="從後端重新抓取球員戰力、對戰紀錄與統計"
-          >
-            <RefreshCw className={cn("w-5 h-5", (manualProfileSync || profileQuery.isFetching) && "animate-spin")} />
-            <span className="hidden sm:inline text-xs font-black uppercase">同步資訊</span>
-          </button>
           
           <button
             onClick={() => setIsShareModalOpen(true)}
@@ -584,9 +534,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
             ? {
                 instantCp: currentStats.instant,
                 careerCp: currentStats.career,
-                bestPartner: teammateStats[0]
-                  ? { name: teammateStats[0].name, winRate: teammateStats[0].winRate }
-                  : null,
+                bestPartner: profileQuery.data?.bestPartner,
+                worstPartner: profileQuery.data?.worstPartner,
               }
             : null
         }

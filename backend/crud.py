@@ -460,7 +460,8 @@ def get_player_profile(db: Session, player_id: str):
             "winRate": round((s["wins"] / s["total"]) * 100, 1)
         })
     
-    best_partner = max(partner_list, key=lambda x: x["winRate"]) if partner_list else None
+    best_partner = max(partner_list, key=lambda x: (x["winRate"], x["count"])) if partner_list else None
+    worst_partner = min(partner_list, key=lambda x: (x["winRate"], -x["count"])) if partner_list else None
 
     return {
         "player": {
@@ -487,6 +488,7 @@ def get_player_profile(db: Session, player_id: str):
         },
         "trend": trend_per_match[-20:], # 取最近 20 場
         "bestPartner": best_partner,
+        "worstPartner": worst_partner,
         "partners": partner_list,
         "history": list(reversed(match_history_processed)) # 新的在前面
     }
@@ -891,7 +893,8 @@ def get_daily_analytics(db: Session, target_date: date):
     tiers = {
         "Elite": {"count": 0, "names": []}, 
         "Advanced": {"count": 0, "names": []}, 
-        "Normal": {"count": 0, "names": []}
+        "Normal": {"count": 0, "names": []},
+        "Casual": {"count": 0, "names": []}
     }
     for s in stats:
         mu = s.mu * 10
@@ -902,9 +905,12 @@ def get_daily_analytics(db: Session, target_date: date):
         elif mu >= 250:
             tiers["Advanced"]["count"] += 1
             tiers["Advanced"]["names"].append(name)
-        else:
+        elif mu >= 200:
             tiers["Normal"]["count"] += 1
             tiers["Normal"]["names"].append(name)
+        else:
+            tiers["Casual"]["count"] += 1
+            tiers["Casual"]["names"].append(name)
 
     return {
         "gainers": gainers,
