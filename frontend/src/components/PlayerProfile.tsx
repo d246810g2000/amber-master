@@ -12,6 +12,7 @@ import Lock from "lucide-react/dist/esm/icons/lock";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus";
 import Share2 from "lucide-react/dist/esm/icons/share-2";
+import Feather from "lucide-react/dist/esm/icons/feather";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
@@ -28,6 +29,7 @@ import { ProfileRecordSummary } from './profile/ProfileRecordSummary';
 const CpTrendChart = React.lazy(() => import('./profile/CpTrendChart').then(m => ({ default: m.CpTrendChart })));
 import { PartnerTable } from './profile/PartnerTable';
 import { MatchHistoryTable } from './profile/MatchHistoryTable';
+import { FeatherHistoryTable } from './profile/FeatherHistoryTable';
 import { AvatarEditModal } from './profile/AvatarEditModal';
 import { ShareModal } from './share/ShareModal';
 
@@ -150,7 +152,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
-  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history'>('trend');
+  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers'>('trend');
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
@@ -165,6 +167,13 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const comprehensiveMu = profileData?.comprehensiveMu ?? null;
   const todayStr = getTaipeiDateString();
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+
+  const featherHistoryQuery = useQuery({
+    queryKey: ['playerFeathers', playerId],
+    queryFn: () => gasApi.getPlayerFeathers(playerId),
+    enabled: activeTab === 'feathers',
+    staleTime: 30_000,
+  });
 
   // Admin-only global stats
   const { data: globalSummary } = useDashboardSummary(getTaipeiDateString());
@@ -577,7 +586,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
         {[
           { id: 'trend' as const, label: '戰力趨勢', icon: <Activity size={14} /> },
           { id: 'partners' as const, label: '拍檔分析', icon: <Target size={14} /> },
-          { id: 'history' as const, label: '詳細對戰', icon: <Calendar size={14} /> }
+          { id: 'history' as const, label: '詳細對戰', icon: <Calendar size={14} /> },
+          { id: 'feathers' as const, label: '羽毛明細', icon: <Feather size={14} /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -687,6 +697,12 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                   setHistorySort={setHistorySort}
                   players={Object.values(playerMap)}
                   activeMatchDates={activeMatchDates}
+                />
+              )}
+              {activeTab === 'feathers' && (
+                <FeatherHistoryTable
+                  transactions={featherHistoryQuery.data || []}
+                  isLoading={featherHistoryQuery.isLoading}
                 />
               )}
             </>

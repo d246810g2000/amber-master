@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, text
 from datetime import date, datetime
 import models, schemas
 import time
@@ -10,7 +10,9 @@ def get_players(db: Session):
     return db.query(models.Player).all()
 
 def get_player_by_email(db: Session, email: str):
-    return db.query(models.Player).filter(models.Player.email == email).first()
+    if not email: return None
+    clean_email = email.strip().lower()
+    return db.query(models.Player).filter(func.lower(models.Player.email) == clean_email).first()
 
 def get_player_stats(db: Session, target_date: date = None):
     query = db.query(models.PlayerStat).options(joinedload(models.PlayerStat.player))
@@ -310,11 +312,32 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
     new_version = today_state.version if today_state else 0
     
     db.commit()
+    
+    # 5. 結算投注
+    bet_results = settle_bets(db, match_id, winner)
+
+    # 6. V1.0 完賽獎勵 (勝方 100, 敗方 50)
+    for pid in p_ids:
+        db_p = db_players.get(pid)
+        if db_p:
+            is_winner_p = (winner == 1 and (pid == req.t1p1 or pid == req.t1p2)) or \
+                         (winner == 2 and (pid == req.t2p1 or pid == req.t2p2))
+            reward = 100 if is_winner_p else 50
+            db_p.feathers = (db_p.feathers or 0) + reward
+            db.add(models.FeatherTransaction(
+                player_id=pid,
+                amount=reward,
+                type="match_reward",
+                description=f"完賽獎勵：{'勝場' if is_winner_p else '安慰獎'} (100/50 規則)"
+            ) )
+
+    db.commit()
     return {
         "status": "success", 
         "data": {
             "matchId": match_id,
-            "version": new_version
+            "version": new_version,
+            "bet_results": bet_results
         }
     }
 
@@ -797,18 +820,396 @@ def update_match(db: Session, match_id: str, req: schemas.MatchUpdateRequest):
     db.commit()
     # 自動重新計算所有戰力，確保數據一致性
     recalibrate_all_ratings(db)
+
+    # 結算投注 (如果 winner 有變動，但這裡 recalibrate_all_ratings 已經 commit 了，我們重新結算一次)
+    if req.winner:
+        settle_bets(db, match_id, req.winner)
+    
     return {"status": "success", "message": "Match updated and ratings recalibrated"}
 
-def delete_match(db: Session, match_id: str):
-    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
-    if not db_match:
-        return {"status": "error", "message": "Match not found"}
+
+def claim_daily_feathers(db: Session, email: str):
+    db_player = get_player_by_email(db, email)
+    if not db_player:
+        return {"status": "error", "message": "Player not found", "amount": 0}
     
-    db.delete(db_match)
+    # 使用台北時間判斷
+    from datetime import timedelta
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
+    
+    # 生產環境：恢復週三限制 (2 is Wednesday)
+    if today.weekday() != 2: 
+        return {"status": "error", "message": "今天不是比賽日（週三），無法領取羽毛", "amount": 0}
+
+    if db_player.last_feather_claim == today:
+        return {"status": "error", "message": "今天已經領取過羽毛了", "amount": 0}
+    
+    claim_amount = 1000
+    db_player.feathers = (db_player.feathers or 0) + claim_amount
+    db_player.last_feather_claim = today
+    
+    # 新增交易紀錄
+    transaction = models.FeatherTransaction(
+        player_id=db_player.id,
+        amount=claim_amount,
+        type="daily_claim",
+        description=f"每日登入獎勵 ({today})"
+    )
+    db.add(transaction)
     db.commit()
-    # 自動重新計算所有戰力，確保數據一致性
-    recalibrate_all_ratings(db)
-    return {"status": "success", "message": "Match deleted and ratings recalibrated"}
+    db.refresh(db_player)
+    
+    return {"status": "success", "amount": claim_amount, "message": f"成功領取 {claim_amount} 根羽毛！"}
+
+def get_feather_transactions(db: Session, player_id: str, limit: int = 50):
+    return db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id
+    ).order_by(models.FeatherTransaction.created_at.desc()).limit(limit).all()
+def get_match_teams(db: Session, match_id: str, return_mu: bool = False):
+    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if db_match:
+        if return_mu:
+            p_ids = [db_match.t1p1_id, db_match.t1p2_id, db_match.t2p1_id, db_match.t2p2_id]
+            players = db.query(models.Player).filter(models.Player.id.in_(p_ids)).all()
+            p_dict = {p.id: p.mu for p in players}
+            t1_mu = (p_dict.get(db_match.t1p1_id, 25) + p_dict.get(db_match.t1p2_id, 25))
+            t2_mu = (p_dict.get(db_match.t2p1_id, 25) + p_dict.get(db_match.t2p2_id, 25))
+            return t1_mu, t2_mu
+        t1 = [db_match.t1p1.name, db_match.t1p2.name] if db_match.t1p2 else [db_match.t1p1.name]
+        t2 = [db_match.t2p1.name, db_match.t2p2.name] if db_match.t2p2 else [db_match.t2p1.name]
+        c_name = db_match.court_name or "未知"
+        return " & ".join(t1), " & ".join(t2), f"場地 {c_name}"
+    
+    # 如果 matches 表找不到，去 court_state 找 (處理正在進行中的比賽)
+    from datetime import datetime, timedelta
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
+    cs = db.query(models.CourtState).filter(models.CourtState.date == today).first()
+    if not cs:
+        cs = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
+    
+    if cs and cs.state:
+        courts = cs.state.get("courts", [])
+        for c in courts:
+            if str(c.get("matchId")) == str(match_id):
+                p_ids = [str(pid) for pid in c.get("players", []) if pid]
+                players = db.query(models.Player).filter(models.Player.id.in_(p_ids)).all()
+                p_dict = {p.id: p.name for p in players}
+                
+                # 取得球員姓名
+                t1_names = [p_dict.get(p_ids[0], "T1"), p_dict.get(p_ids[1], "")] if len(p_ids) >= 2 else ["T1"]
+                t2_names = [p_dict.get(p_ids[2], "T2"), p_dict.get(p_ids[3], "")] if len(p_ids) >= 4 else ["T2"]
+                
+                t1_str = " & ".join([n for n in t1_names if n])
+                t2_str = " & ".join([n for n in t2_names if n])
+                c_name = c.get("name", "未知")
+                
+                if return_mu:
+                    # 如果需要 Mu，則重新抓取 Mu 資料
+                    mu_dict = {p.id: p.mu for p in players}
+                    t1_mu = mu_dict.get(p_ids[0], 25.0) + mu_dict.get(p_ids[1], 25.0) if len(p_ids) >= 2 else 50.0
+                    t2_mu = mu_dict.get(p_ids[2], 25.0) + mu_dict.get(p_ids[3], 25.0) if len(p_ids) >= 4 else 50.0
+                    return t1_mu, t2_mu
+                    
+                return t1_str, t2_str, f"場地 {c_name}"
+
+    if return_mu: return 50.0, 50.0
+    return "Team 1", "Team 2", "未知場地"
+
+def get_match_description(db: Session, match_id: str):
+    t1, t2, court = get_match_teams(db, match_id)
+    return f"[{court}] {t1} vs {t2}"
+
+def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int, bet_type: str = "moneyline", line_value: float = 0.0):
+    if amount < 50:
+        return {"status": "error", "message": "最低投注金額為 50 根羽毛"}
+    if amount > 500:
+        return {"status": "error", "message": "最高投注金額為 500 根羽毛"}
+
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if not db_player:
+        return {"status": "error", "message": "找不到球員資料"}
+    
+    if (db_player.feathers or 0) < amount:
+        return {"status": "error", "message": "羽毛不足"}
+    
+    # 2. 檢查比賽是否已結束
+    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if db_match and db_match.winner:
+        return {"status": "error", "message": "比賽已結束，無法投注"}
+
+    # 3. 檢查重複投注 (同類型只能投一次)
+    existing_bet = db.query(models.Bet).filter(
+        models.Bet.match_id == match_id,
+        models.Bet.player_id == player_id,
+        models.Bet.bet_type == bet_type
+    ).first()
+    if existing_bet:
+        return {"status": "error", "message": f"您已經投過「{bet_type}」了"}
+
+    # 4. 防放水機制 (獨贏與讓分)
+    if bet_type in ["moneyline", "handicap"]:
+        from datetime import timedelta
+        today = (datetime.utcnow() + timedelta(hours=8)).date()
+        court_state = db.query(models.CourtState).filter(models.CourtState.date == today).first()
+        if not court_state:
+            court_state = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
+        
+        if court_state and court_state.state:
+            courts = court_state.state.get("courts", [])
+            for c in courts:
+                if str(c.get("matchId")) == str(match_id):
+                    player_ids = [str(pid) for pid in c.get("players", []) if pid]
+                    if player_id in player_ids:
+                        idx = player_ids.index(player_id)
+                        player_team = 1 if idx < 2 else 2
+                        if team != player_team:
+                            return {"status": "error", "message": "身為參賽球員，你只能看好自己贏！"}
+
+    # 5. 執行投注
+    db_player.feathers -= amount
+    db_bet = models.Bet(
+        player_id=player_id,
+        match_id=match_id,
+        team=team,
+        amount=amount,
+        bet_type=bet_type,
+        line_value=line_value
+    )
+    db.add(db_bet)
+    
+    # 新增交易紀錄
+    match_desc = get_match_description(db, match_id)
+    transaction = models.FeatherTransaction(
+        player_id=player_id,
+        amount=-amount,
+        type="bet_placed",
+        description=f"預測投注({bet_type})：{match_desc} (選項 {team}, 盤口 {line_value})"
+    )
+    db.add(transaction)
+    db.commit()
+    
+    return {"status": "success", "message": "投注成功"}
+
+def get_bet_status(db: Session, match_id: str, player_id: Optional[str] = None):
+    bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
+    
+    # 盤口計算 (對齊今日即時戰力)
+    from datetime import datetime, timedelta
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
+    
+    t1_mu, t2_mu = 0.0, 0.0
+    p_ids = []
+    
+    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if db_match:
+        p_ids = [db_match.t1p1_id, db_match.t1p2_id, db_match.t2p1_id, db_match.t2p2_id]
+    else:
+        # 如果 matches 表找不到，去 court_state 找
+        cs = db.query(models.CourtState).filter(models.CourtState.date == today).first()
+        if not cs:
+            cs = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
+        if cs and cs.state:
+            courts = cs.state.get("courts", [])
+            for c in courts:
+                if str(c.get("matchId")) == str(match_id):
+                    p_ids = [str(pid) for pid in c.get("players", []) if pid]
+                    break
+    
+    if p_ids:
+        # 抓取今日即時戰力 (PlayerStat)
+        stats = db.query(models.PlayerStat).filter(
+            models.PlayerStat.player_id.in_(p_ids),
+            models.PlayerStat.date == today
+        ).all()
+        s_dict = {s.player_id: s.mu for s in stats}
+        
+        def get_current_mu(pid):
+            return s_dict.get(pid, 25.0)
+
+        if len(p_ids) >= 4:
+            t1_mu = get_current_mu(p_ids[0]) + get_current_mu(p_ids[1])
+            t2_mu = get_current_mu(p_ids[2]) + get_current_mu(p_ids[3])
+        elif len(p_ids) == 2:
+            t1_mu = get_current_mu(p_ids[0])
+            t2_mu = get_current_mu(p_ids[1])
+    
+    # 1. 計算原始讓分並設定上限 (h_coeff=0.45，經 176 場回測證明此換算率最接近 50/50 平衡)
+    raw_h = round((t1_mu - t2_mu) * 0.45 * 2) / 2
+    handicap_line = max(-12.5, min(12.5, raw_h))
+    
+    # 2. 大小分計算：ou_base=41.5, ou_floor=33.5 (經回測證明此組合能達成 50% vs 50% 的大/小分分布)
+    # 公式：基準 41.5 - (讓分絕對值 * 0.7)，最低不低於 33.5
+    base_ou = 41.5 - (abs(handicap_line) * 0.7)
+    ou_line = float(int(max(33.5, base_ou))) + 0.5
+    
+    # 3. 定義統一的資訊獲取函數 (包含開盤鎖定邏輯)
+    def get_type_info(b_type: str, line: float):
+        internal_type = "over_under" if b_type == "overUnder" else b_type
+        type_bets = [b for b in bets if b.bet_type == internal_type]
+        
+        # 動態開盤邏輯
+        is_locked = False
+        abs_h = abs(handicap_line)
+        if b_type == "moneyline" and abs_h > 6.0:
+            is_locked = True # 實力差距超過 6 分，獨贏盤無懸念
+        elif b_type == "handicap" and abs_h <= 1.0:
+            is_locked = True
+            
+        t1_total = sum(b.amount for b in type_bets if b.team == 1)
+        t2_total = sum(b.amount for b in type_bets if b.team == 2)
+        total = t1_total + t2_total
+        
+        # 賠率計算 (簡單抽水)
+        odds1 = round(max(1.05, total / t1_total * 0.85), 2) if t1_total > 0 else 2.0
+        odds2 = round(max(1.05, total / t2_total * 0.85), 2) if t2_total > 0 else 2.0
+        
+        my_bet = next((b for b in type_bets if b.player_id == player_id), None)
+        return {
+            "team1Total": t1_total,
+            "team2Total": t2_total,
+            "odds1": odds1,
+            "odds2": odds2,
+            "line": line,
+            "myBetAmount": my_bet.amount if my_bet else 0,
+            "myBetTeam": my_bet.team if my_bet else None,
+            "locked": is_locked
+        }
+
+    return {
+        "matchId": match_id,
+        "moneyline": get_type_info("moneyline", 0.0),
+        "handicap": get_type_info("handicap", handicap_line),
+        "overUnder": get_type_info("overUnder", ou_line)
+    }
+
+def settle_bets(db: Session, match_id: str, winner_team: int):
+    try:
+        # 相容性處理：將前端可能傳入的 camelCase 轉為 snake_case
+        db.execute(text("UPDATE bets SET bet_type = 'over_under' WHERE match_id = :mid AND bet_type = 'overUnder'"), {"mid": match_id})
+        db.commit()
+        
+        bets = db.query(models.Bet).filter(models.Bet.match_id == match_id, models.Bet.is_settled == 0).all()
+        if not bets: return {"winners": []}
+        
+        db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+        if not db_match: return {"winners": []}
+        
+        # 處理分數格式
+        try:
+            score_str = db_match.score or "21-0"
+            s1, s2 = map(int, score_str.split("-"))
+        except:
+            s1, s2 = (21, 0) if winner_team == 1 else (0, 21)
+
+        bet_types = ["moneyline", "handicap", "over_under"]
+        total_player_bonus = 0
+        winners_report = []
+
+        for bt in bet_types:
+            type_bets = [b for b in bets if b.bet_type == bt]
+            if not type_bets: continue
+            
+            def is_bet_won(b):
+                if b.bet_type == "moneyline": return b.team == winner_team
+                if b.bet_type == "handicap":
+                    # 讓分邏輯：Team 1 總分 + 讓分值 vs Team 2 總分
+                    if b.team == 1: return (s1 + b.line_value) > s2
+                    else: return (s2 - b.line_value) > s1
+                if b.bet_type == "over_under":
+                    total = s1 + s2
+                    return (total > b.line_value) if b.team == 1 else (total < b.line_value)
+                return False
+
+            win_bets = [b for b in type_bets if is_bet_won(b)]
+            lose_stake = sum(b.amount for b in type_bets if not is_bet_won(b))
+            win_stake = sum(b.amount for b in win_bets)
+            
+            if win_stake > 0:
+                # 抽水與分紅
+                rake = int(lose_stake * 0.05)
+                bonus = int(lose_stake * 0.10)
+                total_player_bonus += bonus
+                net_profit = lose_stake - rake - bonus
+                odds = (win_stake + net_profit) / win_stake
+                
+                for b in win_bets:
+                    payout = int(b.amount * odds)
+                    p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
+                    if p:
+                        p.feathers = (p.feathers or 0) + payout
+                        db.add(models.FeatherTransaction(
+                            player_id=b.player_id, 
+                            amount=payout, 
+                            type="bet_won", 
+                            description=f"預測成功({bt})：{s1}-{s2} (賠率 {round(odds, 2)})"
+                        ))
+                        winners_report.append({"name": p.name, "payout": payout, "type": bt})
+            
+            # 標記為已結算
+            for b in type_bets: b.is_settled = 1
+
+        # 6. 分紅給勝場球員 (贏球分紅)
+        if total_player_bonus > 0:
+            winner_p_ids = [db_match.t1p1_id, db_match.t1p2_id] if winner_team == 1 else [db_match.t2p1_id, db_match.t2p2_id]
+            share = total_player_bonus // 2
+            for pid in winner_p_ids:
+                if pid:
+                    p = db.query(models.Player).filter(models.Player.id == pid).first()
+                    if p:
+                        p.feathers = (p.feathers or 0) + share
+                        db.add(models.FeatherTransaction(
+                            player_id=pid, 
+                            amount=share, 
+                            type="match_reward", 
+                            description=f"贏球分紅(多重獎池)：場地 {db_match.court_name or '未知'}"
+                        ))
+
+        db.commit()
+        return {"winners": winners_report}
+    except Exception as e:
+        print(f"CRITICAL ERROR in settle_bets: {str(e)}")
+        db.rollback()
+        return {"winners": [], "error": str(e)}
+
+def delete_match(db: Session, match_id: str):
+    print(f"DEBUG: Deleting match {match_id} and checking for bets to refund...")
+    
+    # 不論比賽是否已入庫 (錄入結果)，只要有投注就要退款
+    bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
+    print(f"DEBUG: Found {len(bets)} bets for match {match_id} to refund.")
+    
+    refund_count = 0
+    for bet in bets:
+        player = db.query(models.Player).filter(models.Player.id == bet.player_id).first()
+        if player:
+            print(f"DEBUG: Refunding {bet.amount} feathers to player {player.name} (ID: {player.id})")
+            player.feathers = (player.feathers or 0) + bet.amount
+            # 建立退款交易紀錄
+            match_desc = get_match_description(db, match_id)
+            transaction = models.FeatherTransaction(
+                player_id=player.id,
+                amount=bet.amount,
+                type="bet_refund",
+                description=f"比賽取消退款：{match_desc}"
+            )
+            db.add(transaction)
+            refund_count += 1
+        db.delete(bet)
+    
+    # 嘗試刪除比賽紀錄 (如果已經打完入庫了的話)
+    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if db_match:
+        print(f"DEBUG: Match record found, deleting...")
+        db.delete(db_match)
+    
+    db.commit()
+    print(f"DEBUG: Process completed. Refunded {refund_count} players.")
+    
+    # 如果有刪除比賽，才需要重新校準
+    if db_match:
+        recalibrate_all_ratings(db)
+        
+    return {"status": "success", "message": f"Refunded {refund_count} bets and cleaned up match {match_id}"}
 
 def batch_update_matches(db: Session, updates: List[schemas.MatchBatchUpdateItem]):
     for up in updates:

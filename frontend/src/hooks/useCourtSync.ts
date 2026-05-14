@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import * as gasApi from '../lib/gasApi';
 import { WS_URL } from '../lib/config';
+import type { ChatMessage } from '../components/dashboard/GlobalChat';
 
 export interface CourtSyncState {
   version: number;
@@ -26,6 +29,7 @@ export function useCourtSync({
   enabled = true,
   targetDate
 }: UseCourtSyncOptions) {
+  const queryClient = useQueryClient();
 
   const [syncState, setSyncState] = useState<CourtSyncState>({
     version: 0,
@@ -39,6 +43,8 @@ export function useCourtSync({
   const [isSyncInitialized, setIsSyncInitialized] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [onlineCount, setOnlineCount] = useState<number>(1);
+  const [betStatuses, setBetStatuses] = useState<Record<string, any>>({});
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   // 用 ref 追蹤最新狀態避免 closure 裡的狀態過期
   const stateRef = useRef(syncState);
@@ -124,8 +130,38 @@ export function useCourtSync({
               console.log('[WS] Version update received:', data.version);
               // 立即觸發 fetchState
               fetchState();
+              
+              // 加入訊息 (例如勝利公告)
+              if (data.message) {
+                setChatMessages(prev => [...prev.slice(-49), {
+                  id: `win-${Date.now()}`,
+                  type: 'announcement',
+                  content: data.message,
+                  timestamp: Date.now()
+                }]);
+              }
             } else if (data.type === 'online_count') {
               setOnlineCount(data.count);
+            } else if (data.type === 'bet_update') {
+              console.log('[WS] Bet update received for match:', data.matchId);
+              setBetStatuses(prev => ({
+                ...prev,
+                [data.matchId]: data.status
+              }));
+              
+              // 尬廣訊息顯示
+              if (data.message) {
+                // 加入聊天室
+                setChatMessages(prev => [...prev.slice(-49), {
+                  id: `bet-${Date.now()}-${Math.random()}`,
+                  type: 'bet',
+                  content: data.message,
+                  timestamp: Date.now()
+                }]);
+              }
+              
+              // 當有人投注時，順便重新整理羽毛餘額 (以防是自己投注或其他影響餘額的操作)
+              queryClient.invalidateQueries({ queryKey: ['players-base'] });
             }
           } catch (e) {
             // 忽略非 JSON 訊息
@@ -245,6 +281,9 @@ export function useCourtSync({
     isSyncInitialized,
     syncError,
     onlineCount,
+    betStatuses,
+    setBetStatuses,
+    chatMessages,
     fetchState,
     pushState
   };

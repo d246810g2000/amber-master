@@ -99,8 +99,8 @@ async function apiGet<T>(
   const parsed = GasResponseSchema(schema).safeParse(json);
   
   if (!parsed.success) {
-    console.error('API Parse Error:', parsed.error);
-    throw new Error('API Response format invalid');
+    console.error('API Response Format Error (GET):', parsed.error, json);
+    throw new Error(`後端回傳格式不正確 (GET): ${JSON.stringify(json)}`);
   }
 
   if (parsed.data.status === 'success' && parsed.data.data !== undefined) {
@@ -113,7 +113,7 @@ async function apiPost<T>(path: string, body: unknown, schema: z.ZodType<T>, met
   const baseUrl = API_URL || window.location.origin;
   const fullPath = path.startsWith('/') ? path : `/${path}`;
   const finalUrlStr = API_URL.startsWith('http') 
-    ? new URL(path.startsWith('/') ? path.slice(1) : path, API_URL).toString()
+    ? new URL(path.startsWith('/') ? path.slice(1) : path, API_URL.endsWith('/') ? API_URL : `${API_URL}/`).toString()
     : `${baseUrl}${fullPath}`;
   let res: Response;
   try {
@@ -130,8 +130,8 @@ async function apiPost<T>(path: string, body: unknown, schema: z.ZodType<T>, met
   const parsed = GasResponseSchema(schema).safeParse(json);
 
   if (!parsed.success) {
-    console.error('API Parse Error:', parsed.error);
-    throw new Error('API Response format invalid');
+    console.error('API Response Format Error (POST):', parsed.error, json);
+    throw new Error(`後端回傳格式不正確 (POST): ${JSON.stringify(json)}`);
   }
 
   if (parsed.data.status === 'success') {
@@ -382,3 +382,36 @@ export type { RawPlayer, RawPlayerStat, RawMatch };
 export async function recalibrateRatings(): Promise<string> {
   return apiPost('/admin/recalibrate-ratings', {}, z.string());
 }
+
+/** 領取每日羽毛 */
+export async function claimDailyFeathers(email: string): Promise<{ status: string, amount: number, message: string }> {
+  return apiPost('/feathers/claim', { email }, z.any());
+}
+
+/** 投注預測 */
+export async function placeBet(data: { 
+  matchId: string, 
+  team: number, 
+  amount: number, 
+  playerEmail: string,
+  betType?: string,
+  lineValue?: number 
+}): Promise<any> {
+  return apiPost('/bets', data, z.any());
+}
+
+/** 取得投注狀態 */
+export async function getBetStatus(matchId: string, email?: string): Promise<any> {
+  const params: Record<string, string> = { matchId };
+  if (email) params.email = email;
+  return apiGet('/bets/status', params, z.any());
+}
+
+/** 取得球員羽毛交易紀錄 */
+export async function getPlayerFeathers(playerId: string, limit: number = 50): Promise<FeatherTransaction[]> {
+  return apiGet(`/players/${playerId}/feathers`, { limit: String(limit) }, z.array(FeatherTransactionSchema));
+}
+
+import { FeatherTransactionSchema, type FeatherTransaction } from './apiSchema';
+export type { FeatherTransaction };
+export { FeatherTransactionSchema };

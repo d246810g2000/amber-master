@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import * as gasApi from '../lib/gasApi';
 import { useQueryClient } from '@tanstack/react-query';
 import { getTaipeiDateString } from "../lib/utils";
 import * as matchEngine from "../lib/matchEngine";
@@ -11,6 +14,7 @@ import { MatchHistory, MatchHistorySkeleton } from "../components/MatchHistory";
 import { SettingsModal } from "../components/SettingsModal";
 import { WinnerModal } from "../components/WinnerModal";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
+import { GlobalChat } from "../components/dashboard/GlobalChat";
 import { PlayerZones, PlayerZonesSkeleton } from "../components/dashboard/PlayerZones";
 import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import { CourtCard, CourtCardSkeleton } from "../components/CourtCard";
@@ -75,12 +79,60 @@ export function DashboardPage() {
     isSyncInitialized,
     pushState, 
     fetchState,
-    onlineCount
+    onlineCount,
+    betStatuses,
+    setBetStatuses,
+    chatMessages
   } = useCourtSync({
     pollingInterval: 5000, 
     enabled: currentFilterDate === getTaipeiDateString(), // 只有當天需要同步狀態
     targetDate: currentFilterDate
   });
+
+  const { currentUser } = useAuth();
+  
+  const handleBet = useCallback(async (matchId: string, team: number, amount: number, betType: string, lineValue: number) => {
+    if (!currentUser?.email) {
+      toast.info("請先登入以進行投注預測");
+      return;
+    }
+    try {
+      const res = await gasApi.placeBet({
+        matchId,
+        team,
+        amount,
+        betType,
+        lineValue,
+        playerEmail: currentUser.email
+      });
+      if (res.status === 'success') {
+        toast.success(res.message);
+        // 手動更新本地狀態，直到 WS 廣播到來
+        const status = await gasApi.getBetStatus(matchId, currentUser.email);
+        setBetStatuses(prev => ({ ...prev, [matchId]: status.data || status }));
+        // 同步更新玩家羽毛
+        queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "投注失敗");
+    }
+  }, [currentUser, setBetStatuses, queryClient]);
+
+  // 為所有進行中的比賽抓取初始投注狀態
+  React.useEffect(() => {
+    if (!isSyncInitialized || !syncState.state?.courts) return;
+    
+    syncState.state.courts.forEach(async (court: any) => {
+      if (court.matchId && !betStatuses[court.matchId]) {
+        try {
+          const status = await gasApi.getBetStatus(court.matchId, currentUser?.email);
+          setBetStatuses(prev => ({ ...prev, [court.matchId]: status.data || status }));
+        } catch (e) { /* ignore */ }
+      }
+    });
+  }, [syncState.state?.courts, isSyncInitialized, currentUser?.email, setBetStatuses]);
 
   // 當遠端同步狀態的版本號更新時，主動強制抓取，達成即時同步
   React.useEffect(() => {
@@ -102,7 +154,7 @@ export function DashboardPage() {
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
 
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isLocalSyncing, syncingCourtIds, isGuest,
+    handleTakeover, hasControl, isSyncing, isLocalSyncing, syncingCourtIds,
     syncToRemote,
     isAutoMode, setIsAutoMode,
     ignoreFatigue, setIgnoreFatigue,
@@ -211,13 +263,7 @@ export function DashboardPage() {
         onToggleFullscreen={toggleFullscreen}
         onRefresh={() => { refetchPlayers(); refetchMatches(); fetchState(); }}
         onSettings={() => setIsSettingsOpen(true)}
-        hasControl={hasControl}
-        currentControllerName={currentControllerName}
-        onTakeover={handleTakeover}
-        isSyncing={isSyncing}
-        isGuest={isGuest}
-        isLockedByMe={isLockedByMe}
-        isLockedByOther={isLockedByOther}
+
         summary={summary}
         onlineCount={onlineCount}
 
@@ -268,6 +314,9 @@ export function DashboardPage() {
                       }
                       hasControl={hasControl}
                       useCareerWeight={useCareerWeight}
+                      matchId={court.matchId}
+                      betStatus={court.matchId ? betStatuses[court.matchId] : null}
+                      onBet={handleBet}
                     />
                   </div>
                 ))}
@@ -392,6 +441,14 @@ export function DashboardPage() {
           team1={[activeCourt.players[0]!, activeCourt.players[1]!]}
           team2={[activeCourt.players[2]!, activeCourt.players[3]!]}
           isSubmitting={submittingMatch}
+          requireScore={
+            activeCourt.matchId ? (
+              (betStatuses[activeCourt.matchId]?.handicap?.team1Total || 0) > 0 ||
+              (betStatuses[activeCourt.matchId]?.handicap?.team2Total || 0) > 0 ||
+              (betStatuses[activeCourt.matchId]?.overUnder?.team1Total || 0) > 0 ||
+              (betStatuses[activeCourt.matchId]?.overUnder?.team2Total || 0) > 0
+            ) : false
+          }
         />
       )}
       
@@ -409,6 +466,9 @@ export function DashboardPage() {
         matchHistory={matchHistory}
         players={players}
       />
+      
+      {/* 楓之谷風格尬廣聊天室 */}
+      <GlobalChat messages={chatMessages} />
     </div>
   );
 }

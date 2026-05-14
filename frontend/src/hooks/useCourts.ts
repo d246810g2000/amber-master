@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { getTaipeiDateString, getTaipeiISOString } from '../lib/utils';
 import * as matchEngine from '../lib/matchEngine';
 import type { DerivedPlayer } from '../lib/matchEngine';
@@ -300,14 +301,7 @@ export function useCourts({
   }, [syncState, players]);
 
   const hasControl = !!currentUser;
-  const isLockedByMe = !!currentUser && syncState.state?.controller === currentUser?.email;
-  // 在協作模式下，不再有「被別人鎖定」這回事，大家都能改
-  const isLockedByOther = false; 
-  const rawControllerName = syncState.state?.controllerName || syncState.state?.controller || "無";
-  const currentControllerName = (rawControllerName === 'admin' || rawControllerName === '超級管理員') 
-    ? '專業撿球大隊長' 
-    : rawControllerName;
-  const isGuest = !currentUser;
+
 
   // Auto Mode Logic
   useEffect(() => {
@@ -858,8 +852,22 @@ export function useCourts({
       setError("您目前沒有控制權，請先取得主動權");
       return;
     }
-    const court = courts.find(c => c.id === courtId);
+    const court = courtsRef.current.find(c => c.id === courtId);
     if (!court) return;
+
+    // 如果比賽已經開始（有 matchId），呼叫刪除 API 觸發退款與校準
+    if (court.matchId) {
+      console.log("DEBUG: Calling deleteMatch for ID:", court.matchId);
+      try {
+        const res = await gasApi.deleteMatch(court.matchId);
+        console.log("DEBUG: deleteMatch response:", res);
+      } catch (err) {
+        console.error("Failed to delete match on cancel:", err);
+        toast.error("退款請求失敗，請聯絡管理員");
+      }
+    } else {
+      console.log("DEBUG: No matchId found for court", courtId, court);
+    }
 
     const participants = court.players.filter(p => p !== null) as Player[];
     const newStatus: Record<string, PlayerStatus> = {};
@@ -894,7 +902,7 @@ export function useCourts({
     toggleManualSelection, handleGoToCourt, handleEndMatch, confirmWinner, handleCancelMatch,
 
     getPlayerTeamColor,
-    handleTakeover, hasControl, isLockedByMe, isLockedByOther, currentControllerName, isSyncing, isFetching, isLocalSyncing, syncingCourtIds, isGuest,
+    handleTakeover, hasControl, isSyncing, isFetching, isLocalSyncing, syncingCourtIds,
     isRemoteSyncPending: pendingRemoteSyncCount > 0,
     syncToRemote,
     isAutoMode, setIsAutoMode,

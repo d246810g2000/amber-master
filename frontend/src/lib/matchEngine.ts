@@ -15,6 +15,8 @@ export interface DerivedPlayer extends Player {
   winRate: number;
   lastPlayed?: string;
   streak: number;
+  feathers: number;
+  last_feather_claim?: string;
 }
 
 export interface PlayerHistoryResult {

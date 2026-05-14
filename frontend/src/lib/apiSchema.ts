@@ -3,12 +3,14 @@ import { z } from 'zod';
 export const RawPlayerSchema = z.object({
   id: z.string(),
   name: z.string(),
-  avatar: z.string().optional(),
+  avatar: z.string().nullable().optional(),
   hasBinding: z.boolean().optional(),
   mu: z.coerce.number().optional(),
   sigma: z.coerce.number().optional(),
   isGoogleLinked: z.boolean().optional(),
   type: z.enum(['resident', 'guest']).optional().default('guest'),
+  feathers: z.coerce.number().optional().default(0),
+  last_feather_claim: z.string().nullable().optional(),
 });
 
 export const PlayerBindingSchema = z.object({
@@ -20,7 +22,7 @@ export const UserBindingSchema = z.object({
   isBound: z.boolean(),
   playerId: z.string().optional(),
   playerName: z.string().optional(),
-  avatar: z.string().optional(),
+  avatar: z.string().nullable().optional(),
 });
 
 export const RawPlayerStatSchema = z.object({
@@ -54,7 +56,7 @@ export const RawPlayerStatSchema = z.object({
 export const RawMatchPlayerSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(val => String(val)).optional(),
   name: z.string(),
-  avatar: z.string().optional(),
+  avatar: z.string().nullable().optional(),
   muBefore: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   muAfter: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   dailyMuBefore: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
@@ -86,10 +88,20 @@ export const RawMatchSchema = z.object({
 
 export const GasResponseSchema = <T extends z.ZodTypeAny>(schema: T) => z.object({
   status: z.enum(['success', 'error', 'conflict']),
-  data: schema.optional(),
-  message: z.string().optional(),
+  data: schema.nullable().optional(),
+  message: z.string().nullable().optional(),
+});
+
+export const FeatherTransactionSchema = z.object({
+  id: z.number(),
+  player_id: z.string(),
+  amount: z.number(),
+  type: z.string(),
+  description: z.string().nullable().optional(),
+  created_at: z.string(),
 });
 
 export type RawPlayer = z.infer<typeof RawPlayerSchema>;
 export type RawPlayerStat = z.infer<typeof RawPlayerStatSchema>;
 export type RawMatch = z.infer<typeof RawMatchSchema>;
+export type FeatherTransaction = z.infer<typeof FeatherTransactionSchema>;

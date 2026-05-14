@@ -14,6 +14,14 @@ export function getTaipeiDateString(date: Date = new Date()) {
   }).format(date);
 }
 
+export function isTaipeiWednesday(date: Date = new Date()) {
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    weekday: 'short'
+  }).format(date);
+  return day === 'Wed';
+}
+
 export function getTaipeiISOString(date: Date = new Date()) {
   // Returns YYYY-MM-DDTHH:mm:ss for Taipei local time
   const taipeiStr = new Intl.DateTimeFormat('en-CA', {

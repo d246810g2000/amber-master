@@ -11,8 +11,35 @@ CREATE TABLE IF NOT EXISTS players (
     type VARCHAR(20) DEFAULT 'guest',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    feathers INT DEFAULT 0,
+    last_feather_claim DATE,
     INDEX idx_name (name),
     INDEX idx_email (email)
+);
+
+-- Bets Table
+CREATE TABLE IF NOT EXISTS bets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id VARCHAR(50) NOT NULL,
+    match_id VARCHAR(50),
+    team INT,
+    amount INT NOT NULL,
+    bet_type VARCHAR(20) DEFAULT 'moneyline',
+    line_value FLOAT DEFAULT 0.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_settled INT DEFAULT 0,
+    INDEX idx_match (match_id)
+);
+
+-- Feather Transactions Table
+CREATE TABLE IF NOT EXISTS feather_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id VARCHAR(50) NOT NULL,
+    amount INT NOT NULL,
+    type VARCHAR(50),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_player (player_id)
 );
 
 -- Matches Table

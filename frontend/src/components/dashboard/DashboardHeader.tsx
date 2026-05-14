@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from 'sonner';
 import Settings from "lucide-react/dist/esm/icons/settings";
 import Maximize from "lucide-react/dist/esm/icons/maximize";
 import Minimize from "lucide-react/dist/esm/icons/minimize";
@@ -8,6 +9,11 @@ import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
 import { cn } from '../../lib/utils';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Feather from "lucide-react/dist/esm/icons/feather";
+import { useAuth } from '../../context/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as gasApi from '../../lib/gasApi';
+import { getTaipeiDateString, isTaipeiWednesday } from '../../lib/utils';
 
 
 const BadmintonIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
@@ -54,13 +60,7 @@ interface DashboardHeaderProps {
   onToggleFullscreen: () => void;
   onRefresh: () => void;
   onSettings: () => void;
-  hasControl: boolean;
-  currentControllerName: string;
-  onTakeover: () => void;
-  isSyncing: boolean;
-  isGuest: boolean;
-  isLockedByMe: boolean;
-  isLockedByOther: boolean;
+
   summary?: {
     totalMatches: number;
     activePlayerCount: number;
@@ -74,11 +74,57 @@ interface DashboardHeaderProps {
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
   onToggleBanner, onToggleFullscreen, onRefresh, onSettings,
-  hasControl, currentControllerName, onTakeover, isSyncing, isGuest,
-  isLockedByMe, isLockedByOther,
-  summary, onlineCount
 
+  summary, onlineCount
 }) => {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const [claiming, setClaiming] = React.useState(false);
+
+  const bindingQuery = useQuery({
+    queryKey: ['userBinding', currentUser?.email ?? ''],
+    queryFn: () => gasApi.getUserBinding(currentUser!.email),
+    enabled: !!currentUser?.email,
+    staleTime: 30_000,
+  });
+
+  const basePlayersQuery = useQuery({
+    queryKey: ['players-base'],
+    queryFn: gasApi.fetchPlayers,
+    enabled: !!currentUser?.email,
+    staleTime: 60_000,
+  });
+
+  const boundPlayer = React.useMemo(() => {
+    if (!bindingQuery.data?.isBound || !bindingQuery.data.playerId) return undefined;
+    return basePlayersQuery.data?.find(p => p.id === bindingQuery.data.playerId);
+  }, [bindingQuery.data, basePlayersQuery.data]);
+
+  const hasClaimedToday = React.useMemo(() => {
+    if (!boundPlayer?.last_feather_claim) return false;
+    return boundPlayer.last_feather_claim === getTaipeiDateString();
+  }, [boundPlayer]);
+
+  const isGameDay = true; // 暫時改為 true 以方便測試
+
+  const handleClaimFeathers = async () => {
+    if (!currentUser?.email || claiming) return;
+    setClaiming(true);
+    try {
+      const res = await gasApi.claimDailyFeathers(currentUser.email);
+      if (res.status === 'success') {
+        toast.success(res.message);
+        queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || '領取失敗');
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <header className="flex flex-col mb-4 md:mb-6 bg-white dark:bg-slate-900 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 shrink-0 overflow-hidden">
       <div className="flex flex-nowrap justify-between items-center p-3 md:p-5 gap-2 md:gap-0 overflow-x-auto scrollbar-hide">
@@ -136,18 +182,27 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </span>
           </div>
 
-          {/* Last Operator Status */}
-          <div className="flex items-center gap-1.5 md:gap-2 px-2 py-1 md:px-3 md:py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 transition-all mr-1 md:mr-2 shrink-0" title={isGuest ? "請先登入 Google 帳號以進行操作" : undefined}>
-            <span className={cn(
-              "w-2 h-2 rounded-full",
-              isGuest ? "bg-slate-300 dark:bg-slate-600" : "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-            )} />
-            <div className="flex flex-col">
-              <span className="text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[60px] sm:max-w-none">
-                {isGuest ? "訪客 (唯讀)" : `操作者: ${(currentControllerName === 'admin' || currentControllerName === '超級管理員') ? '專業撿球大隊長' : currentControllerName}`}
+          {/* Feathers */}
+          {currentUser && (
+            <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800/50 transition-all shrink-0">
+              <Feather className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400" />
+              <span className="text-[10px] md:text-[11px] font-black text-sky-700 dark:text-sky-300 tabular-nums">
+                {boundPlayer?.feathers || 0}
               </span>
+              {!hasClaimedToday && boundPlayer && isGameDay && (
+                <button
+                  onClick={handleClaimFeathers}
+                  disabled={claiming}
+                  className="ml-1 px-1.5 py-0.5 bg-sky-500 hover:bg-sky-600 text-white text-[8px] md:text-[10px] font-black rounded-lg transition-all active:scale-90 animate-bounce"
+                  title="領取每日羽毛"
+                >
+                  {claiming ? '...' : '領取'}
+                </button>
+              )}
             </div>
-          </div>
+          )}
+
+
 
           <button
             onClick={onToggleFullscreen}

@@ -11,6 +11,7 @@ interface WinnerModalProps {
   team1: Player[];
   team2: Player[];
   isSubmitting?: boolean;
+  requireScore?: boolean;
 }
 
 export function WinnerModal({
@@ -20,9 +21,11 @@ export function WinnerModal({
   team1,
   team2,
   isSubmitting = false,
+  requireScore = false,
 }: WinnerModalProps) {
   const [score1, setScore1] = useState("");
   const [score2, setScore2] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -53,8 +56,9 @@ export function WinnerModal({
         {/* Score Input (Separated Team 1 vs Team 2) */}
         <div className="mb-6 flex flex-col items-center">
           <label className="block text-[11px] font-bold text-slate-500 mb-2 tracking-wide uppercase text-center">
-            比分 Score (選填)
+            比分 Score {requireScore ? <span className="text-rose-500">(必填)</span> : "(選填)"}
           </label>
+          {error && <div className="text-[10px] font-bold text-rose-500 mb-2 animate-bounce">{error}</div>}
           <div className="flex items-center justify-center gap-3">
             <div className="flex flex-col items-center group">
               <span className="text-[10px] text-rose-400 font-bold mb-1 uppercase tracking-wider opacity-60 group-focus-within:opacity-100 transition-opacity">隊伍 1</span>
@@ -88,10 +92,15 @@ export function WinnerModal({
         <div className="space-y-3">
           <button
             onClick={() => {
+              if (requireScore && (!score1 || !score2)) {
+                setError("有人下注讓分或大小盤，請務必輸入比分！");
+                return;
+              }
               const finalScore = score1 || score2 ? `${score1}-${score2}` : "";
               onConfirm(1, finalScore);
               setScore1("");
               setScore2("");
+              setError(null);
             }}
             disabled={isSubmitting}
             className={`group w-full py-4 px-4 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-500/5 dark:to-orange-500/5 hover:from-rose-100 hover:to-orange-100 dark:hover:from-rose-500/10 dark:hover:to-orange-500/10 border-2 border-rose-200/50 dark:border-rose-500/20 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 hover:shadow-lg dark:hover:shadow-rose-500/10 hover:shadow-rose-500/20 active:scale-[0.98] md:hover:-translate-y-0.5 ${
@@ -120,10 +129,15 @@ export function WinnerModal({
 
           <button
             onClick={() => {
+              if (requireScore && (!score1 || !score2)) {
+                setError("有人下注讓分或大小盤，請務必輸入比分！");
+                return;
+              }
               const finalScore = score1 || score2 ? `${score1}-${score2}` : "";
               onConfirm(2, finalScore);
               setScore1("");
               setScore2("");
+              setError(null);
             }}
             disabled={isSubmitting}
             className={`group w-full py-4 px-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/5 dark:to-indigo-500/5 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-500/10 dark:hover:to-indigo-500/10 border-2 border-blue-200/50 dark:border-blue-500/20 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 hover:shadow-lg dark:hover:shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] md:hover:-translate-y-0.5 ${

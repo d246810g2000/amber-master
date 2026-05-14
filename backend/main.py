@@ -367,10 +367,32 @@ def batch_delete_matches(req: schemas.MatchBatchDelete, db: Session = Depends(ge
 async def record_match_and_update(req: schemas.MatchRecordRequest, db: Session = Depends(get_db)):
     res = crud.record_match_and_update(db, req)
     if res.get("status") == "success":
+        # 準備勝利公告
+        match_id = req.matchId or res["data"].get("matchId")
+        t1, t2, court_name = crud.get_match_teams(db, match_id)
+        winner_team = 1 if req.winnerTeam == 'Team 1' else 2
+        winners = t1 if winner_team == 1 else t2
+        losers = t2 if winner_team == 1 else t1
+        
+        bet_results = res["data"].get("bet_results", {})
+        odds = bet_results.get("odds", 1.0)
+        payouts = bet_results.get("winners", [])
+        
+        announcement = f"🏆 恭喜！在「{court_name}」中，{winners} 最終擊敗了 {losers}，取得勝利！"
+        
+        if payouts:
+            payout_details = " \n💰 賭神出世："
+            # 只列出前 3 名，避免訊息太長
+            sorted_payouts = sorted(payouts, key=lambda x: x['payout'], reverse=True)
+            for p in sorted_payouts[:3]:
+                payout_details += f" {p['name']} (+{p['payout']})"
+            announcement += f"{payout_details} (賠率 {odds})"
+
         await manager.broadcast({
             "type": "version_update",
             "version": res["data"].get("version"),
-            "source": "match_recorded"
+            "source": "match_recorded",
+            "message": announcement
         })
     return res
 
@@ -545,6 +567,55 @@ async def recalibrate_ratings(db: Session = Depends(get_db)):
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
     return success(result["message"])
+
+# Feathers & Betting API
+@app.post("/feathers/claim")
+def claim_feathers(req: schemas.ClaimFeathersRequest, db: Session = Depends(get_db)):
+    result = crud.claim_daily_feathers(db, req.email)
+    return success(result)
+
+@app.get("/players/{player_id}/feathers")
+def get_player_feathers(player_id: str, limit: int = 50, db: Session = Depends(get_db)):
+    transactions = crud.get_feather_transactions(db, player_id, limit)
+    return success(transactions)
+
+@app.post("/bets")
+async def place_bet(req: schemas.BetRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    
+    result = crud.place_bet(db, player.id, req.matchId, req.team, req.amount)
+    if result.get("status") == "error":
+        return error(result.get("message"))
+    
+    # 廣播更新 (廣播公用狀態與尬廣訊息)
+    t1, t2, court_name = crud.get_match_teams(db, req.matchId)
+    bet_status = crud.get_bet_status(db, req.matchId, None)
+    
+    target_team_name = t1 if req.team == 1 else t2
+    other_team_name = t2 if req.team == 1 else t1
+    announcement = f"📣 {player.name} 豪擲了 {req.amount} 根羽毛，在「{court_name}」看好「{target_team_name}」會打敗「{other_team_name}」！"
+    
+    await manager.broadcast({
+        "type": "bet_update",
+        "matchId": req.matchId,
+        "status": bet_status,
+        "message": announcement
+    })
+    
+    return success(result)
+
+@app.get("/bets/status")
+def get_bet_status(matchId: str, email: Optional[str] = None, db: Session = Depends(get_db)):
+    player_id = None
+    if email:
+        player = crud.get_player_by_email(db, email)
+        if player:
+            player_id = player.id
+            
+    result = crud.get_bet_status(db, matchId, player_id)
+    return success(result)
 
 if __name__ == "__main__":
     import uvicorn

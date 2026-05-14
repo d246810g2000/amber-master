@@ -42,6 +42,8 @@ class Player(PlayerBase):
     id: str
     mu: float
     sigma: float
+    feathers: int
+    last_feather_claim: Optional[date] = None
     hasBinding: bool = False
     isGoogleLinked: bool = False
 
@@ -152,3 +154,51 @@ class MatchmakingRequest(BaseModel):
 
 class AdminLoginRequest(BaseModel):
     password: str
+
+class BetBase(BaseModel):
+    match_id: str
+    team: int
+    amount: int
+
+class BetCreate(BetBase):
+    pass
+
+class Bet(BetBase):
+    id: int
+    player_id: str
+    created_at: datetime
+    is_settled: int
+
+    class Config:
+        from_attributes = True
+
+class BetRequest(BaseModel):
+    matchId: str
+    team: int
+    amount: int
+    playerEmail: str
+    betType: Optional[str] = "moneyline"
+    lineValue: Optional[float] = 0.0
+
+class ClaimFeathersRequest(BaseModel):
+    email: str
+
+class FeatherClaimResponse(BaseModel):
+    status: str
+    amount: int
+    message: str
+
+class BetTypeStatus(BaseModel):
+    team1Total: int = 0
+    team2Total: int = 0
+    odds1: float = 1.0
+    odds2: float = 1.0
+    line: float = 0.0
+    myBetAmount: int = 0
+    myBetTeam: Optional[int] = None
+
+class BetStatus(BaseModel):
+    matchId: str
+    moneyline: BetTypeStatus
+    handicap: BetTypeStatus
+    overUnder: BetTypeStatus

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, Share2, Loader2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
@@ -56,7 +57,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       link.click();
     } catch (err) {
       console.error('Failed to export image:', err);
-      alert('匯出圖片失敗，請稍後再試。');
+      toast.error('匯出圖片失敗，請稍後再試。');
     } finally {
       setIsExporting(false);
     }

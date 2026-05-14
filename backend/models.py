@@ -14,6 +14,8 @@ class Player(Base):
     type = Column(String(20), default="guest")               # resident, guest
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    feathers = Column(Integer, default=0)
+    last_feather_claim = Column(Date)
 
     stats = relationship("PlayerStat", back_populates="player")
 
@@ -59,3 +61,24 @@ class CourtState(Base):
     state = Column(JSON)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(String(255))                        # 與 SQL 統一為 255
+
+class Bet(Base):
+    __tablename__ = "bets"
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    match_id = Column(String(50), index=True)
+    team = Column(Integer) # 1 or 2 (For Over/Under: 1=Over, 2=Under)
+    amount = Column(Integer, nullable=False)
+    bet_type = Column(String(20), default="moneyline") # moneyline, handicap, over_under
+    line_value = Column(Float, default=0.0) # e.g., -3.5 or 40.5
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_settled = Column(Integer, default=0) # 0: pending, 1: settled, 2: cancelled
+
+class FeatherTransaction(Base):
+    __tablename__ = "feather_transactions"
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    type = Column(String(50)) # daily_claim, bet_placed, bet_won, etc.
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)

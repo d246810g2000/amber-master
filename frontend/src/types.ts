@@ -10,6 +10,8 @@ export interface Player {
   email?: string;
   hasBinding?: boolean;
   type?: 'resident' | 'guest';
+  feathers?: number;
+  last_feather_claim?: string;
 }
 
 export interface MatchPlayer {

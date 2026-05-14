@@ -48,7 +48,10 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
         career_mu: p.mu || 25.0, // 保留生涯原始戰力
         matchCount: s ? s.matchCount : 0,
         winCount: s ? s.winCount : 0,
+        lossCount: s ? (s.matchCount - s.winCount) : 0,
         winRate: s ? s.winRate : 0,
+        feathers: p.feathers || 0,
+        last_feather_claim: p.last_feather_claim,
         streak: 0,
       } as DerivedPlayer;
     }).sort((a: any, b: any) => b.mu - a.mu);

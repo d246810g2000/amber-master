@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import ImageDown from 'lucide-react/dist/esm/icons/image-down';
@@ -303,7 +304,7 @@ export const DailyBattleSummaryModal: React.FC<DailyBattleSummaryModalProps> = (
       link.click();
     } catch (e) {
       console.error(e);
-      alert('匯出圖片失敗，請稍後再試。');
+      toast.error('匯出圖片失敗，請稍後再試。');
     } finally {
       setExporting(false);
     }

@@ -32,7 +32,17 @@ interface CourtCardProps {
   /** 連續未上場場次（僅 Target 推薦卡傳入）；`null` 表示當日尚未上場，角標顯示「無」 */
   missedStreakByPlayerId?: Record<string, number | null>;
   useCareerWeight?: boolean;
+  matchId?: string | null;
+  betStatus?: {
+    matchId: string;
+    moneyline: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
+    handicap: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
+    overUnder: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
+  } | null;
+  onBet?: (matchId: string, team: number, amount: number, betType: string, lineValue: number) => void;
 }
+
+const BET_AMOUNTS = [50, 100, 200, 500];
 
 const PlayerSlot = React.memo(({ 
   player, 
@@ -128,9 +138,17 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   onToggleAuto,
   missedStreakByPlayerId,
   isCalculating,
-  useCareerWeight,
+  useCareerWeight = false,
+  matchId,
+  betStatus,
+  onBet,
 }) => {
+  const [bettingTeam, setBettingTeam] = useState<number | null>(null);
+  const [activeBetType, setActiveBetType] = useState<"moneyline" | "handicap" | "overUnder">("moneyline");
   const readOnly = hasControl === false;
+  
+  // 獲取目前選定類型的數據
+  const currentStatus = betStatus?.[activeBetType] || { odds1: 1, odds2: 1, team1Total: 0, team2Total: 0, myBetTeam: null, myBetAmount: 0, line: 0 };
   const team1Score = players[0] && players[1] ? Math.round(((players[0].mu || 0) + (players[1].mu || 0)) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round(((players[2].mu || 0) + (players[3].mu || 0)) * 10) : 0;
 
@@ -142,6 +160,30 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
     ? Math.round((calculateWeightedMu(players[2].mu || 0, players[2].career_mu || players[2].mu || 0) + 
                   calculateWeightedMu(players[3].mu || 0, players[3].career_mu || players[3].mu || 0)) * 10) 
     : 0;
+
+  const renderBetButton = (team: number) => {
+    if (isRecommended || actionText !== "結束" || !matchId || !betStatus) return null;
+    
+    // 檢查是否在任何玩法中有投注 (獨贏/讓分/大小 只限一注)
+    const hasAnyBet = !!(betStatus.moneyline.myBetTeam || betStatus.handicap.myBetTeam || betStatus.overUnder.myBetTeam);
+    const isThisTeamSelected = currentStatus.myBetTeam === team;
+    
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setBettingTeam(currentStatus.myBetTeam || 1); }}
+        disabled={hasAnyBet}
+        className={cn(
+          "flex items-center justify-center px-2 py-1 rounded-full border transition-all pointer-events-auto min-w-[40px] shadow-lg",
+          hasAnyBet
+            ? "bg-emerald-500 border-emerald-400 text-white"
+            : "bg-black/60 border-white/20 hover:bg-black/80 hover:scale-105 text-white/90",
+          hasAnyBet && !currentStatus.myBetTeam && "opacity-40 grayscale"
+        )}
+      >
+        <span className="text-[9px] md:text-[10px] font-black drop-shadow-sm leading-none">投注</span>
+      </button>
+    );
+  };
 
   const [elapsed, setElapsed] = useState<string>("00:00");
 
@@ -163,6 +205,20 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
+
+  // 自動切換分頁：如果目前選的分頁是被鎖定的，自動跳轉到第一個可用的分頁
+  useEffect(() => {
+    if (bettingTeam && betStatus) {
+      const currentLocked = (betStatus as any)[activeBetType]?.locked;
+      if (currentLocked) {
+        const types = ["moneyline", "handicap", "overUnder"] as const;
+        const firstAvailable = types.find(t => !(betStatus as any)[t]?.locked);
+        if (firstAvailable) {
+          setActiveBetType(firstAvailable);
+        }
+      }
+    }
+  }, [bettingTeam, betStatus, activeBetType]);
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden flex flex-col shadow-sm border border-slate-100 dark:border-slate-800 transition-all hover:shadow-lg w-full max-w-[340px] md:max-w-[220px] mx-auto group">
@@ -216,6 +272,18 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       {/* Court Floor - FULL PRECISION ALIGNMENT WITH INSET */}
       <div className="relative bg-[#4A7265] dark:bg-[#3d5c52] h-[220px] md:h-[300px] flex flex-col justify-between overflow-hidden shrink-0 select-none">
         
+        {/* Team Favorite Labels - Absolute Top/Bottom of card */}
+        {team1Score > team2Score && team2Score > 0 && (
+          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[45] pointer-events-none">
+            <span className="bg-rose-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-rose-500/30 animate-pulse whitespace-nowrap">FAVORITE 強勢</span>
+          </div>
+        )}
+        {team2Score > team1Score && team1Score > 0 && (
+          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-[45] pointer-events-none">
+            <span className="bg-blue-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-blue-500/30 animate-pulse whitespace-nowrap">FAVORITE 強勢</span>
+          </div>
+        )}
+
         {/* Court Markings - Absolute Relative to the 300px floor */}
         <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute inset-x-[7.5%] inset-y-0 border-x-[1px] border-white/30 dark:border-white/20"></div>
@@ -273,21 +341,161 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
         {/* Center VS & Points */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center py-1 md:py-2 z-40 pointer-events-none w-full">
-          <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none mb-0.5 md:mb-1 transition-all duration-300", team1Score === 0 && "opacity-0 scale-75")}>
-            {team1Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team1Weighted})</span>}
+          
+          {/* Team 1 Score & Bet */}
+          <div className="relative flex items-center justify-center w-full mb-1 md:mb-2 translate-y-[5px] md:translate-y-[10px]">
+            <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none transition-all duration-300", team1Score === 0 && "opacity-0 scale-75")}>
+              {team1Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team1Weighted})</span>}
+            </div>
           </div>
           
-          <div className="relative my-0.5 scale-75 md:scale-90">
-            <div className="bg-emerald-950/90 backdrop-blur-md px-2 md:px-3 py-0.5 md:py-1 rounded-full border border-white/30 shadow-2xl flex items-center justify-center">
-              <span className="text-[9px] md:text-[10px] font-black text-emerald-400 italic uppercase tracking-widest">VS</span>
+          {/* VS / POOL 核心區 */}
+          <div className="relative my-1 md:my-1.5 scale-75 md:scale-90 flex items-center gap-2">
+            <div className="bg-emerald-950/90 backdrop-blur-md px-2 md:px-3 py-0.5 md:py-1 rounded-full border border-white/30 shadow-2xl flex flex-col items-center justify-center">
+              {betStatus && !isRecommended && actionText === "結束" ? (
+                <>
+                  <span className="text-[5px] font-black text-sky-400 uppercase leading-none mb-0.5 tracking-tighter">
+                    {activeBetType === "moneyline" ? "獨贏" : activeBetType === "handicap" ? "讓分" : "總分"} POOL
+                  </span>
+                  <span className="text-[8px] font-black text-white leading-none">{(currentStatus.team1Total || 0) + (currentStatus.team2Total || 0)}</span>
+                </>
+              ) : (
+                <div className="flex flex-col items-center">
+                   <span className="text-[9px] md:text-[10px] font-black text-emerald-400 italic uppercase tracking-widest">VS</span>
+                   {team1Score > 0 && team2Score > 0 && (
+                     <span className="text-[6px] text-white/40 font-bold whitespace-nowrap">
+                       WIN %: {Math.round((0.5 + (Math.abs(team1Score - team2Score) / 100) * 0.4) * 100)}%
+                     </span>
+                   )}
+                </div>
+              )}
             </div>
+            {renderBetButton(1)}
             <div className="absolute inset-0 bg-emerald-400/25 blur-xl rounded-full -z-10 animate-pulse"></div>
           </div>
           
-          <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none mt-0.5 md:mt-1 transition-all duration-300", team2Score === 0 && "opacity-0 scale-75")}>
-            {team2Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team2Weighted})</span>}
+          {/* Team 2 Score & Bet */}
+          <div className="relative flex items-center justify-center w-full mt-1 md:mt-2 translate-y-[-5px] md:translate-y-[-10px]">
+            <div className={cn("text-sm md:text-xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tighter leading-none transition-all duration-300", team2Score === 0 && "opacity-0 scale-75")}>
+              {team2Score}{useCareerWeight && <span className="text-[10px] md:text-sm opacity-80 ml-1">({team2Weighted})</span>}
+            </div>
           </div>
         </div>
+
+        {/* Advanced Betting Selector Overlay */}
+        {bettingTeam && (
+          <div className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-3 animate-in fade-in zoom-in duration-200">
+            {/* Bet Type Tabs */}
+            <div className="flex bg-white/5 p-1 rounded-xl gap-1 mb-4 w-full max-w-[240px]">
+              {(["moneyline", "handicap", "overUnder"] as const).map((type) => {
+                const labelMap = { moneyline: "獨贏", handicap: "讓分", overUnder: "大小" };
+                const isLocked = betStatus?.[type]?.locked;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => !isLocked && setActiveBetType(type)}
+                    disabled={isLocked}
+                    className={cn(
+                      "flex-1 py-2 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center",
+                      activeBetType === type 
+                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" 
+                        : isLocked
+                          ? "text-white/10 cursor-not-allowed bg-transparent"
+                          : "text-white/40 hover:text-white/70 hover:bg-white/5"
+                    )}
+                  >
+                    <span>{labelMap[type]}</span>
+                    {isLocked && <span className="text-[7px] opacity-50 font-normal">未開盤</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Choice Selector (Player Names or Over/Under) */}
+            <div className="flex w-full max-w-[240px] gap-2 mb-4">
+              <button
+                onClick={() => setBettingTeam(1)}
+                className={cn(
+                  "flex-1 py-2 px-1 rounded-xl border font-black text-[10px] transition-all overflow-hidden",
+                  bettingTeam === 1 
+                    ? "bg-rose-500 border-rose-400 text-white shadow-lg" 
+                    : "bg-white/5 border-white/10 text-white/40"
+                )}
+              >
+                {activeBetType === "overUnder" ? "大於" : (
+                  <span className="truncate block">
+                    {players[0]?.name || "T1"} {players[1] ? `& ${players[1].name}` : ""}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setBettingTeam(2)}
+                className={cn(
+                  "flex-1 py-2 px-1 rounded-xl border font-black text-[10px] transition-all overflow-hidden",
+                  bettingTeam === 2 
+                    ? "bg-blue-500 border-blue-400 text-white shadow-lg" 
+                    : "bg-white/5 border-white/10 text-white/40"
+                )}
+              >
+                {activeBetType === "overUnder" ? "小於" : (
+                  <span className="truncate block">
+                    {players[2]?.name || "T2"} {players[3] ? `& ${players[3].name}` : ""}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="text-center mb-4">
+              <h4 className="text-white font-black text-xs uppercase tracking-widest mb-1">
+                {activeBetType === "moneyline" ? (
+                  `預測 ${bettingTeam === 1 
+                    ? (players[0]?.name || "T1") + (players[1] ? " & " + players[1].name : "")
+                    : (players[2]?.name || "T2") + (players[3] ? " & " + players[3].name : "")} 獲勝`
+                ) : 
+                 activeBetType === "handicap" ? (
+                   bettingTeam === 1 
+                    ? `預測 ${players[0]?.name || "T1"} 讓分 (${currentStatus.line > 0 ? "+" : ""}${currentStatus.line})`
+                    : `預測 ${players[2]?.name || "T2"} 受讓 (${currentStatus.line > 0 ? "-" : "+"}${Math.abs(currentStatus.line)})`
+                 ) :
+                 `總分 ${bettingTeam === 1 ? "大於" : "小於"} ${currentStatus.line}`}
+              </h4>
+              <div className="text-emerald-400 font-black text-[9px] uppercase tracking-tighter opacity-80">
+                投注金額
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 w-full max-w-[160px] mb-4">
+              {BET_AMOUNTS.map(amount => {
+                const isLocked = (currentStatus as any).locked;
+                return (
+                  <button
+                    key={amount}
+                    onClick={() => {
+                      if (!isLocked && matchId) onBet?.(matchId, bettingTeam, amount, activeBetType, currentStatus.line);
+                      setBettingTeam(null);
+                    }}
+                    disabled={isLocked}
+                    className={cn(
+                      "border border-white/10 py-2 rounded-xl text-white font-black text-xs transition-all active:scale-95",
+                      isLocked 
+                        ? "bg-white/5 text-white/10 cursor-not-allowed" 
+                        : "bg-white/10 hover:bg-emerald-500 hover:text-white"
+                    )}
+                  >
+                    {amount}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <button 
+              onClick={() => setBettingTeam(null)} 
+              className="text-white/40 text-[9px] font-bold hover:text-white uppercase tracking-widest"
+            >
+              取消返回
+            </button>
+          </div>
+        )}
 
         {/* Team 2 Slots (Inset within Bottom Grid Rectangles) */}
         <PlayerSlot 
@@ -329,6 +537,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             <Loader2 size={32} className="animate-spin text-white drop-shadow-md" />
           </div>
         )}
+
       </div>
 
       {/* Footer：無控制權時不顯示操作鈕，避免只看不操作的人誤觸與困惑 */}
@@ -345,7 +554,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           {isRecommended && onSelectPlayers && (
             <button
               onClick={onSelectPlayers}
-              disabled={isLoading || isActionDisabled}
+              disabled={isLoading || isActionDisabled || !!bettingTeam}
               className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black hover:border-black dark:hover:border-white rounded-xl transition-all active:scale-95 bg-indigo-50/30 dark:bg-indigo-950/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
@@ -357,7 +566,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               {actionText === "結束" && onCancel && (
                 <button
                   onClick={onCancel}
-                  disabled={isLoading || isActionDisabled}
+                  disabled={isLoading || isActionDisabled || !!bettingTeam}
                   className="px-4 py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 w-full"
                 >
                   取消
@@ -366,7 +575,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
               <button
                 onClick={onAction}
-                disabled={isLoading || isActionDisabled || !!isPrimaryActionLocked}
+                disabled={isLoading || isActionDisabled || !!isPrimaryActionLocked || !!bettingTeam}
                 className={cn(
                   "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center gap-2",
                   actionText === "結束" 
