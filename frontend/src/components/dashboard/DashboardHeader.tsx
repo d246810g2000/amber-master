@@ -105,7 +105,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     return boundPlayer.last_feather_claim === getTaipeiDateString();
   }, [boundPlayer]);
 
-  const isGameDay = true; // 暫時改為 true 以方便測試
+  const isGameDay = isTaipeiWednesday();
 
   const handleClaimFeathers = async () => {
     if (!currentUser?.email || claiming) return;
