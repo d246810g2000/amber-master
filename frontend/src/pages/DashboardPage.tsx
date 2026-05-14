@@ -126,13 +126,21 @@ export function DashboardPage() {
     
     syncState.state.courts.forEach(async (court: any) => {
       if (court.matchId && !betStatuses[court.matchId]) {
-        try {
-          const status = await gasApi.getBetStatus(court.matchId, currentUser?.email);
-          setBetStatuses(prev => ({ ...prev, [court.matchId]: status.data || status }));
-        } catch (e) { /* ignore */ }
+        // 嘗試抓取盤口，包含簡單的重試機制（應對後端同步延遲）
+        const fetchWithRetry = async (attempt = 0) => {
+          try {
+            const status = await gasApi.getBetStatus(court.matchId, currentUser?.email);
+            setBetStatuses(prev => ({ ...prev, [court.matchId]: status.data || status }));
+          } catch (e) {
+            if (attempt < 2) {
+              setTimeout(() => fetchWithRetry(attempt + 1), 1500 * (attempt + 1));
+            }
+          }
+        };
+        fetchWithRetry();
       }
     });
-  }, [syncState.state?.courts, isSyncInitialized, currentUser?.email, setBetStatuses]);
+  }, [syncState.state?.courts, syncState.version, isSyncInitialized, currentUser?.email, setBetStatuses]);
 
   // 當遠端同步狀態的版本號更新時，主動強制抓取，達成即時同步
   React.useEffect(() => {

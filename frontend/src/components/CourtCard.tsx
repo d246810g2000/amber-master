@@ -162,7 +162,18 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
     : 0;
 
   const renderBetButton = (team: number) => {
-    if (isRecommended || actionText !== "結束" || !matchId || !betStatus) return null;
+    if (isRecommended || actionText !== "結束" || !matchId) return null;
+    
+    if (!betStatus) {
+      return (
+        <button
+          disabled
+          className="flex items-center justify-center px-2 py-1 rounded-full border border-white/10 bg-black/40 text-white/40 pointer-events-none min-w-[40px] animate-pulse"
+        >
+          <span className="text-[9px] md:text-[10px] font-black leading-none">載入中</span>
+        </button>
+      );
+    }
     
     // 檢查是否在任何玩法中有投注 (獨贏/讓分/大小 只限一注)
     const hasAnyBet = !!(betStatus.moneyline.myBetTeam || betStatus.handicap.myBetTeam || betStatus.overUnder.myBetTeam);
@@ -352,13 +363,17 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           {/* VS / POOL 核心區 */}
           <div className="relative my-1 md:my-1.5 scale-75 md:scale-90 flex items-center gap-2">
             <div className="bg-emerald-950/90 backdrop-blur-md px-2 md:px-3 py-0.5 md:py-1 rounded-full border border-white/30 shadow-2xl flex flex-col items-center justify-center">
-              {betStatus && !isRecommended && actionText === "結束" ? (
-                <>
-                  <span className="text-[5px] font-black text-sky-400 uppercase leading-none mb-0.5 tracking-tighter">
-                    {activeBetType === "moneyline" ? "獨贏" : activeBetType === "handicap" ? "讓分" : "總分"} POOL
-                  </span>
-                  <span className="text-[8px] font-black text-white leading-none">{(currentStatus.team1Total || 0) + (currentStatus.team2Total || 0)}</span>
-                </>
+              {matchId && !isRecommended && actionText === "結束" ? (
+                betStatus ? (
+                  <>
+                    <span className="text-[5px] font-black text-sky-400 uppercase leading-none mb-0.5 tracking-tighter">
+                      {activeBetType === "moneyline" ? "獨贏" : activeBetType === "handicap" ? "讓分" : "總分"} POOL
+                    </span>
+                    <span className="text-[8px] font-black text-white leading-none">{(currentStatus.team1Total || 0) + (currentStatus.team2Total || 0)}</span>
+                  </>
+                ) : (
+                  <span className="text-[8px] font-black text-white/50 animate-pulse">載入中...</span>
+                )
               ) : (
                 <div className="flex flex-col items-center">
                    <span className="text-[9px] md:text-[10px] font-black text-emerald-400 italic uppercase tracking-widest">VS</span>

@@ -913,10 +913,13 @@ def get_match_teams(db: Session, match_id: str, return_mu: bool = False):
                 return t1_str, t2_str, f"場地 {c_name}"
 
     if return_mu: return 50.0, 50.0
-    return "Team 1", "Team 2", "未知場地"
+    return "未知隊伍A", "未知隊伍B", "未知場地"
 
 def get_match_description(db: Session, match_id: str):
-    t1, t2, court = get_match_teams(db, match_id)
+    res = get_match_teams(db, match_id)
+    if not res:
+        return f"未知比賽 ({match_id})"
+    t1, t2, court = res
     return f"[{court}] {t1} vs {t2}"
 
 def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int, bet_type: str = "moneyline", line_value: float = 0.0):
@@ -1012,7 +1015,14 @@ def get_bet_status(db: Session, match_id: str, player_id: Optional[str] = None):
             courts = cs.state.get("courts", [])
             for c in courts:
                 if str(c.get("matchId")) == str(match_id):
-                    p_ids = [str(pid) for pid in c.get("players", []) if pid]
+                    raw_players = c.get("players", [])
+                    p_ids = []
+                    for rp in raw_players:
+                        if not rp: continue
+                        if isinstance(rp, dict):
+                            p_ids.append(str(rp.get("id")))
+                        else:
+                            p_ids.append(str(rp))
                     break
     
     if p_ids:
@@ -1172,44 +1182,49 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
         return {"winners": [], "error": str(e)}
 
 def delete_match(db: Session, match_id: str):
-    print(f"DEBUG: Deleting match {match_id} and checking for bets to refund...")
-    
-    # 不論比賽是否已入庫 (錄入結果)，只要有投注就要退款
-    bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
-    print(f"DEBUG: Found {len(bets)} bets for match {match_id} to refund.")
-    
-    refund_count = 0
-    for bet in bets:
-        player = db.query(models.Player).filter(models.Player.id == bet.player_id).first()
-        if player:
-            print(f"DEBUG: Refunding {bet.amount} feathers to player {player.name} (ID: {player.id})")
-            player.feathers = (player.feathers or 0) + bet.amount
-            # 建立退款交易紀錄
-            match_desc = get_match_description(db, match_id)
-            transaction = models.FeatherTransaction(
-                player_id=player.id,
-                amount=bet.amount,
-                type="bet_refund",
-                description=f"比賽取消退款：{match_desc}"
-            )
-            db.add(transaction)
-            refund_count += 1
-        db.delete(bet)
-    
-    # 嘗試刪除比賽紀錄 (如果已經打完入庫了的話)
-    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
-    if db_match:
-        print(f"DEBUG: Match record found, deleting...")
-        db.delete(db_match)
-    
-    db.commit()
-    print(f"DEBUG: Process completed. Refunded {refund_count} players.")
-    
-    # 如果有刪除比賽，才需要重新校準
-    if db_match:
-        recalibrate_all_ratings(db)
+    try:
+        print(f"DEBUG: Deleting match {match_id} and checking for bets to refund...")
         
-    return {"status": "success", "message": f"Refunded {refund_count} bets and cleaned up match {match_id}"}
+        # 不論比賽是否已入庫 (錄入結果)，只要有投注就要退款
+        bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
+        print(f"DEBUG: Found {len(bets)} bets for match {match_id} to refund.")
+        
+        refund_count = 0
+        for bet in bets:
+            player = db.query(models.Player).filter(models.Player.id == bet.player_id).first()
+            if player:
+                print(f"DEBUG: Refunding {bet.amount} feathers to player {player.name} (ID: {player.id})")
+                player.feathers = (player.feathers or 0) + bet.amount
+                # 建立退款交易紀錄
+                match_desc = get_match_description(db, match_id)
+                transaction = models.FeatherTransaction(
+                    player_id=player.id,
+                    amount=bet.amount,
+                    type="bet_refund",
+                    description=f"比賽取消退款：{match_desc}"
+                )
+                db.add(transaction)
+                refund_count += 1
+            db.delete(bet)
+        
+        # 嘗試刪除比賽紀錄 (如果已經打完入庫了的話)
+        db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+        if db_match:
+            print(f"DEBUG: Match record found, deleting...")
+            db.delete(db_match)
+        
+        db.commit()
+        print(f"DEBUG: Process completed. Refunded {refund_count} players.")
+        
+        # 如果有刪除比賽，才需要重新校準
+        if db_match:
+            recalibrate_all_ratings(db)
+            
+        return {"status": "success", "message": f"Refunded {refund_count} bets and cleaned up match {match_id}"}
+    except Exception as e:
+        db.rollback()
+        print(f"ERROR in delete_match: {str(e)}")
+        return {"status": "error", "message": f"刪除比賽失敗: {str(e)}"}
 
 def batch_update_matches(db: Session, updates: List[schemas.MatchBatchUpdateItem]):
     for up in updates:

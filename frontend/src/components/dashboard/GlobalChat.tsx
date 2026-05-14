@@ -14,7 +14,7 @@ interface GlobalChatProps {
 }
 
 export const GlobalChat: React.FC<GlobalChatProps> = ({ messages }) => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
