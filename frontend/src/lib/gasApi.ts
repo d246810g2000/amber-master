@@ -407,9 +407,24 @@ export async function getBetStatus(matchId: string, email?: string): Promise<any
   return apiGet('/bets/status', params, z.any());
 }
 
-/** 取得球員羽毛交易紀錄 */
-export async function getPlayerFeathers(playerId: string, limit: number = 50): Promise<FeatherTransaction[]> {
-  return apiGet(`/players/${playerId}/feathers`, { limit: String(limit) }, z.array(FeatherTransactionSchema));
+/** 取得商店商品 */
+export async function fetchShopItems(): Promise<any[]> {
+  return apiGet('/shop/items', undefined, z.array(z.any()));
+}
+
+/** 購買商品 */
+export async function buyShopItem(itemId: number, userEmail: string) {
+  return apiPost('/shop/buy', { itemId, userEmail }, z.any());
+}
+
+/** 取得個人背包 */
+export async function fetchInventory(playerId: string): Promise<any[]> {
+  return apiGet(`/players/${playerId}/inventory`, undefined, z.array(z.any()));
+}
+
+/** 裝備商品 */
+export async function equipItem(playerId: string, itemId: number) {
+  return apiPost(`/players/${playerId}/equip`, { itemId }, z.any());
 }
 
 import { FeatherTransactionSchema, type FeatherTransaction } from './apiSchema';

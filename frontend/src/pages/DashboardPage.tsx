@@ -23,6 +23,7 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { GeminiBot } from "../components/chat/GeminiBot";
 import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
+import { ShopModal } from "../components/dashboard/ShopModal";
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -33,6 +34,7 @@ export function DashboardPage() {
   const [filterPlayerIds, setFilterPlayerIds] = useState<string[]>([]);
   const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [dailySummaryOpen, setDailySummaryOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -271,6 +273,7 @@ export function DashboardPage() {
         onToggleFullscreen={toggleFullscreen}
         onRefresh={() => { refetchPlayers(); refetchMatches(); fetchState(); }}
         onSettings={() => setIsSettingsOpen(true)}
+        onShop={() => setIsShopOpen(true)}
 
         summary={summary}
         onlineCount={onlineCount}
@@ -477,6 +480,16 @@ export function DashboardPage() {
       
       {/* 楓之谷風格尬廣聊天室 */}
       <GlobalChat messages={chatMessages} />
+      
+      {isShopOpen && (
+        <ShopModal
+          onClose={() => setIsShopOpen(false)}
+          onUpdate={() => {
+            refetchPlayers();
+            queryClient.invalidateQueries({ queryKey: ['players-base'] });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -16,8 +16,12 @@ class Player(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     feathers = Column(Integer, default=0)
     last_feather_claim = Column(Date)
+    active_title_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
+    active_frame_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
 
     stats = relationship("PlayerStat", back_populates="player")
+    active_title = relationship("ShopItem", foreign_keys=[active_title_id])
+    active_frame = relationship("ShopItem", foreign_keys=[active_frame_id])
 
 class Match(Base):
     __tablename__ = "matches"
@@ -82,3 +86,24 @@ class FeatherTransaction(Base):
     type = Column(String(50)) # daily_claim, bet_placed, bet_won, etc.
     description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class ShopItem(Base):
+    __tablename__ = "shop_items"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    price = Column(Integer, nullable=False)
+    item_type = Column(String(50), nullable=False) # title, frame, aura
+    duration_days = Column(Integer, default=7)
+    image_url = Column(Text) # For frames/auras if we use specific assets
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PlayerInventory(Base):
+    __tablename__ = "player_inventory"
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("shop_items.id"), nullable=False)
+    purchased_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+
+    item = relationship("ShopItem")

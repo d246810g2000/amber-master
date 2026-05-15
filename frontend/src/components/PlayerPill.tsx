@@ -3,6 +3,8 @@ import { Player } from "../types";
 import { cn, getAvatarUrl } from "../lib/utils";
 import Moon from "lucide-react/dist/esm/icons/moon";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Star from "lucide-react/dist/esm/icons/star";
+import Feather from "lucide-react/dist/esm/icons/feather";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 
 interface PlayerPillProps {
@@ -41,9 +43,37 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
     cornerMissed === null || cornerMissed >= 0;
   const isTeamRed = teamColor === "red";
   const isTeamBlue = teamColor === "blue";
+  const activeTitle = player.active_title?.name;
+  const activeFrame = player.active_frame?.name;
+
+  const frameClass = activeFrame === "初學者青銅" 
+    ? "border-amber-700/50 shadow-[0_0_10px_rgba(180,83,9,0.2)]" 
+    : activeFrame === "熱血火紅"
+    ? "border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse-subtle"
+    : activeFrame === "純白羽框"
+    ? "border-white dark:border-white/80 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/20"
+    : activeFrame === "飄零羽落"
+    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_10px_rgba(186,230,253,0.3)]"
+    : null;
+
+  const isFallingFeathers = activeFrame === "飄零羽落";
 
   return (
     <div className="relative group">
+      {/* Falling Feathers Animation Overlay */}
+      {isFallingFeathers && (
+        <div className="absolute inset-0 pointer-events-none opacity-40 overflow-hidden rounded-2xl">
+          <Feather size={8} className="absolute top-0 left-1/4 text-sky-400/40" style={{ animation: 'feather-fall 4s linear infinite' }} />
+          <Feather size={6} className="absolute top-0 left-2/3 text-sky-300/40" style={{ animation: 'feather-fall 5s linear infinite 1.5s' }} />
+          <Feather size={10} className="absolute top-0 left-1/2 text-white/40" style={{ animation: 'feather-fall 6s linear infinite 0.5s' }} />
+        </div>
+      )}
+
+      {/* Pure White Frame Corner Feather */}
+      {activeFrame === "純白羽框" && (
+        <Feather size={12} className="absolute -top-1 -right-1 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-30" />
+      )}
+
       {status === "ready" && onStatusToggle && (
         <button
           onClick={(e) => {
@@ -94,6 +124,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                 : isFatigued
                   ? "bg-slate-100/50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-800 opacity-60 grayscale"
                   : "bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-white/50 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:shadow-md hover:-translate-y-0.5",
+          frameClass
         )}
       >
         {status === "finishing" && (
@@ -137,9 +168,16 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             className="h-full w-full object-cover"
           />
         </div>
-        <span className="text-[10px] md:text-[11px] font-black truncate w-full text-center leading-tight dark:text-slate-200">
-          {player.name}
-        </span>
+        <div className="flex flex-col items-center w-full min-w-0">
+          {activeTitle && (
+            <span className="text-[7px] md:text-[8px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1 rounded-sm border border-amber-200/50 dark:border-amber-500/30 mb-0.5 truncate max-w-full">
+              {activeTitle}
+            </span>
+          )}
+          <span className="text-[10px] md:text-[11px] font-black truncate w-full text-center leading-tight dark:text-slate-200">
+            {player.name}
+          </span>
+        </div>
         <div className="flex items-center gap-0.5 mt-0.5">
           <span className="text-[8px] font-bold opacity-60 dark:text-slate-400">
             {player.matchCount || 0}場

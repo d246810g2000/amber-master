@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS players (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     feathers INT DEFAULT 0,
     last_feather_claim DATE,
+    active_title_id INT,
+    active_frame_id INT,
     INDEX idx_name (name),
     INDEX idx_email (email)
 );
@@ -82,3 +84,35 @@ CREATE TABLE IF NOT EXISTS court_state (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by VARCHAR(255)
 );
+
+-- Shop Items Table
+CREATE TABLE IF NOT EXISTS shop_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    price INT NOT NULL,
+    item_type VARCHAR(50) NOT NULL,
+    duration_days INT DEFAULT 7,
+    image_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Player Inventory Table
+CREATE TABLE IF NOT EXISTS player_inventory (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id VARCHAR(50) NOT NULL,
+    item_id INT NOT NULL,
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    INDEX idx_player_inv (player_id),
+    FOREIGN KEY (player_id) REFERENCES players(id),
+    FOREIGN KEY (item_id) REFERENCES shop_items(id)
+);
+
+-- Seed Shop Items
+INSERT INTO shop_items (name, description, price, item_type, duration_days) VALUES 
+('球館殺手', '霸氣側漏的稱號', 500, 'title', 7),
+('發球機器', '穩定如機器的發球', 500, 'title', 7),
+('羽球萌新', '請大家多多指教', 200, 'title', 7),
+('初學者青銅', '簡約的青銅邊框', 800, 'frame', 7),
+('熱血火紅', '燃燒鬥志的紅色邊框', 800, 'frame', 7);

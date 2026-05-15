@@ -11,6 +11,11 @@ export const RawPlayerSchema = z.object({
   type: z.enum(['resident', 'guest']).optional().default('guest'),
   feathers: z.coerce.number().optional().default(0),
   last_feather_claim: z.string().nullable().optional(),
+  active_title_id: z.coerce.number().nullable().optional(),
+  active_frame_id: z.coerce.number().nullable().optional(),
+  active_title: z.object({ id: z.number(), name: z.string(), item_type: z.string() }).nullable().optional(),
+  active_frame: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
+  email: z.string().nullable().optional(),
 });
 
 export const PlayerBindingSchema = z.object({

@@ -13,6 +13,7 @@ import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus";
 import Share2 from "lucide-react/dist/esm/icons/share-2";
 import Feather from "lucide-react/dist/esm/icons/feather";
+import Package from "lucide-react/dist/esm/icons/package";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
@@ -30,6 +31,7 @@ const CpTrendChart = React.lazy(() => import('./profile/CpTrendChart').then(m =>
 import { PartnerTable } from './profile/PartnerTable';
 import { MatchHistoryTable } from './profile/MatchHistoryTable';
 import { FeatherHistoryTable } from './profile/FeatherHistoryTable';
+import { InventoryTable } from './profile/InventoryTable';
 import { AvatarEditModal } from './profile/AvatarEditModal';
 import { ShareModal } from './share/ShareModal';
 
@@ -152,7 +154,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
-  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers'>('trend');
+  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers' | 'inventory'>('trend');
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
@@ -392,6 +394,21 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   const canQuickBind = !googleBindingQuery.data?.isBound && !userBindingQuery.data?.isBound && !player.hasBinding;
 
+  const activeTitle = player.active_title?.name;
+  const activeFrame = player.active_frame?.name;
+
+  const frameClass = activeFrame === "初學者青銅" 
+    ? "border-amber-700/50 shadow-[0_0_15px_rgba(180,83,9,0.3)] ring-4 ring-amber-700/10" 
+    : activeFrame === "熱血火紅"
+    ? "border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)] ring-4 ring-rose-500/10 animate-pulse-subtle"
+    : activeFrame === "純白羽框"
+    ? "border-white dark:border-white/80 shadow-[0_0_20px_rgba(255,255,255,0.5)] ring-4 ring-white/10"
+    : activeFrame === "飄零羽落"
+    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_15px_rgba(186,230,253,0.4)]"
+    : null;
+
+  const isFallingFeathers = activeFrame === "飄零羽落";
+
   const handleBindAndEnter = async () => {
     if (!currentUser?.email || !player?.id) {
       showAlert("請先登入", "請先使用 Google 登入後再進行綁定。");
@@ -494,7 +511,12 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           </div>
         </div>
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="flex items-center min-w-[80px] md:min-w-[120px] justify-end">
+          <div className="flex flex-col items-end min-w-[80px] md:min-w-[120px]">
+            {activeTitle && (
+              <span className="text-[9px] md:text-[11px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-lg border border-amber-200/50 dark:border-amber-500/30 mb-1">
+                {activeTitle}
+              </span>
+            )}
             {isEditingName ? (
               <input
                 autoFocus
@@ -529,9 +551,26 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                 showAlert("權限限制", `只有 ${player.name} 本人才能修改頭像。`);
               }
             }}
-            className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg ${canEdit ? 'cursor-pointer hover:border-emerald-500/50' : 'opacity-80'} transition-all flex items-center justify-center group shrink-0`}
+            className={cn(
+              "relative w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg transition-all flex items-center justify-center group shrink-0",
+              canEdit ? 'cursor-pointer hover:border-emerald-500/50' : 'opacity-80',
+              frameClass
+            )}
             title={canEdit ? "點擊修改頭像" : "已綁定，無法修改"}
           >
+            {/* Falling Feathers Animation Overlay for Profile */}
+            {isFallingFeathers && (
+              <div className="absolute inset-0 pointer-events-none opacity-40 z-0">
+                <Feather size={10} className="absolute top-0 left-1/4 text-sky-400/40" style={{ animation: 'feather-fall 4s linear infinite' }} />
+                <Feather size={8} className="absolute top-0 left-2/3 text-sky-300/40" style={{ animation: 'feather-fall 5s linear infinite 1.5s' }} />
+              </div>
+            )}
+            
+            {/* Pure White Frame Corner Feather for Profile */}
+            {activeFrame === "純白羽框" && (
+              <Feather size={14} className="absolute -top-0.5 -right-0.5 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-30" />
+            )}
+
             <img
               src={getAvatarUrl(currentAvatarFull, player.name)}
               alt={player.name}
@@ -587,7 +626,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           { id: 'trend' as const, label: '戰力趨勢', icon: <Activity size={14} /> },
           { id: 'partners' as const, label: '拍檔分析', icon: <Target size={14} /> },
           { id: 'history' as const, label: '詳細對戰', icon: <Calendar size={14} /> },
-          { id: 'feathers' as const, label: '羽毛明細', icon: <Feather size={14} /> }
+          { id: 'feathers' as const, label: '羽毛明細', icon: <Feather size={14} /> },
+          { id: 'inventory' as const, label: '我的背包', icon: <Package size={14} className="scale-90" /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -703,6 +743,15 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                 <FeatherHistoryTable
                   transactions={featherHistoryQuery.data || []}
                   isLoading={featherHistoryQuery.isLoading}
+                />
+              )}
+              {activeTab === 'inventory' && (
+                <InventoryTable 
+                  playerId={player.id} 
+                  activeTitleId={player.active_title_id}
+                  activeFrameId={player.active_frame_id}
+                  playerData={player}
+                  onUpdate={onUpdate}
                 />
               )}
             </>

@@ -4,6 +4,7 @@ import Settings from "lucide-react/dist/esm/icons/settings";
 import Maximize from "lucide-react/dist/esm/icons/maximize";
 import Minimize from "lucide-react/dist/esm/icons/minimize";
 import Users from "lucide-react/dist/esm/icons/users";
+import ShoppingBag from "lucide-react/dist/esm/icons/shopping-bag";
 
 import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
@@ -60,6 +61,7 @@ interface DashboardHeaderProps {
   onToggleFullscreen: () => void;
   onRefresh: () => void;
   onSettings: () => void;
+  onShop: () => void;
 
   summary?: {
     totalMatches: number;
@@ -73,7 +75,7 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
-  onToggleBanner, onToggleFullscreen, onRefresh, onSettings,
+  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop,
 
   summary, onlineCount
 }) => {
@@ -189,6 +191,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               <span className="text-[10px] md:text-[11px] font-black text-sky-700 dark:text-sky-300 tabular-nums">
                 {boundPlayer?.feathers || 0}
               </span>
+              <button
+                onClick={onShop}
+                className="ml-1 p-1 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group"
+                title="羽毛商店"
+              >
+                <ShoppingBag className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
+              </button>
               {!hasClaimedToday && boundPlayer && isGameDay && (
                 <button
                   onClick={handleClaimFeathers}

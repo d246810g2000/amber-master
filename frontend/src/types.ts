@@ -12,6 +12,8 @@ export interface Player {
   type?: 'resident' | 'guest';
   feathers?: number;
   last_feather_claim?: string;
+  active_title?: { id: number; name: string; item_type: string };
+  active_frame?: { id: number; name: string; item_type: string; image_url?: string };
 }
 
 export interface MatchPlayer {

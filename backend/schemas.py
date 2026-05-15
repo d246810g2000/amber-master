@@ -38,12 +38,28 @@ class PlayerBindRequest(BaseModel):
     userEmail: str
 
 
+class ShopItem(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    price: int
+    item_type: str
+    duration_days: int
+    image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class Player(PlayerBase):
     id: str
     mu: float
     sigma: float
     feathers: int
     last_feather_claim: Optional[date] = None
+    active_title_id: Optional[int] = None
+    active_frame_id: Optional[int] = None
+    active_title: Optional[ShopItem] = None
+    active_frame: Optional[ShopItem] = None
     hasBinding: bool = False
     isGoogleLinked: bool = False
 
@@ -202,3 +218,20 @@ class BetStatus(BaseModel):
     moneyline: BetTypeStatus
     handicap: BetTypeStatus
     overUnder: BetTypeStatus
+
+
+class BuyRequest(BaseModel):
+    itemId: int
+    userEmail: str
+
+class InventoryItem(BaseModel):
+    id: int
+    item: ShopItem
+    purchased_at: datetime
+    expires_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class EquipRequest(BaseModel):
+    itemId: int

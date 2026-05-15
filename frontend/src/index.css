@@ -22,6 +22,13 @@
     50% { transform: translateY(-10px); }
   }
   --animate-bounce-stat: bounce-stat 0.5s ease-in-out infinite;
+
+  @keyframes feather-fall {
+    0% { transform: translate(0, -20px) rotate(0deg); opacity: 0; }
+    20% { opacity: 0.6; }
+    80% { opacity: 0.6; }
+    100% { transform: translate(15px, 120px) rotate(360deg); opacity: 0; }
+  }
 }
 
 @custom-variant dark (&:where(.dark, .dark *));

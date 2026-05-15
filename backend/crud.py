@@ -7,12 +7,20 @@ import trueskill_logic
 from typing import List, Dict, Any, Optional, Union
 
 def get_players(db: Session):
-    return db.query(models.Player).all()
+    return db.query(models.Player).options(
+        joinedload(models.Player.active_title),
+        joinedload(models.Player.active_frame)
+    ).all()
 
 def get_player_by_email(db: Session, email: str):
     if not email: return None
     clean_email = email.strip().lower()
-    return db.query(models.Player).filter(func.lower(models.Player.email) == clean_email).first()
+    return db.query(models.Player).filter(
+        func.lower(models.Player.email) == clean_email
+    ).options(
+        joinedload(models.Player.active_title),
+        joinedload(models.Player.active_frame)
+    ).first()
 
 def get_player_stats(db: Session, target_date: date = None):
     query = db.query(models.PlayerStat).options(joinedload(models.PlayerStat.player))
@@ -506,6 +514,11 @@ def get_player_profile(db: Session, player_id: str):
             "mu": db_player.mu,
             "sigma": db_player.sigma,
             "avatar": db_player.avatar,
+            "feathers": db_player.feathers,
+            "active_title_id": db_player.active_title_id,
+            "active_frame_id": db_player.active_frame_id,
+            "active_title": { "name": db_player.active_title.name } if db_player.active_title else None,
+            "active_frame": { "name": db_player.active_frame.name } if db_player.active_frame else None,
             "hasBinding": db_player.email is not None,
             "isGoogleLinked": db_player.email is not None and "@" in db_player.email
         },
@@ -1352,3 +1365,86 @@ def get_daily_analytics(db: Session, target_date: date):
         "bestPartners": best_partners,
         "tiers": tiers
     }
+
+def get_shop_items(db: Session):
+    return db.query(models.ShopItem).all()
+
+def buy_item(db: Session, player_id: str, item_id: int):
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    db_item = db.query(models.ShopItem).filter(models.ShopItem.id == item_id).first()
+    
+    if not db_player or not db_item:
+        return {"status": "error", "message": "球員或商品不存在"}
+    
+    if db_player.feathers < db_item.price:
+        return {"status": "error", "message": "羽毛不足"}
+    
+    # 檢查是否已擁有尚未過期的相同商品
+    now = datetime.utcnow()
+    existing_inv = db.query(models.PlayerInventory).filter(
+        models.PlayerInventory.player_id == player_id,
+        models.PlayerInventory.item_id == item_id,
+        models.PlayerInventory.expires_at > now
+    ).first()
+    
+    if existing_inv:
+        return {"status": "error", "message": "您已擁有此商品且尚未過期，無需重複購買。"}
+    
+    db_player.feathers -= db_item.price
+    
+    from datetime import timedelta
+    expires_at = datetime.utcnow() + timedelta(days=db_item.duration_days)
+    
+    db_inv = models.PlayerInventory(
+        player_id=player_id,
+        item_id=item_id,
+        expires_at=expires_at
+    )
+    db.add(db_inv)
+    
+    db.add(models.FeatherTransaction(
+        player_id=player_id,
+        amount=-db_item.price,
+        type="shop_purchase",
+        description=f"購買商品：{db_item.name}"
+    ))
+    
+    # 自動裝備
+    if db_item.item_type == "title":
+        db_player.active_title_id = db_item.id
+    elif db_item.item_type == "frame":
+        db_player.active_frame_id = db_item.id
+        
+    db.commit()
+    return {"status": "success", "message": f"成功購買 {db_item.name}"}
+
+def get_player_inventory(db: Session, player_id: str):
+    now = datetime.utcnow()
+    return db.query(models.PlayerInventory).filter(
+        models.PlayerInventory.player_id == player_id,
+        models.PlayerInventory.expires_at > now
+    ).options(joinedload(models.PlayerInventory.item)).all()
+
+def equip_item(db: Session, player_id: str, item_id: int):
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if not db_player:
+        return {"status": "error", "message": "Player not found"}
+    
+    now = datetime.utcnow()
+    inv_item = db.query(models.PlayerInventory).filter(
+        models.PlayerInventory.player_id == player_id,
+        models.PlayerInventory.item_id == item_id,
+        models.PlayerInventory.expires_at > now
+    ).first()
+    
+    if not inv_item:
+        return {"status": "error", "message": "未擁有該商品或已過期"}
+    
+    db_item = db.query(models.ShopItem).filter(models.ShopItem.id == item_id).first()
+    if db_item.item_type == "title":
+        db_player.active_title_id = item_id
+    elif db_item.item_type == "frame":
+        db_player.active_frame_id = item_id
+        
+    db.commit()
+    return {"status": "success", "message": "裝備成功"}

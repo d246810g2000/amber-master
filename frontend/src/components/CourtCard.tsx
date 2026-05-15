@@ -3,6 +3,7 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import Users from "lucide-react/dist/esm/icons/users";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Zap from "lucide-react/dist/esm/icons/zap";
+import Feather from "lucide-react/dist/esm/icons/feather";
 import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
 import { calculateWeightedMu } from "../lib/matchEngine";
@@ -65,6 +66,20 @@ const PlayerSlot = React.memo(({
   interactive?: boolean;
   useCareerWeight?: boolean;
 }) => {
+  const activeTitle = player?.active_title?.name;
+  const activeFrame = player?.active_frame?.name;
+
+  const frameClass = activeFrame === "初學者青銅" 
+    ? "border-amber-700/50 shadow-[0_0_10px_rgba(180,83,9,0.2)]" 
+    : activeFrame === "熱血火紅"
+    ? "border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse-subtle"
+    : activeFrame === "純白羽框"
+    ? "border-white dark:border-white/80 shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+    : activeFrame === "飄零羽落"
+    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_10px_rgba(186,230,253,0.3)]"
+    : null;
+
+  const isFallingFeathers = activeFrame === "飄零羽落";
   return (
     <button 
       onClick={interactive ? onClick : undefined}
@@ -83,19 +98,40 @@ const PlayerSlot = React.memo(({
         !isSelected && teamColor === "red" && player && "bg-rose-50/95 dark:bg-rose-950/80 ring-rose-200/50 dark:ring-rose-900/50",
         !isSelected && teamColor === "blue" && player && "bg-blue-50/95 dark:bg-blue-950/80 ring-blue-200/50 dark:ring-blue-900/50",
         interactive && "active:scale-95 group/slot",
+        frameClass,
         className
       )}
     >
       {player ? (
         <div className="absolute inset-0 isolate flex flex-col items-center justify-center overflow-clip rounded-xl p-0.5 md:p-1">
+          {/* Falling Feathers Animation Overlay */}
+          {isFallingFeathers && (
+            <div className="absolute inset-0 pointer-events-none opacity-40 z-0">
+              <Feather size={6} className="absolute top-0 left-1/4 text-sky-400/40" style={{ animation: 'feather-fall 4s linear infinite' }} />
+              <Feather size={4} className="absolute top-0 left-2/3 text-sky-300/40" style={{ animation: 'feather-fall 5s linear infinite 1.5s' }} />
+            </div>
+          )}
+          
+          {/* Pure White Frame Corner Feather */}
+          {activeFrame === "純白羽框" && (
+            <Feather size={10} className="absolute -top-0.5 -right-0.5 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-30" />
+          )}
+
           <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
           <img
             src={getAvatarUrl(player.avatar, player.name)}
             alt={player.name}
             className="hidden md:block w-7 h-7 rounded-full object-cover shadow-sm bg-white mb-1 border border-slate-200/50"
           />
-          <div className="font-black text-[11px] md:text-[13px] tracking-tighter text-slate-800 dark:text-slate-100 truncate w-full text-center px-0.5 md:px-1 leading-none mb-0.5 md:mb-1 drop-shadow-sm">
-            {player.name}
+          <div className="flex flex-col items-center w-full min-w-0 mb-0.5 md:mb-1">
+            {activeTitle && (
+              <span className="text-[6px] md:text-[7px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1 rounded-sm border border-amber-200/50 dark:border-amber-500/30 mb-0.5 truncate max-w-[90%]">
+                {activeTitle}
+              </span>
+            )}
+            <div className="font-black text-[11px] md:text-[13px] tracking-tighter text-slate-800 dark:text-slate-100 truncate w-full text-center px-0.5 md:px-1 leading-none drop-shadow-sm">
+              {player.name}
+            </div>
           </div>
           <div className="flex items-center gap-1 px-1 md:px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-md md:rounded-lg shadow-inner scale-[0.8] origin-top md:scale-90">
              <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 leading-none">

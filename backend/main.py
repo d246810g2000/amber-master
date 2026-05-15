@@ -617,6 +617,28 @@ def get_bet_status(matchId: str, email: Optional[str] = None, db: Session = Depe
     result = crud.get_bet_status(db, matchId, player_id)
     return success(result)
 
+# Shop API
+@app.get("/shop/items")
+def get_shop_items(db: Session = Depends(get_db)):
+    items = crud.get_shop_items(db)
+    return success(items)
+
+@app.post("/shop/buy")
+def buy_item(req: schemas.BuyRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.userEmail)
+    if not player:
+        return error("USER_NOT_BOUND")
+    return crud.buy_item(db, player.id, req.itemId)
+
+@app.get("/players/{player_id}/inventory")
+def get_inventory(player_id: str, db: Session = Depends(get_db)):
+    items = crud.get_player_inventory(db, player_id)
+    return success(items)
+
+@app.post("/players/{player_id}/equip")
+def equip_item(player_id: str, req: schemas.EquipRequest, db: Session = Depends(get_db)):
+    return crud.equip_item(db, player_id, req.itemId)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
