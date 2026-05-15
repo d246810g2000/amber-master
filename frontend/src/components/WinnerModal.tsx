@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Player } from "../types";
 import Trophy from "lucide-react/dist/esm/icons/trophy";
 import X from "lucide-react/dist/esm/icons/x";
-import { getAvatarUrl } from "../lib/utils";
+import { getAvatarUrl, cn } from "../lib/utils";
 
 interface WinnerModalProps {
   isOpen: boolean;
@@ -108,19 +108,39 @@ export function WinnerModal({
             }`}
           >
             <div className="flex items-center justify-center gap-3 mb-2 group-hover:scale-105 transition-transform">
-              {team1.map((p, index) => (
-                <React.Fragment key={p?.id || `t1p${index}`}>
-                  {index > 0 && <span className="text-rose-300 font-black text-xs shrink-0">&amp;</span>}
-                  <div className="flex flex-col items-center gap-1">
-                    <img
-                      src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
-                      alt={p?.name || 'Unknown'}
-                      className="w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2 border-rose-100 dark:border-rose-900"
-                    />
-                    <span className="text-rose-700 dark:text-rose-400 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
-                  </div>
-                </React.Fragment>
-              ))}
+              {team1.map((p, index) => {
+                const activeTitle = p?.active_title?.name;
+                const activeFrame = p?.active_frame?.name;
+                const frameClass = activeFrame === "初學者青銅" 
+                  ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
+                  : activeFrame === "熱血火紅"
+                  ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
+                  : activeFrame === "純白羽框"
+                  ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                  : activeFrame === "飄零羽落"
+                  ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
+                  : null;
+
+                return (
+                  <React.Fragment key={p?.id || `t1p${index}`}>
+                    {index > 0 && <span className="text-rose-300 font-black text-xs shrink-0">&amp;</span>}
+                    <div className="flex flex-col items-center gap-1">
+                      <img
+                        src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
+                        alt={p?.name || 'Unknown'}
+                        className={cn(
+                          "w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2",
+                          frameClass ? frameClass : "border-rose-100 dark:border-rose-900"
+                        )}
+                      />
+                      <div className="flex flex-col items-center">
+                        {activeTitle && <span className="text-[6px] font-black text-amber-600 bg-amber-50 px-0.5 rounded-sm leading-none mb-0.5">{activeTitle}</span>}
+                        <span className="text-rose-700 dark:text-rose-400 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
             <span className="text-rose-500/80 dark:text-rose-400/80 font-bold text-[10px] uppercase tracking-[0.2em] bg-rose-100/50 dark:bg-rose-500/10 px-2.5 py-0.5 rounded-full group-hover:bg-rose-200/50 dark:group-hover:bg-rose-500/20 transition-colors">
               選擇此隊獲勝
@@ -145,19 +165,39 @@ export function WinnerModal({
             }`}
           >
             <div className="flex items-center justify-center gap-3 mb-2 group-hover:scale-105 transition-transform">
-              {team2.map((p, index) => (
-                <React.Fragment key={p?.id || `t2p${index}`}>
-                  {index > 0 && <span className="text-blue-300 font-black text-xs shrink-0">&amp;</span>}
-                  <div className="flex flex-col items-center gap-1">
-                    <img
-                      src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
-                      alt={p?.name || 'Unknown'}
-                      className="w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2 border-blue-100 dark:border-blue-900"
-                    />
-                    <span className="text-blue-700 dark:text-blue-400 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
-                  </div>
-                </React.Fragment>
-              ))}
+              {team2.map((p, index) => {
+                const activeTitle = p?.active_title?.name;
+                const activeFrame = p?.active_frame?.name;
+                const frameClass = activeFrame === "初學者青銅" 
+                  ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
+                  : activeFrame === "熱血火紅"
+                  ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
+                  : activeFrame === "純白羽框"
+                  ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                  : activeFrame === "飄零羽落"
+                  ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
+                  : null;
+
+                return (
+                  <React.Fragment key={p?.id || `t2p${index}`}>
+                    {index > 0 && <span className="text-blue-300 font-black text-xs shrink-0">&amp;</span>}
+                    <div className="flex flex-col items-center gap-1">
+                      <img
+                        src={getAvatarUrl(p?.avatar, p?.name || 'Unknown')}
+                        alt={p?.name || 'Unknown'}
+                        className={cn(
+                          "w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2",
+                          frameClass ? frameClass : "border-blue-100 dark:border-blue-900"
+                        )}
+                      />
+                      <div className="flex flex-col items-center">
+                        {activeTitle && <span className="text-[6px] font-black text-amber-600 bg-amber-50 px-0.5 rounded-sm leading-none mb-0.5">{activeTitle}</span>}
+                        <span className="text-blue-700 dark:text-blue-400 font-black text-sm truncate max-w-[70px] leading-none">{p?.name || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
             <span className="text-blue-500/80 dark:text-blue-400/80 font-bold text-[10px] uppercase tracking-[0.2em] bg-blue-100/50 dark:bg-blue-500/10 px-2.5 py-0.5 rounded-full group-hover:bg-blue-200/50 dark:group-hover:bg-blue-500/20 transition-colors">
               選擇此隊獲勝

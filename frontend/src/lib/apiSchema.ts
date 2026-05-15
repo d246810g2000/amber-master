@@ -13,8 +13,10 @@ export const RawPlayerSchema = z.object({
   last_feather_claim: z.string().nullable().optional(),
   active_title_id: z.coerce.number().nullable().optional(),
   active_frame_id: z.coerce.number().nullable().optional(),
+  active_background_id: z.coerce.number().nullable().optional(),
   active_title: z.object({ id: z.number(), name: z.string(), item_type: z.string() }).nullable().optional(),
   active_frame: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
+  active_background: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
   email: z.string().nullable().optional(),
 });
 
@@ -67,6 +69,9 @@ export const RawMatchPlayerSchema = z.object({
   dailyMuBefore: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   dailyMuAfter: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
   sigma: z.coerce.number().nullable().optional().transform(val => val ?? undefined),
+  active_title: z.object({ id: z.number(), name: z.string(), item_type: z.string() }).nullable().optional(),
+  active_frame: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
+  active_background: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
 });
 
 export const RawMatchSchema = z.object({

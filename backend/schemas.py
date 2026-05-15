@@ -58,8 +58,10 @@ class Player(PlayerBase):
     last_feather_claim: Optional[date] = None
     active_title_id: Optional[int] = None
     active_frame_id: Optional[int] = None
+    active_background_id: Optional[int] = None
     active_title: Optional[ShopItem] = None
     active_frame: Optional[ShopItem] = None
+    active_background: Optional[ShopItem] = None
     hasBinding: bool = False
     isGoogleLinked: bool = False
 

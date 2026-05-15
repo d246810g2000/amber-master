@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS players (
     last_feather_claim DATE,
     active_title_id INT,
     active_frame_id INT,
+    active_background_id INT,
     INDEX idx_name (name),
     INDEX idx_email (email)
 );
@@ -111,8 +112,27 @@ CREATE TABLE IF NOT EXISTS player_inventory (
 
 -- Seed Shop Items
 INSERT INTO shop_items (name, description, price, item_type, duration_days) VALUES 
-('球館殺手', '霸氣側漏的稱號', 500, 'title', 7),
-('發球機器', '穩定如機器的發球', 500, 'title', 7),
-('羽球萌新', '請大家多多指教', 200, 'title', 7),
-('初學者青銅', '簡約的青銅邊框', 800, 'frame', 7),
-('熱血火紅', '燃燒鬥志的紅色邊框', 800, 'frame', 7);
+('連裁判都敢殺', '霸氣側漏的稱號', 1000, 'title', 7),
+('發球姿勢 100 分', '穩定如機器的發球', 800, 'title', 7),
+('撿球大師', '我撿的不是球，是寂寞', 300, 'title', 7),
+('撲球之鬼', '球還沒落地，我就已經在那了', 1200, 'title', 7),
+('撲球之鬼(不擦地)', '撲球很帥，但地板很髒', 1500, 'title', 7),
+('球場邊緣人', '大家打球，我打哈哈', 150, 'title', 7),
+('初學者青銅', '簡約的青銅邊框', 500, 'frame', 7),
+('熱血火紅', '燃燒鬥志的紅色邊框', 500, 'frame', 7),
+('純白羽框', '潔白如羽的奢華邊框', 2000, 'frame', 7),
+('暗影雷鳴', '充滿神秘力量的紫色閃電邊框', 1000, 'frame', 7),
+('翡翠之心', '煥發生命力的碧綠色邊框', 1000, 'frame', 7),
+('傳奇黃金', '象徵至高榮耀的黃金拋光邊框', 3000, 'frame', 7),
+('極光幻彩', '如夢似幻的虹彩流光邊框', 4000, 'frame', 7),
+('鑽石星辰', '極致奢華的璀璨鑽石切割邊框', 5000, 'frame', 7),
+('飄零羽落', '動態羽毛飄落特效背景', 3500, 'background', 7),
+('落櫻繽紛', '唯美動漫風櫻花飄落背景', 2500, 'background', 7),
+('螢火之森', '神祕森林螢火微光上升背景', 2000, 'background', 7),
+('雷霆萬鈞', '霸氣紫雷閃動特效背景', 3000, 'background', 7),
+('星河燦爛', '深邃極致的璀璨星河背景', 4500, 'background', 7),
+('溫暖夕陽', '簡約柔和的橙粉漸變背景', 500, 'background', 7),
+('薄荷涼感', '清爽俐落的淺藍綠漸變背景', 500, 'background', 7),
+('夢幻粉紫', '層次豐富的浪漫粉紫背景', 800, 'background', 7),
+('迷霧灰藍', '沉穩內斂的低調灰藍背景', 800, 'background', 7),
+('極致純黑', '深邃純粹的高質感黑色背景', 1000, 'background', 7);

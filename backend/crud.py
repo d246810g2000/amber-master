@@ -9,7 +9,8 @@ from typing import List, Dict, Any, Optional, Union
 def get_players(db: Session):
     return db.query(models.Player).options(
         joinedload(models.Player.active_title),
-        joinedload(models.Player.active_frame)
+        joinedload(models.Player.active_frame),
+        joinedload(models.Player.active_background)
     ).all()
 
 def get_player_by_email(db: Session, email: str):
@@ -19,7 +20,8 @@ def get_player_by_email(db: Session, email: str):
         func.lower(models.Player.email) == clean_email
     ).options(
         joinedload(models.Player.active_title),
-        joinedload(models.Player.active_frame)
+        joinedload(models.Player.active_frame),
+        joinedload(models.Player.active_background)
     ).first()
 
 def get_player_stats(db: Session, target_date: date = None):
@@ -517,8 +519,10 @@ def get_player_profile(db: Session, player_id: str):
             "feathers": db_player.feathers,
             "active_title_id": db_player.active_title_id,
             "active_frame_id": db_player.active_frame_id,
+            "active_background_id": db_player.active_background_id,
             "active_title": { "name": db_player.active_title.name } if db_player.active_title else None,
             "active_frame": { "name": db_player.active_frame.name } if db_player.active_frame else None,
+            "active_background": { "name": db_player.active_background.name } if db_player.active_background else None,
             "hasBinding": db_player.email is not None,
             "isGoogleLinked": db_player.email is not None and "@" in db_player.email
         },
@@ -1367,7 +1371,7 @@ def get_daily_analytics(db: Session, target_date: date):
     }
 
 def get_shop_items(db: Session):
-    return db.query(models.ShopItem).all()
+    return db.query(models.ShopItem).order_by(models.ShopItem.price.asc()).all()
 
 def buy_item(db: Session, player_id: str, item_id: int):
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
@@ -1414,6 +1418,8 @@ def buy_item(db: Session, player_id: str, item_id: int):
         db_player.active_title_id = db_item.id
     elif db_item.item_type == "frame":
         db_player.active_frame_id = db_item.id
+    elif db_item.item_type == "background":
+        db_player.active_background_id = db_item.id
         
     db.commit()
     return {"status": "success", "message": f"成功購買 {db_item.name}"}
@@ -1445,6 +1451,8 @@ def equip_item(db: Session, player_id: str, item_id: int):
         db_player.active_title_id = item_id
     elif db_item.item_type == "frame":
         db_player.active_frame_id = item_id
+    elif db_item.item_type == "background":
+        db_player.active_background_id = item_id
         
     db.commit()
     return {"status": "success", "message": "裝備成功"}

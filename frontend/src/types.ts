@@ -12,8 +12,13 @@ export interface Player {
   type?: 'resident' | 'guest';
   feathers?: number;
   last_feather_claim?: string;
+  active_title_id?: number;
+  active_frame_id?: number;
+  active_background_id?: number;
   active_title?: { id: number; name: string; item_type: string };
   active_frame?: { id: number; name: string; item_type: string; image_url?: string };
+  active_background?: { id: number; name: string; item_type: string; image_url?: string };
+  isGoogleLinked?: boolean;
 }
 
 export interface MatchPlayer {
@@ -26,6 +31,12 @@ export interface MatchPlayer {
   dailyMuAfter?: number;
   mu?: number;
   sigma?: number;
+  active_title_id?: number;
+  active_frame_id?: number;
+  active_background_id?: number;
+  active_title?: { id: number; name: string; item_type: string };
+  active_frame?: { id: number; name: string; item_type: string; image_url?: string };
+  active_background?: { id: number; name: string; item_type: string; image_url?: string };
 }
 
 export interface MatchRecord {

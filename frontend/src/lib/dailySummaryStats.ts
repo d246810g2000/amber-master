@@ -29,6 +29,8 @@ export interface DailyPlayerSummaryRow {
   nemesis: DailyNemesisSummary | null;
   /** 有紀錄的各場 μ 差加總／場次 */
   avgCpDelta: number | null;
+  active_title?: { id: number; name: string; item_type: string };
+  active_frame?: { id: number; name: string; item_type: string; image_url?: string };
 }
 
 function keyFor(p: MatchPlayer): string {
@@ -52,7 +54,7 @@ function pickName(p: MatchPlayer, playerLookup: Map<string, Pick<Player, 'name'>
  */
 export function computeDailyPlayerSummary(
   matchesNewestFirst: MatchRecord[],
-  players: Pick<Player, 'id' | 'name' | 'mu'>[],
+  players: (Pick<Player, 'id' | 'name' | 'mu'> & { active_title?: any; active_frame?: any })[],
 ): DailyPlayerSummaryRow[] {
   const chronological = [...matchesNewestFirst].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
@@ -193,6 +195,8 @@ export function computeDailyPlayerSummary(
       bestPartner,
       nemesis,
       avgCpDelta,
+      active_title: pid.startsWith('name:') ? undefined : players.find((p) => String(p.id) === pid)?.active_title,
+      active_frame: pid.startsWith('name:') ? undefined : players.find((p) => String(p.id) === pid)?.active_frame,
     });
   }
 

@@ -18,10 +18,12 @@ class Player(Base):
     last_feather_claim = Column(Date)
     active_title_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
     active_frame_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
+    active_background_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
 
     stats = relationship("PlayerStat", back_populates="player")
     active_title = relationship("ShopItem", foreign_keys=[active_title_id])
     active_frame = relationship("ShopItem", foreign_keys=[active_frame_id])
+    active_background = relationship("ShopItem", foreign_keys=[active_background_id])
 
 class Match(Base):
     __tablename__ = "matches"
@@ -93,7 +95,7 @@ class ShopItem(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     price = Column(Integer, nullable=False)
-    item_type = Column(String(50), nullable=False) # title, frame, aura
+    item_type = Column(String(50), nullable=False) # title, frame, background
     duration_days = Column(Integer, default=7)
     image_url = Column(Text) # For frames/auras if we use specific assets
     created_at = Column(DateTime, default=datetime.utcnow)

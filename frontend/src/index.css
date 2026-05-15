@@ -24,11 +24,18 @@
   --animate-bounce-stat: bounce-stat 0.5s ease-in-out infinite;
 
   @keyframes feather-fall {
-    0% { transform: translate(0, -20px) rotate(0deg); opacity: 0; }
-    20% { opacity: 0.6; }
-    80% { opacity: 0.6; }
-    100% { transform: translate(15px, 120px) rotate(360deg); opacity: 0; }
+    0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+    20% { opacity: 0.8; }
+    80% { opacity: 0.8; }
+    100% { transform: translateY(100px) translateX(20px) rotate(360deg); opacity: 0; }
   }
+  --animate-feather-fall: feather-fall 5s linear infinite;
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  --animate-shimmer: shimmer 2.5s infinite linear;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -101,4 +108,68 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
   }
+}
+
+/* Premium Border Animations */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.01); }
+}
+
+@keyframes border-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 4s linear infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+.animate-border-flow {
+  background-size: 200% 200%;
+  animation: border-flow 4s linear infinite;
+}
+
+/* Background Effects Animations */
+@keyframes float-up {
+  0% { transform: translateY(100%) translateX(0); opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { transform: translateY(-100%) translateX(10px); opacity: 0; }
+}
+
+@keyframes lightning-flash {
+  0%, 90%, 100% { opacity: 0; }
+  92% { opacity: 0.3; }
+  94% { opacity: 0.1; }
+  96% { opacity: 0.4; }
+}
+
+@keyframes nebula-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-float-up {
+  animation: float-up 6s ease-in-out infinite;
+}
+
+.animate-lightning {
+  animation: lightning-flash 5s ease-in-out infinite;
+}
+
+.animate-nebula {
+  background-size: 200% 200%;
+  animation: nebula-drift 10s linear infinite;
 }

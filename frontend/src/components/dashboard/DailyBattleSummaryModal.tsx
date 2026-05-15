@@ -97,15 +97,37 @@ function SummaryTableCard({
                   >
                     <td className="px-2 py-2 text-[12px] font-black border-t border-slate-100 align-middle max-w-[10rem]" title={r.name}>
                       <div className="flex items-center gap-1.5 min-w-0 max-w-[10rem]">
-                        <img
-                          src={r.avatarUrl}
-                          alt=""
-                          width={20}
-                          height={20}
-                          className="w-5 h-5 rounded-full object-cover border border-slate-200/90 shrink-0 bg-slate-100"
-                          referrerPolicy="no-referrer"
-                        />
-                        <span className="truncate min-w-0">{r.name}</span>
+                        {(() => {
+                          const activeFrame = r.active_frame?.name;
+                          const frameClass = activeFrame === "初學者青銅" 
+                            ? "border-amber-700/50 shadow-[0_0_4px_rgba(180,83,9,0.2)]" 
+                            : activeFrame === "熱血火紅"
+                            ? "border-rose-500 shadow-[0_0_4px_rgba(244,63,94,0.3)]"
+                            : activeFrame === "純白羽框"
+                            ? "border-white dark:border-white/80 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
+                            : activeFrame === "飄零羽落"
+                            ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_4px_rgba(186,230,253,0.3)]"
+                            : "border-slate-200/90";
+
+                          return (
+                            <img
+                              src={r.avatarUrl}
+                              alt=""
+                              width={20}
+                              height={20}
+                              className={`w-5 h-5 rounded-full object-cover border shrink-0 bg-slate-100 ${frameClass}`}
+                              referrerPolicy="no-referrer"
+                            />
+                          );
+                        })()}
+                        <div className="flex flex-col min-w-0">
+                          {r.active_title && (
+                            <span className="text-[7px] font-black text-amber-600 bg-amber-50/80 px-1 rounded-sm leading-none mb-0.5 scale-90 origin-left">
+                              {r.active_title.name}
+                            </span>
+                          )}
+                          <span className="truncate min-w-0">{r.name}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-1 py-2 text-center text-[12px] font-black tabular-nums border-t border-slate-100 whitespace-nowrap align-middle">

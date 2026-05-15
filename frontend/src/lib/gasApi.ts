@@ -430,3 +430,8 @@ export async function equipItem(playerId: string, itemId: number) {
 import { FeatherTransactionSchema, type FeatherTransaction } from './apiSchema';
 export type { FeatherTransaction };
 export { FeatherTransactionSchema };
+
+/** 取得特定球員的羽毛交易紀錄 */
+export async function getPlayerFeathers(playerId: string): Promise<FeatherTransaction[]> {
+  return apiGet(`/players/${playerId}/feathers`, undefined, z.array(FeatherTransactionSchema));
+}

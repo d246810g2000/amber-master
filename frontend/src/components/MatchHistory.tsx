@@ -98,6 +98,19 @@ const PlayerItem = React.memo(({
   // 使用當前生涯 mu（從 allPlayers 查找），而非比賽快照的 muBefore
   const currentCareerMu = (playerInList as any)?.career_mu ?? playerInList?.mu;
 
+  const activeTitle = p.active_title?.name || playerInList?.active_title?.name;
+  const activeFrame = p.active_frame?.name || playerInList?.active_frame?.name;
+
+  const frameClass = activeFrame === "初學者青銅" 
+    ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
+    : activeFrame === "熱血火紅"
+    ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
+    : activeFrame === "純白羽框"
+    ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+    : activeFrame === "飄零羽落"
+    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
+    : null;
+
   return (
     <div className={cn(
       "flex flex-col min-w-0 flex-1 group/player gap-0.5",
@@ -106,22 +119,29 @@ const PlayerItem = React.memo(({
       {/* Top row: Avatar + Name */}
       <div className={cn("flex items-center gap-1.5 min-w-0 w-full", isRight ? "flex-row-reverse" : "flex-row")}>
         <div className={cn(
-          "w-5 h-5 md:w-6 md:h-6 rounded-full border shadow-sm shrink-0 p-0.5 transition-transform group-hover/player:scale-110",
-          isWinner 
+          "w-5 h-5 md:w-6 md:h-6 rounded-full border shadow-sm shrink-0 p-0.5 transition-transform group-hover/player:scale-110 relative",
+          frameClass ? frameClass : (isWinner 
             ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" 
-            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900"
+            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900")
         )}>
           <img src={avatarUrl} alt={p.name} className="w-full h-full rounded-full object-cover" />
         </div>
-        <span 
-          onClick={() => onPlayerClick?.(p.id)}
-          className={cn(
-            "text-[11px] md:text-[12px] font-black cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 truncate px-0.5 rounded transition-colors leading-tight min-w-0",
-            selectedPlayerIds.includes(p.id) ? "text-blue-500 bg-blue-50 dark:bg-blue-900/40" : "text-slate-800 dark:text-slate-200"
+        <div className={cn("flex flex-col min-w-0", isRight ? "items-end" : "items-start")}>
+          {activeTitle && (
+            <span className="text-[6px] font-black text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/20 px-1 rounded-sm scale-90 origin-left">
+              {activeTitle}
+            </span>
           )}
-        >
-          {p?.name}
-        </span>
+          <span 
+            onClick={() => onPlayerClick?.(p.id)}
+            className={cn(
+              "text-[10px] md:text-[11px] font-black cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 truncate px-0.5 rounded transition-colors leading-tight min-w-0",
+              selectedPlayerIds.includes(p.id) ? "text-blue-500 bg-blue-50 dark:bg-blue-900/40" : "text-slate-800 dark:text-slate-200"
+            )}
+          >
+            {p?.name}
+          </span>
+        </div>
       </div>
 
       {/* Bottom row: CP Info */}
