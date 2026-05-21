@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Users from "lucide-react/dist/esm/icons/users";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Zap from "lucide-react/dist/esm/icons/zap";
@@ -62,10 +62,43 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
   onToggleUseCareerWeight,
 }) => {
   const readOnly = hasControl === false;
+  const [confirmRestPlayerId, setConfirmRestPlayerId] = useState<string | null>(null);
+
+  const confirmRest = () => {
+    if (confirmRestPlayerId) {
+      onTogglePlayerStatus(confirmRestPlayerId);
+      setConfirmRestPlayerId(null);
+    }
+  };
+
   return (
     <>
       {/* Ready Zone */}
       <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col relative shrink-0 min-h-[300px] md:min-h-[400px]">
+        {confirmRestPlayerId && (
+          <div className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center rounded-[2rem]">
+            <div className="bg-white dark:bg-slate-800 p-6 mx-4 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+              <Moon size={32} className="text-indigo-400" />
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">確認進入休息狀態？</h3>
+              <p className="text-sm text-slate-500 text-center">此玩家將暫停參與接下來的賽事配對。</p>
+              <div className="flex gap-3 mt-2 w-full">
+                <button 
+                  onClick={() => setConfirmRestPlayerId(null)}
+                  className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 font-bold transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={confirmRest}
+                  className="flex-1 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold shadow-md shadow-indigo-500/20 transition-colors"
+                >
+                  確認休息
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isMatchmaking && (
           <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-[2rem]">
             <div className="flex flex-col items-center gap-3">
@@ -143,7 +176,7 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
                 }
                 teamColor={getPlayerTeamColor(p.id)}
                 onClick={() => hasControl && onToggleManualSelection(p.id)}
-                onStatusToggle={() => hasControl && onTogglePlayerStatus(p.id)}
+                onStatusToggle={() => hasControl && setConfirmRestPlayerId(p.id)}
                 onProfileClick={() => onProfileClick(p.id)}
                 hasControl={hasControl}
               />

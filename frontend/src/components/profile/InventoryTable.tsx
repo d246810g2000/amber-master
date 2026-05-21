@@ -65,15 +65,16 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
     }
   });
 
-  const parseDaysLeft = (dateStr: string) => {
-    if (!dateStr) return 0;
+  const getDurationText = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '永久擁有';
     try {
       const expire = new Date(dateStr.replace(' ', 'T'));
       const now = new Date();
       const diff = expire.getTime() - now.getTime();
-      return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+      const days = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+      return `剩餘 ${days} 天`;
     } catch (e) {
-      return 0;
+      return '已過期';
     }
   };
 
@@ -130,7 +131,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
           const isEquipped = (item.item_type === 'title' && Number(activeTitleId) === Number(item.id)) || 
                             (item.item_type === 'frame' && Number(activeFrameId) === Number(item.id)) ||
                             (item.item_type === 'background' && Number(activeBackgroundId) === Number(item.id));
-          const daysLeft = parseDaysLeft(inv.expires_at);
+          // duration text will be parsed inside the card
 
           return (
             <div 
@@ -175,9 +176,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 <h3 className="text-xs md:text-base font-black text-slate-800 dark:text-slate-100 mb-0.5 md:mb-1 group-hover:text-amber-500 transition-colors truncate">
                   {item.name}
                 </h3>
-                <div className="flex items-center gap-1 text-[8px] md:text-[10px] text-slate-400 font-bold mb-2 md:mb-3">
+                <div className={cn(
+                  "flex items-center gap-1 text-[8px] md:text-[10px] font-bold mb-2 md:mb-3",
+                  inv.expires_at 
+                    ? "text-slate-400" 
+                    : "text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded"
+                )}>
                   <Calendar size={8} className="md:w-3 md:h-3" />
-                  <span>剩餘 {daysLeft} 天</span>
+                  <span>{getDurationText(inv.expires_at)}</span>
                 </div>
                 <p className="hidden md:block text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-6">
                   {item.description}

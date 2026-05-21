@@ -34,7 +34,7 @@ interface MatchHistoryTableProps {
   historySort: { key: string; dir: 'asc' | 'desc' };
   setHistorySort: React.Dispatch<React.SetStateAction<{ key: string; dir: 'asc' | 'desc' }>>;
   players: Player[];
-  activeMatchDates?: Set<string>;
+  activeMatchDates?: string[] | Set<string>;
 }
 
 export const MatchHistoryTable: React.FC<MatchHistoryTableProps> = ({

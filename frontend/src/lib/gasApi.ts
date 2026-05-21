@@ -413,8 +413,8 @@ export async function fetchShopItems(): Promise<any[]> {
 }
 
 /** 購買商品 */
-export async function buyShopItem(itemId: number, userEmail: string) {
-  return apiPost('/shop/buy', { itemId, userEmail }, z.any());
+export async function buyShopItem(itemId: number, userEmail: string, isPermanent: boolean = false) {
+  return apiPost('/shop/buy', { itemId, userEmail, isPermanent }, z.any());
 }
 
 /** 取得個人背包 */
@@ -427,11 +427,46 @@ export async function equipItem(playerId: string, itemId: number) {
   return apiPost(`/players/${playerId}/equip`, { itemId }, z.any());
 }
 
-import { FeatherTransactionSchema, type FeatherTransaction } from './apiSchema';
-export type { FeatherTransaction };
-export { FeatherTransactionSchema };
+import { FeatherTransactionSchema, type FeatherTransaction, PlayerLoanSchema, type PlayerLoan } from './apiSchema';
+export type { FeatherTransaction, PlayerLoan };
+export { FeatherTransactionSchema, PlayerLoanSchema };
 
 /** 取得特定球員的羽毛交易紀錄 */
 export async function getPlayerFeathers(playerId: string): Promise<FeatherTransaction[]> {
   return apiGet(`/players/${playerId}/feathers`, undefined, z.array(FeatherTransactionSchema));
 }
+
+/** 取得特定球員的借貸紀錄 */
+export async function getPlayerLoans(playerId: string): Promise<{ lent: PlayerLoan[], borrowed: PlayerLoan[] }> {
+  const schema = z.object({
+    lent: z.array(PlayerLoanSchema),
+    borrowed: z.array(PlayerLoanSchema)
+  });
+  return apiGet(`/players/${playerId}/loans`, undefined, schema);
+}
+
+/** 建立借貸關係 */
+export async function createLoan(lenderId: string, borrowerId: string, principal: number, interestRate: number) {
+  return apiPost('/loans', { lender_id: lenderId, borrower_id: borrowerId, principal, interest_rate: interestRate }, z.any());
+}
+
+/** 歸還借貸 */
+export async function repayLoan(loanId: number, amount?: number) {
+  return apiPost(`/loans/${loanId}/repay`, { amount }, z.any());
+}
+
+/** 接受借貸 */
+export async function acceptLoan(loanId: number) {
+  return apiPost(`/loans/${loanId}/accept`, {}, z.any());
+}
+
+/** 拒絕借貸 */
+export async function rejectLoan(loanId: number) {
+  return apiPost(`/loans/${loanId}/reject`, {}, z.any());
+}
+
+/** 取消借貸 */
+export async function cancelLoan(loanId: number) {
+  return apiPost(`/loans/${loanId}/cancel`, {}, z.any());
+}
+

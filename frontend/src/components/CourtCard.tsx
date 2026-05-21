@@ -44,7 +44,7 @@ interface CourtCardProps {
   onBet?: (matchId: string, team: number, amount: number, betType: string, lineValue: number) => void;
 }
 
-const BET_AMOUNTS = [50, 100, 200, 500];
+const BET_AMOUNTS = [100, 200, 500, "自訂"];
 
 const PlayerSlot = React.memo(({ 
   player, 
@@ -323,6 +323,8 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 }) => {
   const [bettingTeam, setBettingTeam] = useState<number | null>(null);
   const [activeBetType, setActiveBetType] = useState<"moneyline" | "handicap" | "overUnder">("moneyline");
+  const [customAmountStr, setCustomAmountStr] = useState<string>("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const readOnly = hasControl === false;
   
   // 獲取目前選定類型的數據
@@ -375,10 +377,13 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   };
 
   const [elapsed, setElapsed] = useState<string>("00:00");
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const isTimeLocked = elapsedSeconds > 60;
 
   useEffect(() => {
     if (!startTime) {
       setElapsed("00:00");
+      setElapsedSeconds(0);
       return;
     }
 
@@ -387,6 +392,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       const diff = Math.floor((now.getTime() - new Date(startTime).getTime()) / 1000);
       const minutes = Math.floor(diff / 60);
       const seconds = diff % 60;
+      setElapsedSeconds(diff);
       setElapsed(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     };
 
@@ -577,9 +583,16 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
         {/* Advanced Betting Selector Overlay */}
         {bettingTeam && (
-          <div className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-3 animate-in fade-in zoom-in duration-200">
+          <div className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-3 animate-in fade-in zoom-in duration-200">
+            {isTimeLocked ? (
+              <div className="flex flex-col items-center justify-center bg-red-900/40 border border-red-500/50 rounded-xl p-4 mb-4">
+                <span className="text-red-400 font-black text-sm mb-1 uppercase tracking-wider">投注時間已截止</span>
+                <span className="text-white/60 text-[10px]">開打 1 分鐘後無法進行下注</span>
+              </div>
+            ) : (
+              <>
             {/* Bet Type Tabs */}
-            <div className="flex bg-white/5 p-1 rounded-xl gap-1 mb-4 w-full max-w-[240px]">
+            <div className="flex bg-white/5 p-1 rounded-xl gap-1 mb-2 sm:mb-4 w-[95%] max-w-[320px]">
               {(["moneyline", "handicap", "overUnder"] as const).map((type) => {
                 const labelMap = { moneyline: "獨贏", handicap: "讓分", overUnder: "大小" };
                 const isLocked = betStatus?.[type]?.locked;
@@ -605,7 +618,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             </div>
 
             {/* Choice Selector (Player Names or Over/Under) */}
-            <div className="flex w-full max-w-[240px] gap-2 mb-4">
+            <div className="flex w-[95%] max-w-[320px] gap-2 mb-2 sm:mb-4">
               <button
                 onClick={() => setBettingTeam(1)}
                 className={cn(
@@ -657,32 +670,86 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-2 w-full max-w-[160px] mb-4">
-              {BET_AMOUNTS.map(amount => {
-                const isLocked = (currentStatus as any).locked;
-                return (
+            
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 w-[95%] max-w-[320px] mb-4">
+              {showCustomInput ? (
+                <div className="col-span-2 flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={customAmountStr}
+                    onChange={(e) => setCustomAmountStr(e.target.value)}
+                    placeholder="輸入金額"
+                    className="flex-1 bg-white/10 border border-emerald-500/50 rounded-xl px-3 py-2 text-white font-black text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    autoFocus
+                  />
                   <button
-                    key={amount}
                     onClick={() => {
-                      if (!isLocked && matchId) onBet?.(matchId, bettingTeam, amount, activeBetType, currentStatus.line);
+                      const parsed = parseInt(customAmountStr, 10);
+                      if (isNaN(parsed) || parsed <= 0) {
+                        setCustomAmountStr("");
+                        setShowCustomInput(false);
+                        return;
+                      }
+                      if (!(currentStatus as any).locked && matchId) {
+                         onBet?.(matchId, bettingTeam, parsed, activeBetType, currentStatus.line);
+                      }
                       setBettingTeam(null);
+                      setShowCustomInput(false);
+                      setCustomAmountStr("");
                     }}
-                    disabled={isLocked}
-                    className={cn(
-                      "border border-white/10 py-2 rounded-xl text-white font-black text-xs transition-all active:scale-95",
-                      isLocked 
-                        ? "bg-white/5 text-white/10 cursor-not-allowed" 
-                        : "bg-white/10 hover:bg-emerald-500 hover:text-white"
-                    )}
+                    disabled={(currentStatus as any).locked || !customAmountStr}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white px-4 rounded-xl font-black text-xs transition-colors"
                   >
-                    {amount}
+                    確定
                   </button>
-                );
-              })}
+                  <button 
+                    onClick={() => { setShowCustomInput(false); setCustomAmountStr(""); }}
+                    className="bg-white/10 hover:bg-white/20 text-white/60 px-3 rounded-xl font-black text-xs"
+                  >
+                    X
+                  </button>
+                </div>
+              ) : (
+                BET_AMOUNTS.map(amount => {
+                  const isLocked = (currentStatus as any).locked;
+                  return (
+                    <button
+                      key={amount}
+                      onClick={() => {
+                        if (amount === "自訂") {
+                          setShowCustomInput(true);
+                          return;
+                        }
+                        if (!isLocked && matchId) onBet?.(matchId, bettingTeam, amount as number, activeBetType, currentStatus.line);
+                        setBettingTeam(null);
+                      }}
+                      disabled={isLocked}
+                      className={cn(
+                        "border border-white/10 py-1.5 sm:py-2 rounded-xl text-white font-black text-[11px] sm:text-xs transition-all active:scale-95",
+                        isLocked 
+                          ? "bg-white/5 text-white/10 cursor-not-allowed" 
+                          : amount === "自訂"
+                            ? "bg-indigo-600/30 hover:bg-indigo-500 hover:text-white border-indigo-400/30"
+                            : "bg-white/10 hover:bg-emerald-500 hover:text-white"
+                      )}
+                    >
+                      {amount}
+                    </button>
+                  );
+                })
+              )}
             </div>
             
+              </>
+            )}
+            
             <button 
-              onClick={() => setBettingTeam(null)} 
+              onClick={() => {
+                setBettingTeam(null);
+                setShowCustomInput(false);
+                setCustomAmountStr("");
+              }} 
               className="text-white/40 text-[9px] font-bold hover:text-white uppercase tracking-widest"
             >
               取消返回

@@ -846,6 +846,9 @@ def update_match(db: Session, match_id: str, req: schemas.MatchUpdateRequest):
 
 
 def claim_daily_feathers(db: Session, email: str):
+    # 先清理過期借貸，退還金額
+    check_and_expire_loans(db)
+
     db_player = get_player_by_email(db, email)
     if not db_player:
         return {"status": "error", "message": "Player not found", "amount": 0}
@@ -873,10 +876,56 @@ def claim_daily_feathers(db: Session, email: str):
         description=f"每日登入獎勵 ({today})"
     )
     db.add(transaction)
+
+    # ─── 自動扣款償還借貸 ───
+    active_loans = db.query(models.PlayerLoan).filter(
+        models.PlayerLoan.borrower_id == db_player.id,
+        models.PlayerLoan.status == 'active'
+    ).order_by(models.PlayerLoan.created_at.asc()).all()
+
+    for loan in active_loans:
+        if db_player.feathers <= 0:
+            break
+        due = loan.total_due - loan.repaid_amount
+        if due <= 0:
+            continue
+        
+        repay_amt = min(db_player.feathers, due)
+        
+        # 執行扣還款
+        db_player.feathers -= repay_amt
+        
+        lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+        if lender:
+            lender.feathers = (lender.feathers or 0) + repay_amt
+            
+        loan.repaid_amount += repay_amt
+        if loan.repaid_amount >= loan.total_due:
+            loan.status = 'repaid'
+            
+        # 扣款交易紀錄
+        tx_borrower = models.FeatherTransaction(
+            player_id=db_player.id,
+            amount=-repay_amt,
+            type="loan_repayment_auto",
+            description=f"週三領取羽毛時自動扣款償還給 {lender.name if lender else '好友'}"
+        )
+        db.add(tx_borrower)
+        
+        if lender:
+            tx_lender = models.FeatherTransaction(
+                player_id=lender.id,
+                amount=repay_amt,
+                type="loan_repayment_auto_received",
+                description=f"週三 {db_player.name} 領取羽毛時自動扣還"
+            )
+            db.add(tx_lender)
+
     db.commit()
     db.refresh(db_player)
     
     return {"status": "success", "amount": claim_amount, "message": f"成功領取 {claim_amount} 根羽毛！"}
+
 
 def get_feather_transactions(db: Session, player_id: str, limit: int = 50):
     return db.query(models.FeatherTransaction).filter(
@@ -1373,44 +1422,57 @@ def get_daily_analytics(db: Session, target_date: date):
 def get_shop_items(db: Session):
     return db.query(models.ShopItem).order_by(models.ShopItem.price.asc()).all()
 
-def buy_item(db: Session, player_id: str, item_id: int):
+def buy_item(db: Session, player_id: str, item_id: int, is_permanent: bool = False):
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     db_item = db.query(models.ShopItem).filter(models.ShopItem.id == item_id).first()
     
     if not db_player or not db_item:
         return {"status": "error", "message": "球員或商品不存在"}
     
-    if db_player.feathers < db_item.price:
-        return {"status": "error", "message": "羽毛不足"}
-    
     # 檢查是否已擁有尚未過期的相同商品
     now = datetime.utcnow()
     existing_inv = db.query(models.PlayerInventory).filter(
         models.PlayerInventory.player_id == player_id,
         models.PlayerInventory.item_id == item_id,
-        models.PlayerInventory.expires_at > now
+        (models.PlayerInventory.expires_at == None) | (models.PlayerInventory.expires_at > now)
     ).first()
     
+    price = db_item.price_permanent if is_permanent else db_item.price
+    if existing_inv and existing_inv.expires_at is not None and is_permanent:
+        # Upgrade price = permanent price - 7-day price (already paid)
+        price = max(0, db_item.price_permanent - db_item.price)
+        
+    if db_player.feathers < price:
+        return {"status": "error", "code": "INSUFFICIENT_FEATHERS", "message": "羽毛不足"}
+    
     if existing_inv:
-        return {"status": "error", "message": "您已擁有此商品且尚未過期，無需重複購買。"}
+        if existing_inv.expires_at is None:
+            return {"status": "error", "message": "您已永久擁有此商品，無需重複購買。"}
+        else:
+            if is_permanent:
+                # Upgrade to permanent
+                existing_inv.expires_at = None
+            else:
+                # Extend duration
+                from datetime import timedelta
+                existing_inv.expires_at = existing_inv.expires_at + timedelta(days=db_item.duration_days)
+    else:
+        from datetime import timedelta
+        expires_at = None if is_permanent else (datetime.utcnow() + timedelta(days=db_item.duration_days))
+        db_inv = models.PlayerInventory(
+            player_id=player_id,
+            item_id=item_id,
+            expires_at=expires_at
+        )
+        db.add(db_inv)
     
-    db_player.feathers -= db_item.price
-    
-    from datetime import timedelta
-    expires_at = datetime.utcnow() + timedelta(days=db_item.duration_days)
-    
-    db_inv = models.PlayerInventory(
-        player_id=player_id,
-        item_id=item_id,
-        expires_at=expires_at
-    )
-    db.add(db_inv)
+    db_player.feathers -= price
     
     db.add(models.FeatherTransaction(
         player_id=player_id,
-        amount=-db_item.price,
+        amount=-price,
         type="shop_purchase",
-        description=f"購買商品：{db_item.name}"
+        description=f"購買商品：{db_item.name} ({'永久' if is_permanent else '7天'})"
     ))
     
     # 自動裝備
@@ -1422,13 +1484,13 @@ def buy_item(db: Session, player_id: str, item_id: int):
         db_player.active_background_id = db_item.id
         
     db.commit()
-    return {"status": "success", "message": f"成功購買 {db_item.name}"}
+    return {"status": "success", "message": f"成功購買 {db_item.name} ({'永久' if is_permanent else '7天'})"}
 
 def get_player_inventory(db: Session, player_id: str):
     now = datetime.utcnow()
     return db.query(models.PlayerInventory).filter(
         models.PlayerInventory.player_id == player_id,
-        models.PlayerInventory.expires_at > now
+        (models.PlayerInventory.expires_at == None) | (models.PlayerInventory.expires_at > now)
     ).options(joinedload(models.PlayerInventory.item)).all()
 
 def equip_item(db: Session, player_id: str, item_id: int):
@@ -1440,7 +1502,7 @@ def equip_item(db: Session, player_id: str, item_id: int):
     inv_item = db.query(models.PlayerInventory).filter(
         models.PlayerInventory.player_id == player_id,
         models.PlayerInventory.item_id == item_id,
-        models.PlayerInventory.expires_at > now
+        (models.PlayerInventory.expires_at == None) | (models.PlayerInventory.expires_at > now)
     ).first()
     
     if not inv_item:
@@ -1456,3 +1518,214 @@ def equip_item(db: Session, player_id: str, item_id: int):
         
     db.commit()
     return {"status": "success", "message": "裝備成功"}
+
+def create_loan(db: Session, lender_id: str, borrower_id: str, principal: int, interest_rate: float):
+    if lender_id == borrower_id:
+        return {"status": "error", "message": "不能借款給自己"}
+    if principal <= 0:
+        return {"status": "error", "message": "借款本金必須大於 0"}
+    if interest_rate < 0 or interest_rate > 100:
+        return {"status": "error", "message": "利息比例必須介於 0% 到 100% 之間"}
+
+    lender = db.query(models.Player).filter(models.Player.id == lender_id).first()
+    borrower = db.query(models.Player).filter(models.Player.id == borrower_id).first()
+
+    if not lender:
+        return {"status": "error", "message": "貸方球員不存在"}
+    if not borrower:
+        return {"status": "error", "message": "借方球員不存在"}
+
+    if (lender.feathers or 0) < principal:
+        return {"status": "error", "message": f"您的羽毛餘額不足 (目前: {lender.feathers or 0} 根)"}
+
+    # 計算應還總額
+    total_due = int(principal * (1 + interest_rate / 100.0))
+
+    # 執行扣款（暫扣，待借方確認）
+    lender.feathers = (lender.feathers or 0) - principal
+
+    # 建立合約
+    loan = models.PlayerLoan(
+        lender_id=lender_id,
+        borrower_id=borrower_id,
+        principal=principal,
+        interest_rate=interest_rate,
+        total_due=total_due,
+        repaid_amount=0,
+        status="pending"
+    )
+    db.add(loan)
+
+    # 寫入交易紀錄 (僅貸方)
+    tx_lender = models.FeatherTransaction(
+        player_id=lender_id,
+        amount=-principal,
+        type="loan_pending_out",
+        description=f"借貸發起：出借 {principal} 根羽毛給 {borrower.name} (等待對方接受，約定利息 {interest_rate}%, 應還 {total_due})"
+    )
+    db.add(tx_lender)
+
+    db.commit()
+    db.refresh(loan)
+
+    return {"status": "success", "message": f"已發起借貸，等待 {borrower.name} 確認接受！", "loan_id": loan.id}
+
+def check_and_expire_loans(db: Session):
+    from datetime import timedelta
+    today_local = (datetime.utcnow() + timedelta(hours=8)).date()
+    
+    pending_loans = db.query(models.PlayerLoan).filter(models.PlayerLoan.status == "pending").all()
+    for loan in pending_loans:
+        loan_local_date = (loan.created_at + timedelta(hours=8)).date()
+        if loan_local_date < today_local:
+            loan.status = "expired"
+            # 退還貸方
+            lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+            borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+            if lender:
+                lender.feathers = (lender.feathers or 0) + loan.principal
+                tx_refund = models.FeatherTransaction(
+                    player_id=lender.id,
+                    amount=loan.principal,
+                    type="loan_refund",
+                    description=f"借貸失效退回：與 {borrower.name if borrower else '未知'} 的借貸當天未被接收，已自動失效退還本金 {loan.principal} 根羽毛"
+                )
+                db.add(tx_refund)
+    db.commit()
+
+def accept_loan(db: Session, loan_id: int):
+    # 先執行過期檢查
+    check_and_expire_loans(db)
+
+    loan = db.query(models.PlayerLoan).filter(models.PlayerLoan.id == loan_id, models.PlayerLoan.status == "pending").first()
+    if not loan:
+        return {"status": "error", "message": "找不到該筆待確認借貸，或合約已過期/處理完成"}
+
+    lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+    borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+
+    if not lender or not borrower:
+        return {"status": "error", "message": "貸方或借方球員不存在"}
+
+    # 轉移本金給借方
+    borrower.feathers = (borrower.feathers or 0) + loan.principal
+    loan.status = "active"
+
+    # 寫入借方交易紀錄
+    tx_borrower = models.FeatherTransaction(
+        player_id=borrower.id,
+        amount=loan.principal,
+        type="loan_received",
+        description=f"接受借貸：從 {lender.name} 借入 {loan.principal} 根羽毛 (約定利息 {loan.interest_rate}%, 應還 {loan.total_due})"
+    )
+    db.add(tx_borrower)
+    db.commit()
+
+    return {"status": "success", "message": f"您已成功接受來自 {lender.name} 的 {loan.principal} 根羽毛借貸！"}
+
+def reject_loan(db: Session, loan_id: int):
+    loan = db.query(models.PlayerLoan).filter(models.PlayerLoan.id == loan_id, models.PlayerLoan.status == "pending").first()
+    if not loan:
+        return {"status": "error", "message": "找不到該筆待確認借貸合約"}
+
+    lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+    borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+
+    if not lender or not borrower:
+        return {"status": "error", "message": "貸方或借方球員不存在"}
+
+    # 退還本金給貸方
+    lender.feathers = (lender.feathers or 0) + loan.principal
+    loan.status = "rejected"
+
+    # 寫入貸方退款紀錄
+    tx_refund = models.FeatherTransaction(
+        player_id=lender.id,
+        amount=loan.principal,
+        type="loan_refund",
+        description=f"借貸遭拒退回：{borrower.name} 拒絕了您的借貸，已退還本金 {loan.principal} 根羽毛"
+    )
+    db.add(tx_refund)
+    db.commit()
+
+    return {"status": "success", "message": f"已拒絕來自 {lender.name} 的借貸申請，本金已退還給對方。"}
+
+def cancel_loan(db: Session, loan_id: int):
+    loan = db.query(models.PlayerLoan).filter(models.PlayerLoan.id == loan_id, models.PlayerLoan.status == "pending").first()
+    if not loan:
+        return {"status": "error", "message": "找不到該筆待確認借貸合約"}
+
+    lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+    borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+
+    if not lender or not borrower:
+        return {"status": "error", "message": "貸方或借方球員不存在"}
+
+    # 退還本金給貸方
+    lender.feathers = (lender.feathers or 0) + loan.principal
+    loan.status = "cancelled"
+
+    # 寫入貸方退款紀錄
+    tx_refund = models.FeatherTransaction(
+        player_id=lender.id,
+        amount=loan.principal,
+        type="loan_refund",
+        description=f"借貸取消退回：您取消了給 {borrower.name} 的借貸，已退還本金 {loan.principal} 根羽毛"
+    )
+    db.add(tx_refund)
+    db.commit()
+
+    return {"status": "success", "message": "已成功取消該筆借貸發起，本金已退回您的帳戶。"}
+
+
+def repay_loan(db: Session, loan_id: int, repay_amount: Optional[int] = None):
+    loan = db.query(models.PlayerLoan).filter(models.PlayerLoan.id == loan_id, models.PlayerLoan.status == "active").first()
+    if not loan:
+        return {"status": "error", "message": "找不到該筆未結清借貸合約"}
+
+    lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+    borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+
+    if not lender or not borrower:
+        return {"status": "error", "message": "貸方或借方球員不存在"}
+
+    due = loan.total_due - loan.repaid_amount
+    if due <= 0:
+        return {"status": "error", "message": "此筆借貸已清償"}
+
+    # 決定實際還款金額
+    limit_repay = repay_amount if repay_amount is not None else due
+    actual_repay = min(borrower.feathers or 0, due, limit_repay)
+
+    if actual_repay <= 0:
+        return {"status": "error", "message": "餘額不足，無法還款"}
+
+    # 執行轉帳
+    borrower.feathers = (borrower.feathers or 0) - actual_repay
+    lender.feathers = (lender.feathers or 0) + actual_repay
+
+    # 更新合約
+    loan.repaid_amount += actual_repay
+    if loan.repaid_amount >= loan.total_due:
+        loan.status = "repaid"
+
+    # 寫入交易紀錄
+    tx_borrower = models.FeatherTransaction(
+        player_id=borrower.id,
+        amount=-actual_repay,
+        type="loan_repayment",
+        description=f"借貸手動還款：歸還 {actual_repay} 根羽毛給 {lender.name} (尚欠 {max(0, loan.total_due - loan.repaid_amount)})"
+    )
+    tx_lender = models.FeatherTransaction(
+        player_id=lender.id,
+        amount=actual_repay,
+        type="loan_repayment_received",
+        description=f"借貸收款：收到 {borrower.name} 歸還 {actual_repay} 根羽毛"
+    )
+    db.add(tx_borrower)
+    db.add(tx_lender)
+
+    db.commit()
+
+    return {"status": "success", "message": f"成功還款 {actual_repay} 根羽毛給 {lender.name}！"}
+

@@ -95,8 +95,10 @@ class ShopItem(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     price = Column(Integer, nullable=False)
+    price_permanent = Column(Integer, nullable=False, default=0)
     item_type = Column(String(50), nullable=False) # title, frame, background
     duration_days = Column(Integer, default=7)
+    tier = Column(String(20), default="classic") # classic, epic, legendary, ultimate
     image_url = Column(Text) # For frames/auras if we use specific assets
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -109,3 +111,20 @@ class PlayerInventory(Base):
     expires_at = Column(DateTime)
 
     item = relationship("ShopItem")
+
+class PlayerLoan(Base):
+    __tablename__ = "player_loans"
+    id = Column(Integer, primary_key=True, index=True)
+    lender_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    borrower_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    principal = Column(Integer, nullable=False)
+    interest_rate = Column(Float, nullable=False, default=0.0)
+    total_due = Column(Integer, nullable=False)
+    repaid_amount = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), default="active") # active, repaid
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    lender = relationship("Player", foreign_keys=[lender_id])
+    borrower = relationship("Player", foreign_keys=[borrower_id])
+

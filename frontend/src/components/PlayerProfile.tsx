@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, Suspense, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +15,12 @@ import Share2 from "lucide-react/dist/esm/icons/share-2";
 import Feather from "lucide-react/dist/esm/icons/feather";
 import Package from "lucide-react/dist/esm/icons/package";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Square from "lucide-react/dist/esm/icons/square";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import Handshake from "lucide-react/dist/esm/icons/handshake";
+import { PlayerPill } from "./PlayerPill";
+import { Player } from '../types';
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +40,8 @@ import { FeatherHistoryTable } from './profile/FeatherHistoryTable';
 import { InventoryTable } from './profile/InventoryTable';
 import { AvatarEditModal } from './profile/AvatarEditModal';
 import { ShareModal } from './share/ShareModal';
+import { LoanPanel } from './profile/LoanPanel';
+
 
 interface PlayerProfileProps {
   playerId: string;
@@ -154,7 +162,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
-  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers' | 'inventory'>('trend');
+  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers' | 'inventory' | 'loans'>('trend');
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
@@ -169,6 +177,37 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const comprehensiveMu = profileData?.comprehensiveMu ?? null;
   const todayStr = getTaipeiDateString();
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+
+  const [previewTitle, setPreviewTitle] = useState<string | null>(null);
+  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
+  const [previewBackground, setPreviewBackground] = useState<string | null>(null);
+  const [hasInitializedPreview, setHasInitializedPreview] = useState(false);
+
+  useEffect(() => {
+    if (data?.player && !hasInitializedPreview) {
+      setPreviewTitle(data.player.active_title?.name || null);
+      setPreviewFrame(data.player.active_frame?.name || null);
+      setPreviewBackground(data.player.active_background?.name || null);
+      setHasInitializedPreview(true);
+    }
+  }, [data?.player, hasInitializedPreview]);
+
+  useEffect(() => {
+    if (data?.player) {
+      setPreviewTitle(data.player.active_title?.name || null);
+      setPreviewFrame(data.player.active_frame?.name || null);
+      setPreviewBackground(data.player.active_background?.name || null);
+    }
+  }, [data?.player?.active_title_id, data?.player?.active_frame_id, data?.player?.active_background_id]);
+
+  const previewPlayer = useMemo(() => {
+    if (!data?.player) return null;
+    const p = { ...data.player } as Player;
+    if (previewTitle) p.active_title = { id: 0, name: previewTitle, item_type: 'title' };
+    if (previewFrame) p.active_frame = { id: 0, name: previewFrame, item_type: 'frame' };
+    if (previewBackground) p.active_background = { id: 0, name: previewBackground, item_type: 'background' };
+    return p;
+  }, [data?.player, previewTitle, previewFrame, previewBackground]);
 
   const featherHistoryQuery = useQuery({
     queryKey: ['playerFeathers', playerId],
@@ -511,6 +550,14 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           </div>
         </div>
         <div className="flex items-center gap-3 md:gap-4">
+          {/* 羽毛資產 */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800/50 shadow-sm shrink-0">
+            <Feather size={14} className="text-sky-500 animate-pulse-subtle" />
+            <span className="text-xs md:text-sm font-black text-sky-700 dark:text-sky-300 tabular-nums">
+              {player.feathers ?? 0}
+            </span>
+          </div>
+
           <div className="flex flex-col items-end min-w-[80px] md:min-w-[120px]">
             {activeTitle && (
               <span className="text-[9px] md:text-[11px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-lg border border-amber-200/50 dark:border-amber-500/30 mb-1">
@@ -627,8 +674,10 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           { id: 'partners' as const, label: '拍檔分析', icon: <Target size={14} /> },
           { id: 'history' as const, label: '詳細對戰', icon: <Calendar size={14} /> },
           { id: 'feathers' as const, label: '羽毛明細', icon: <Feather size={14} /> },
+          { id: 'loans' as const, label: '羽毛借貸', icon: <Handshake size={14} /> },
           { id: 'inventory' as const, label: '我的背包', icon: <Package size={14} className="scale-90" /> }
         ].map(tab => (
+
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -745,14 +794,68 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                   isLoading={featherHistoryQuery.isLoading}
                 />
               )}
-              {activeTab === 'inventory' && (
-                <InventoryTable 
-                  playerId={player.id} 
-                  activeTitleId={player.active_title_id}
-                  activeFrameId={player.active_frame_id}
-                  playerData={player}
-                  onUpdate={onUpdate}
+              {activeTab === 'loans' && (
+                <LoanPanel
+                  playerId={player.id}
+                  lenderFeathers={player.feathers || 0}
                 />
+              )}
+              {activeTab === 'inventory' && (
+
+                <div className="flex flex-col md:flex-row gap-4 md:gap-8 bg-slate-50/50 dark:bg-slate-900/30 rounded-[2.5rem] p-4 md:p-8 border border-slate-200/50 dark:border-white/5 shadow-inner">
+                  {/* 左側即時預覽 */}
+                  <div className="w-full md:w-64 flex flex-row md:flex-col items-center p-3 md:p-6 bg-white dark:bg-slate-900 rounded-2xl md:rounded-[2rem] border border-slate-100 dark:border-white/5 shrink-0 gap-3 md:gap-6 shadow-sm">
+                    <div className="hidden md:flex text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] items-center gap-2">
+                      <Sparkles size={14} className="text-amber-500" />造型即時預覽
+                    </div>
+                    
+                    <div className="relative p-3 md:p-8 bg-slate-50 dark:bg-slate-950 rounded-xl md:rounded-[2rem] border border-slate-100 dark:border-white/5 flex justify-center items-center shadow-sm shrink-0 overflow-hidden w-24 h-28 md:w-auto md:h-auto">
+                      <div className="scale-[0.95] md:scale-125 origin-center transform transition-all duration-500">
+                        {previewPlayer && (
+                          <PlayerPill player={previewPlayer} status="ready" onClick={() => {}} onProfileClick={() => {}} />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 md:w-full space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">當前搭配</span>
+                        {(previewTitle || previewFrame || previewBackground) && (
+                          <button 
+                            onClick={() => { setPreviewTitle(null); setPreviewFrame(null); setPreviewBackground(null); }} 
+                            className="text-[10px] font-bold text-amber-600 hover:text-amber-700 transition-colors flex items-center gap-1"
+                          >
+                            <RefreshCw size={10} />重設
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {previewTitle && <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-amber-400/20 flex items-center justify-center text-amber-600 font-black text-xs">稱</div><span className="text-xs font-black text-amber-800 dark:text-amber-400">{previewTitle}</span></div></div>}
+                        {previewFrame && <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-blue-400/20 flex items-center justify-center text-blue-600 font-black text-xs"><Square size={10} /></div><span className="text-xs font-black text-blue-800 dark:text-blue-400">{previewFrame}</span></div></div>}
+                        {previewBackground && <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-emerald-400/20 flex items-center justify-center text-emerald-600 font-black text-xs"><Layers size={10} /></div><span className="text-xs font-black text-emerald-800 dark:text-emerald-400">{previewBackground}</span></div></div>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 右側背包道具清單 */}
+                  <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-[2rem] p-4 md:p-6 border border-slate-100 dark:border-white/5">
+                    <InventoryTable 
+                      playerId={player.id} 
+                      activeTitleId={player.active_title_id}
+                      activeFrameId={player.active_frame_id}
+                      activeBackgroundId={player.active_background_id}
+                      playerData={player}
+                      hidePreview={true}
+                      initialFilter="all"
+                      onPreview={(type, name) => {
+                        if (type === 'title') setPreviewTitle(name);
+                        if (type === 'frame') setPreviewFrame(name);
+                        if (type === 'background') setPreviewBackground(name);
+                      }}
+                      onUpdate={onUpdate}
+                    />
+                  </div>
+                </div>
               )}
             </>
           )}

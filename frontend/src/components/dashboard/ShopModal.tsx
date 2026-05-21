@@ -66,10 +66,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     enabled: !!boundPlayer?.id
   });
 
-  const ownedItemIds = useMemo(() => 
-    new Set(inventory?.map((inv: any) => inv.item_id) || []), 
-    [inventory]
-  );
+  const ownedItemsMap = useMemo(() => {
+    const map: Record<number, { isPermanent: boolean }> = {};
+    inventory?.forEach((inv: any) => {
+      map[inv.item_id] = {
+        isPermanent: !inv.expires_at
+      };
+    });
+    return map;
+  }, [inventory]);
 
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
@@ -98,27 +103,29 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     activeCategory === 'all' || item.item_type === activeCategory
   );
 
-  const handleBuy = async (item: any) => {
+  const handleBuy = async (item: any, isPermanent: boolean) => {
     if (!currentUser?.email) {
       toast.error('請先登入');
       return;
     }
-    if ((boundPlayer?.feathers || 0) < item.price) {
+    const price = isPermanent ? item.price_permanent : item.price;
+    if ((boundPlayer?.feathers || 0) < price) {
       toast.error('羽毛不足');
       return;
     }
 
+    const durationText = isPermanent ? '永久版' : '7天版';
     showConfirm(
       '購買確認',
-      `確定要花費 ${item.price} 根羽毛購買「${item.name}」嗎？`,
+      `確定要花費 ${price} 根羽毛購買「${item.name} (${durationText})」嗎？`,
       async () => {
         setBuyingId(item.id);
         try {
-          await gasApi.buyShopItem(item.id, currentUser.email!);
+          await gasApi.buyShopItem(item.id, currentUser.email!, isPermanent);
           if (boundPlayer?.id) {
             await gasApi.equipItem(boundPlayer.id, item.id);
           }
-          toast.success('購買成功！已自動為您裝備。');
+          toast.success(`購買成功！已自動為您裝備 ${durationText}。`);
           onUpdate();
           queryClient.invalidateQueries({ queryKey: ['players-base'] });
           queryClient.invalidateQueries({ queryKey: ['playerInventory', boundPlayer?.id] });
@@ -180,8 +187,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 <div className="hidden md:flex text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 items-center gap-2">
                   <Sparkles size={14} className="text-amber-500" />造型即時預覽
                 </div>
-                <div className="relative p-2 md:p-10 bg-white dark:bg-slate-900 rounded-xl md:rounded-[3rem] border border-slate-100 dark:border-white/5 flex justify-center shadow-sm shrink-0 overflow-hidden">
-                   <div className="scale-[0.6] md:scale-125 origin-center transform transition-all duration-500">
+                <div className="relative p-3 md:p-10 bg-white dark:bg-slate-900 rounded-xl md:rounded-[3rem] border border-slate-100 dark:border-white/5 flex justify-center items-center shadow-sm shrink-0 overflow-hidden w-24 h-28 md:w-auto md:h-auto">
+                   <div className="scale-[0.95] md:scale-125 origin-center transform transition-all duration-500">
                       <PlayerPill player={previewPlayer} status="ready" onClick={() => {}} onProfileClick={() => {}} />
                    </div>
                 </div>
@@ -258,7 +265,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                       <ShopItemCard 
                         key={item.id}
                         item={item}
-                        ownedItemIds={ownedItemIds}
+                        ownedItemsMap={ownedItemsMap}
                         boundPlayer={boundPlayer}
                         buyingId={buyingId}
                         onBuy={handleBuy}
@@ -291,22 +298,70 @@ const PreviewBadge: React.FC<{ label?: string, icon?: React.ReactNode, text: str
   </div>
 );
 
+const TIER_META: Record<string, { label: string; class: string; borderHover: string; glow: string; textClass: string }> = {
+  classic: {
+    label: '經典',
+    class: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50',
+    borderHover: 'hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-slate-500/5',
+    glow: '',
+    textClass: 'text-slate-600 dark:text-slate-400',
+  },
+  epic: {
+    label: '史詩',
+    class: 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 font-black',
+    borderHover: 'hover:border-purple-500/40 dark:hover:border-purple-500/40',
+    glow: 'hover:shadow-purple-500/10 dark:hover:shadow-purple-500/5',
+    textClass: 'text-purple-600 dark:text-purple-400',
+  },
+  legendary: {
+    label: '傳說',
+    class: 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50 font-black animate-pulse',
+    borderHover: 'hover:border-orange-500/40 dark:hover:border-orange-500/40',
+    glow: 'hover:shadow-orange-500/20 dark:hover:shadow-orange-500/10 hover:ring-1 hover:ring-orange-500/20',
+    textClass: 'text-orange-500 dark:text-orange-400',
+  },
+  ultimate: {
+    label: '終極',
+    class: 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white border border-transparent font-black shadow-sm shadow-purple-500/30',
+    borderHover: 'hover:border-pink-500/40 dark:hover:border-purple-500/40',
+    glow: 'hover:shadow-purple-500/25 dark:hover:shadow-purple-500/15 hover:ring-1 hover:ring-purple-500/30 hover:scale-[1.02] duration-300',
+    textClass: 'text-pink-600 dark:text-pink-400 bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent',
+  }
+};
+
 const ShopItemCard: React.FC<{
   item: any;
-  ownedItemIds: Set<number>;
+  ownedItemsMap: Record<number, { isPermanent: boolean }>;
   boundPlayer: any;
   buyingId: number | null;
-  onBuy: (item: any) => void;
+  onBuy: (item: any, isPermanent: boolean) => void;
   onPreview: (type: 'title' | 'frame' | 'background', name: string) => void;
-}> = ({ item, ownedItemIds, boundPlayer, buyingId, onBuy, onPreview }) => {
-  const isOwned = ownedItemIds.has(item.id);
+}> = ({ item, ownedItemsMap, boundPlayer, buyingId, onBuy, onPreview }) => {
+  const [isPermanent, setIsPermanent] = useState(false);
+  const ownedInfo = ownedItemsMap[item.id];
+  const isOwned = !!ownedInfo;
+  const isOwnedPermanent = !!ownedInfo?.isPermanent;
+  
+  const tierInfo = TIER_META[item.tier] || TIER_META.classic;
+  const currentPrice = isPermanent ? item.price_permanent : item.price;
   
   return (
     <motion.div
       onClick={() => onPreview(item.item_type, item.name)}
-      className="group relative bg-white dark:bg-slate-800/40 rounded-2xl md:rounded-[2.5rem] p-3 md:p-6 border border-slate-100 dark:border-slate-800 hover:border-amber-500/30 dark:hover:border-amber-500/30 transition-all flex flex-col cursor-pointer hover:shadow-xl"
+      className={cn(
+        "group relative bg-white dark:bg-slate-800/40 rounded-2xl md:rounded-[2.5rem] p-3 md:p-6 border border-slate-100 dark:border-slate-800 transition-all flex flex-col cursor-pointer",
+        tierInfo.borderHover,
+        tierInfo.glow
+      )}
     >
       <div className="aspect-video bg-slate-50 dark:bg-slate-900 rounded-xl md:rounded-[2rem] mb-3 md:mb-6 flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-100/50 dark:border-white/5">
+        {/* LoL style Tier Badge */}
+        <div className="absolute top-2 left-2 z-20">
+          <span className={cn("text-[9px] md:text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider", tierInfo.class)}>
+            {tierInfo.label}
+          </span>
+        </div>
+
         <div className="absolute inset-0 z-0">
           <img 
             src={
@@ -349,13 +404,18 @@ const ShopItemCard: React.FC<{
                 className="absolute inset-0 z-0 opacity-80"
                 style={{ 
                   background: 
-                    item.name.includes("櫻") || item.name.includes("粉") ? "linear-gradient(135deg, #fbcfe8, #f472b6)" :
-                    item.name.includes("雷") || item.name.includes("電") ? "linear-gradient(135deg, #a855f7, #fbbf24)" :
-                    item.name.includes("羽") || item.name.includes("藍") || item.name.includes("涼") ? "linear-gradient(135deg, #e0f2fe, #7dd3fc)" :
-                    item.name.includes("星") || item.name.includes("夜") || item.name.includes("夢") ? "linear-gradient(135deg, #1e3a8a, #3b82f6)" :
-                    item.name.includes("黑") || item.name.includes("暗") || item.name.includes("影") ? "linear-gradient(135deg, #1e293b, #020617)" :
-                    item.name.includes("夕陽") || item.name.includes("金") || item.name.includes("黃") ? "linear-gradient(135deg, #fb923c, #f43f5e)" :
-                    item.name.includes("森") || item.name.includes("青") || item.name.includes("綠") || item.name.includes("盎") ? "linear-gradient(135deg, #4ade80, #064e3b)" :
+                    item.name.includes("鐵牌") ? "linear-gradient(135deg, #64748b, #334155)" :
+                    item.name.includes("銅牌") ? "linear-gradient(135deg, #b45309, #78350f)" :
+                    item.name.includes("白銀") ? "linear-gradient(135deg, #cbd5e1, #94a3b8)" :
+                    item.name.includes("黃金") ? "linear-gradient(135deg, #fbbf24, #d97706)" :
+                    item.name.includes("白金") ? "linear-gradient(135deg, #2dd4bf, #0284c7)" :
+                    item.name.includes("翡翠") ? "linear-gradient(135deg, #10b981, #065f46)" :
+                    item.name.includes("鑽石") ? "linear-gradient(135deg, #60a5fa, #3b82f6)" :
+                    item.name.includes("大師") ? "linear-gradient(135deg, #8b5cf6, #581c87)" :
+                    item.name.includes("宗師") ? "linear-gradient(135deg, #e11d48, #9f1239)" :
+                    item.name.includes("菁英") ? "linear-gradient(135deg, #fbbf24, #a855f7)" :
+                    item.name.includes("起源") ? "linear-gradient(135deg, #d946ef, #000000)" :
+                    item.name.includes("飄零") ? "linear-gradient(135deg, #e0f2fe, #7dd3fc)" :
                     "linear-gradient(135deg, #94a3b8, #64748b)"
                 }}
               />
@@ -367,14 +427,18 @@ const ShopItemCard: React.FC<{
                     className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow"
                     style={{ 
                       background: 
-                        item.name.includes("金") ? "conic-gradient(from 0deg, transparent 0deg, #fbbf24 90deg, transparent 180deg, #fbbf24 270deg, transparent 360deg)" :
-                        item.name.includes("極光") || item.name.includes("幻彩") ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)" :
-                        item.name.includes("火") || item.name.includes("紅") ? "conic-gradient(from 0deg, #ef4444, #f97316, transparent, #ef4444)" :
-                        item.name.includes("銀") || item.name.includes("白") || item.name.includes("羽") ? "conic-gradient(from 0deg, #cbd5e1, #f8fafc, transparent, #cbd5e1)" :
-                        item.name.includes("雷") || item.name.includes("電") || item.name.includes("紫") ? "conic-gradient(from 0deg, #a855f7, #c084fc, transparent, #a855f7)" :
-                        item.name.includes("翡翠") || item.name.includes("綠") || item.name.includes("青") ? "conic-gradient(from 0deg, #22c55e, #10b981, transparent, #22c55e)" :
-                        item.name.includes("黑") || item.name.includes("影") || item.name.includes("暗") ? "conic-gradient(from 0deg, #475569, #020617, transparent, #475569)" :
-                        item.name.includes("青銅") ? "conic-gradient(from 0deg, #b45309, #d97706, transparent, #b45309)" :
+                        item.name.includes("鐵牌") ? "conic-gradient(from 0deg, #64748b, #334155, transparent, #64748b)" :
+                        item.name.includes("青銅") ? "conic-gradient(from 0deg, #b45309, #78350f, transparent, #b45309)" :
+                        item.name.includes("白銀") ? "conic-gradient(from 0deg, #cbd5e1, #94a3b8, transparent, #cbd5e1)" :
+                        item.name.includes("黃金") ? "conic-gradient(from 0deg, #fbbf24, #d97706, transparent, #fbbf24)" :
+                        item.name.includes("白金") ? "conic-gradient(from 0deg, #2dd4bf, #0284c7, transparent, #2dd4bf)" :
+                        item.name.includes("翡翠") ? "conic-gradient(from 0deg, #10b981, #065f46, transparent, #10b981)" :
+                        item.name.includes("鑽石") ? "conic-gradient(from 0deg, #60a5fa, #3b82f6, transparent, #60a5fa)" :
+                        item.name.includes("大師") ? "conic-gradient(from 0deg, #8b5cf6, #581c87, transparent, #8b5cf6)" :
+                        item.name.includes("宗師") ? "conic-gradient(from 0deg, #e11d48, #9f1239, transparent, #e11d48)" :
+                        item.name.includes("菁英") ? "conic-gradient(from 0deg, #fbbf24, #d946ef, #8b5cf6, #fbbf24)" :
+                        item.name.includes("萬象星空") ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)" :
+                        item.name.includes("聖白羽翼") ? "conic-gradient(from 0deg, #ffffff, #e0f2fe, transparent, #ffffff)" :
                         "conic-gradient(from 0deg, #e2e8f0, #f8fafc, transparent, #e2e8f0)"
                     }}
                   />
@@ -386,26 +450,78 @@ const ShopItemCard: React.FC<{
         )}
       </div>
 
-      <h3 className="text-sm md:text-lg font-black text-slate-900 dark:text-white mb-1 md:mb-2 truncate">{item.name}</h3>
-      <p className="hidden md:block text-xs text-slate-400 dark:text-slate-500 mb-6 line-clamp-2 leading-relaxed flex-1">{item.description || '一件神祕的珍寶'}</p>
+      <h3 className={cn("text-sm md:text-lg font-black mb-1 md:mb-2 truncate", tierInfo.textClass)}>
+        {item.name}
+      </h3>
+      <p className="hidden md:block text-xs text-slate-400 dark:text-slate-500 mb-2 line-clamp-2 leading-relaxed flex-1">{item.description || '一件神祕的珍寶'}</p>
+
+      {/* 雙規格切換器 */}
+      <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 my-3 w-full self-center">
+        <button
+          type="button"
+          disabled={isOwnedPermanent}
+          onClick={(e) => { e.stopPropagation(); setIsPermanent(false); }}
+          className={cn(
+            "flex-1 py-1 rounded-md text-[9px] md:text-xs font-black transition-all",
+            !isPermanent 
+              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
+          )}
+        >
+          7天
+        </button>
+        <button
+          type="button"
+          disabled={isOwnedPermanent}
+          onClick={(e) => { e.stopPropagation(); setIsPermanent(true); }}
+          className={cn(
+            "flex-1 py-1 rounded-md text-[9px] md:text-xs font-black transition-all",
+            isPermanent 
+              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
+          )}
+        >
+          永久
+        </button>
+      </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-auto pt-2 md:pt-4 border-t border-slate-50 dark:border-slate-800 gap-2">
         <div className="flex flex-col">
-           <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider">有效期 {item.duration_days} 天</span>
+           <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider">
+             {isPermanent ? "永久持有" : `有效期 ${item.duration_days} 天`}
+           </span>
            <div className="flex items-center gap-1 mt-0.5 md:mt-1">
               <Feather size={12} className="text-sky-500 md:w-3.5 md:h-3.5" />
-              <span className="text-sm md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none">{item.price}</span>
+              <span className="text-sm md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none">
+                {currentPrice}
+              </span>
            </div>
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); if (!isOwned) onBuy(item); }}
-          disabled={buyingId === item.id || (boundPlayer?.feathers || 0) < item.price || isOwned}
+          onClick={(e) => { e.stopPropagation(); onBuy(item, isPermanent); }}
+          disabled={
+            buyingId === item.id || 
+            (boundPlayer?.feathers || 0) < currentPrice || 
+            isOwnedPermanent
+          }
           className={cn(
             "px-3 py-2 md:px-6 md:py-3 rounded-xl font-black text-[10px] md:text-xs transition-all active:scale-95 whitespace-nowrap shadow-sm",
-            isOwned ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default" : (boundPlayer?.feathers || 0) < item.price ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 dark:shadow-none"
+            isOwnedPermanent 
+              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default" 
+              : (boundPlayer?.feathers || 0) < currentPrice 
+              ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed" 
+              : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 dark:shadow-none"
           )}
         >
-          {buyingId === item.id ? <div className="w-3 h-3 md:w-4 md:h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : isOwned ? '已持有' : '兌換'}
+          {buyingId === item.id ? (
+            <div className="w-3 h-3 md:w-4 md:h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : isOwnedPermanent ? (
+            '已永久擁有'
+          ) : isOwned ? (
+            isPermanent ? '升級永久' : '續期'
+          ) : (
+            '兌換'
+          )}
         </button>
       </div>
     </motion.div>

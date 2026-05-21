@@ -149,9 +149,21 @@ def matchmake(
         
         eff_ratings[pid] = trueskill.Rating(mu=target_mu - mu_penalty, sigma=p['sigma'])
 
+    forced_player_ids = {pid for pid in selected_ids if wait_count_map.get(pid, 0) >= 3}
+    
     matches = []
     for group in itertools.combinations(finalist_pool, 4):
         g_ids = [str(p['id']) for p in group]
+        
+        # --- Forced Priority Penalty ---
+        # 如果排出的組合遺漏了「強制上場」的玩家，給予極大懲罰
+        g_ids_set = set(g_ids)
+        missing_forced = len(forced_player_ids - g_ids_set)
+        forced_penalty = 0.0
+        # 允許的遺漏數 = max(0, 總強制人數 - 4)，如果超過則懲罰
+        if missing_forced > max(0, len(forced_player_ids) - 4):
+            forced_penalty = missing_forced * 10000.0
+
         splits = [
             ((g_ids[0], g_ids[3]), (g_ids[1], g_ids[2])),
             ((g_ids[0], g_ids[2]), (g_ids[1], g_ids[3])),
@@ -163,7 +175,7 @@ def matchmake(
             
             penalty = get_penalty(list(t1_ids), list(t2_ids), precomputed_matches, last_match_ids, ignore_fatigue)
             
-            effective_quality = q - penalty + (random.random() * 0.02)
+            effective_quality = q - penalty - forced_penalty + (random.random() * 0.02)
             
             # Map back to player objects for the response
             p_map = {str(p['id']): p for p in group}

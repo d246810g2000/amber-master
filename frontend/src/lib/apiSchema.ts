@@ -115,3 +115,20 @@ export type RawPlayer = z.infer<typeof RawPlayerSchema>;
 export type RawPlayerStat = z.infer<typeof RawPlayerStatSchema>;
 export type RawMatch = z.infer<typeof RawMatchSchema>;
 export type FeatherTransaction = z.infer<typeof FeatherTransactionSchema>;
+
+export const PlayerLoanSchema = z.object({
+  id: z.number(),
+  lender_id: z.string(),
+  borrower_id: z.string(),
+  lender_name: z.string(),
+  borrower_name: z.string(),
+  principal: z.number(),
+  interest_rate: z.number(),
+  total_due: z.number(),
+  repaid_amount: z.number(),
+  status: z.string(),
+  created_at: z.string().nullable().optional(),
+});
+
+export type PlayerLoan = z.infer<typeof PlayerLoanSchema>;
+

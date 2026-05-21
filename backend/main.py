@@ -12,6 +12,121 @@ from database import engine, Base, get_db
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
+# Run schema migrations and seeds sync
+from sqlalchemy.inspection import inspect
+from sqlalchemy import text
+from database import SessionLocal
+
+def run_db_migrations():
+    # 1. Schema migration
+    with engine.connect() as conn:
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('shop_items')]
+        
+        if 'price_permanent' not in columns:
+            print("MIGRATION: Adding price_permanent column to shop_items...")
+            conn.execute(text("ALTER TABLE shop_items ADD COLUMN price_permanent INT NOT NULL DEFAULT 0"))
+            conn.commit()
+            
+        if 'tier' not in columns:
+            print("MIGRATION: Adding tier column to shop_items...")
+            conn.execute(text("ALTER TABLE shop_items ADD COLUMN tier VARCHAR(20) DEFAULT 'classic'"))
+            conn.commit()
+            
+        if 'player_loans' not in inspector.get_table_names():
+            print("MIGRATION: Creating player_loans table...")
+            conn.execute(text("""
+                CREATE TABLE player_loans (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    lender_id VARCHAR(50) NOT NULL,
+                    borrower_id VARCHAR(50) NOT NULL,
+                    principal INT NOT NULL,
+                    interest_rate FLOAT NOT NULL DEFAULT 0.0,
+                    total_due INT NOT NULL,
+                    repaid_amount INT NOT NULL DEFAULT 0,
+                    status VARCHAR(20) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (lender_id) REFERENCES players(id),
+                    FOREIGN KEY (borrower_id) REFERENCES players(id),
+                    INDEX idx_borrower (borrower_id),
+                    INDEX idx_lender (lender_id)
+                )
+            """))
+            conn.commit()
+
+            
+    # 2. Seed data update
+    db = SessionLocal()
+    try:
+        seeds = [
+            ('球場邊緣人', '永遠在場邊等主揪叫名字', 150, 600, 'title', 7, 'classic'),
+            ('撿球大師', '打球五分鐘，撿球兩小時', 150, 600, 'title', 7, 'classic'),
+            ('報隊請排隊', '場邊磁鐵永遠掛最後一個', 150, 600, 'title', 7, 'classic'),
+            ('發球姿勢 100 分', '姿勢很帥，但球通常沒過網', 250, 1000, 'title', 7, 'epic'),
+            ('活在線上的男人', '專打壓線界內球，鷹眼都沒用', 250, 1000, 'title', 7, 'epic'),
+            ('微笑殺手(肉球製造機)', '送對手滿滿的甜球（肉球）', 250, 1000, 'title', 7, 'epic'),
+            ('連裁判都敢殺', '殺球直接往主審臉上砸', 500, 2000, 'title', 7, 'legendary'),
+            ('撲球之鬼', '球場上移動的吸塵器', 500, 2000, 'title', 7, 'legendary'),
+            ('撲球之鬼(不擦地)', '撲完球還要隊友幫忙擦地板', 500, 2000, 'title', 7, 'legendary'),
+            ('跪求贊助零打券', '白嫖最高境界，全場焦點', 800, 3200, 'title', 7, 'ultimate'),
+            ('羽球界戴資穎', '假動作騙到對手腳骨折', 800, 3200, 'title', 7, 'ultimate'),
+            ('這個殺氣不對勁', '一站上場，全場退避三舍', 800, 3200, 'title', 7, 'ultimate'),
+            ('倔強鐵牌木框', '鐵牌（暗灰色 / 粗糙木質紋理）', 250, 1000, 'frame', 7, 'classic'),
+            ('不屈青銅邊框', '銅牌（古銅色 / 紅棕暗光）', 250, 1000, 'frame', 7, 'classic'),
+            ('傲氣白銀邊框', '銀牌（亮銀色 / 潔淨白光）', 250, 1000, 'frame', 7, 'classic'),
+            ('榮耀黃金邊框', '金牌（耀眼金黃 / 閃爍光芒）', 500, 2000, 'frame', 7, 'epic'),
+            ('華麗白金邊框', '白金（青碧色 / 帶點淡綠偏藍的光澤）', 500, 2000, 'frame', 7, 'epic'),
+            ('璀璨翡翠邊框', '翡翠（深邃翠綠 / 寶石螢光）', 500, 2000, 'frame', 7, 'epic'),
+            ('璀璨鑽石邊框', '鑽石（亮藍色 / 鑽石高光反射）', 800, 3200, 'frame', 7, 'legendary'),
+            ('大師紫羅蘭框', '大師（神祕深紫 / 尊貴紫光）', 800, 3200, 'frame', 7, 'legendary'),
+            ('宗師傲紅邊框', '宗師（霸氣深紅 / 火焰微光）', 800, 3200, 'frame', 7, 'legendary'),
+            ('頂尖菁英流光框', '菁英（金黃至霓虹紫動態流光漸變）', 1000, 4000, 'frame', 7, 'ultimate'),
+            ('萬象星空邊框', '終極（LoL 元素使拉克絲概念，星空幻彩）', 1000, 4000, 'frame', 7, 'ultimate'),
+            ('聖白羽翼邊框', '終極（天使聖光 / 飄落羽毛特效）', 1000, 4000, 'frame', 7, 'ultimate'),
+            ('鐵牌：霧霾灰階', '低調暗沉的灰色煙霧特效', 500, 2000, 'background', 7, 'classic'),
+            ('銅牌：大地岩落', '微弱的岩石與泥土粒子緩慢飄落', 500, 2000, 'background', 7, 'classic'),
+            ('白銀：微光銀河', '乾淨、銀白色的細小流星特效', 500, 2000, 'background', 7, 'classic'),
+            ('黃金：金光閃耀', '畫面四周有金色奢華粒子向上徐升', 800, 3200, 'background', 7, 'epic'),
+            ('白金：海克斯科技', '青藍色的科技魔法護盾微光背景', 800, 3200, 'background', 7, 'epic'),
+            ('翡翠：螢火之森', '深綠森林中帶有螢火蟲的幽綠光點', 800, 3200, 'background', 7, 'epic'),
+            ('鑽石：星辰風暴', 'Hover 時觸發亮藍色鑽石折射與冰晶外發光', 1000, 4000, 'background', 7, 'legendary'),
+            ('大師：虛空星河', '神祕的深紫色星空，自帶黑洞邊緣扭曲特效', 1000, 4000, 'background', 7, 'legendary'),
+            ('宗師：雷霆萬鈞', '血紅色閃電偶爾劃過夜空的動態特效', 1000, 4000, 'background', 7, 'legendary'),
+            ('菁英：傲世神巔', '卡片與背景完美融合，全服通告級流光', 1500, 6000, 'background', 7, 'ultimate'),
+            ('終極：起源矩陣', '霓虹紫與數位矩陣程式碼流動（源計畫畫風）', 1500, 6000, 'background', 7, 'ultimate'),
+            ('終極：飄零羽落', '動態羽毛飄落特效背景', 1500, 6000, 'background', 7, 'ultimate'),
+        ]
+        for name, desc, price, price_perm, item_type, dur_days, tier in seeds:
+            item = db.query(models.ShopItem).filter(models.ShopItem.name == name).first()
+            if item:
+                item.description = desc
+                item.price = price
+                item.price_permanent = price_perm
+                item.item_type = item_type
+                item.duration_days = dur_days
+                item.tier = tier
+            else:
+                item = models.ShopItem(
+                    name=name,
+                    description=desc,
+                    price=price,
+                    price_permanent=price_perm,
+                    item_type=item_type,
+                    duration_days=dur_days,
+                    tier=tier
+                )
+                db.add(item)
+        db.commit()
+        print("MIGRATION: Shop items seeds updated successfully.")
+    except Exception as e:
+        db.rollback()
+        print(f"MIGRATION ERROR: Failed to update shop items seeds: {e}")
+    finally:
+        db.close()
+
+run_db_migrations()
+
 app = FastAPI(title="Amber Badminton API")
 
 
@@ -579,6 +694,72 @@ def get_player_feathers(player_id: str, limit: int = 50, db: Session = Depends(g
     transactions = crud.get_feather_transactions(db, player_id, limit)
     return success(transactions)
 
+@app.get("/players/{player_id}/loans")
+def get_player_loans(player_id: str, db: Session = Depends(get_db)):
+    # 先主動清理過期借貸
+    crud.check_and_expire_loans(db)
+
+    lent = db.query(models.PlayerLoan).filter(models.PlayerLoan.lender_id == player_id).order_by(models.PlayerLoan.created_at.desc()).all()
+    borrowed = db.query(models.PlayerLoan).filter(models.PlayerLoan.borrower_id == player_id).order_by(models.PlayerLoan.created_at.desc()).all()
+    
+    def to_dict(loan):
+        lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+        borrower = db.query(models.Player).filter(models.Player.id == loan.borrower_id).first()
+        return {
+            "id": loan.id,
+            "lender_id": loan.lender_id,
+            "borrower_id": loan.borrower_id,
+            "lender_name": lender.name if lender else "未知",
+            "borrower_name": borrower.name if borrower else "未知",
+            "principal": loan.principal,
+            "interest_rate": loan.interest_rate,
+            "total_due": loan.total_due,
+            "repaid_amount": loan.repaid_amount,
+            "status": loan.status,
+            "created_at": loan.created_at.isoformat() if loan.created_at else None
+        }
+        
+    return success({
+        "lent": [to_dict(l) for l in lent],
+        "borrowed": [to_dict(b) for b in borrowed]
+    })
+
+@app.post("/loans")
+def create_loan(req: schemas.LoanCreateRequest, db: Session = Depends(get_db)):
+    res = crud.create_loan(db, req.lender_id, req.borrower_id, req.principal, req.interest_rate)
+    if res["status"] == "error":
+        raise HTTPException(status_code=400, detail=res["message"])
+    return success(res)
+
+@app.post("/loans/{loan_id}/accept")
+def accept_loan(loan_id: int, db: Session = Depends(get_db)):
+    res = crud.accept_loan(db, loan_id)
+    if res["status"] == "error":
+        raise HTTPException(status_code=400, detail=res["message"])
+    return success(res)
+
+@app.post("/loans/{loan_id}/reject")
+def reject_loan(loan_id: int, db: Session = Depends(get_db)):
+    res = crud.reject_loan(db, loan_id)
+    if res["status"] == "error":
+        raise HTTPException(status_code=400, detail=res["message"])
+    return success(res)
+
+@app.post("/loans/{loan_id}/cancel")
+def cancel_loan(loan_id: int, db: Session = Depends(get_db)):
+    res = crud.cancel_loan(db, loan_id)
+    if res["status"] == "error":
+        raise HTTPException(status_code=400, detail=res["message"])
+    return success(res)
+
+@app.post("/loans/{loan_id}/repay")
+def repay_loan(loan_id: int, req: schemas.LoanRepayRequest, db: Session = Depends(get_db)):
+    res = crud.repay_loan(db, loan_id, req.amount)
+    if res["status"] == "error":
+        raise HTTPException(status_code=400, detail=res["message"])
+    return success(res)
+
+
 @app.post("/bets")
 async def place_bet(req: schemas.BetRequest, db: Session = Depends(get_db)):
     player = crud.get_player_by_email(db, req.playerEmail)
@@ -628,7 +809,7 @@ def buy_item(req: schemas.BuyRequest, db: Session = Depends(get_db)):
     player = crud.get_player_by_email(db, req.userEmail)
     if not player:
         return error("USER_NOT_BOUND")
-    return crud.buy_item(db, player.id, req.itemId)
+    return crud.buy_item(db, player.id, req.itemId, req.isPermanent)
 
 @app.get("/players/{player_id}/inventory")
 def get_inventory(player_id: str, db: Session = Depends(get_db)):

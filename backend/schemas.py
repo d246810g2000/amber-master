@@ -43,8 +43,10 @@ class ShopItem(BaseModel):
     name: str
     description: Optional[str] = None
     price: int
+    price_permanent: int
     item_type: str
     duration_days: int
+    tier: str
     image_url: Optional[str] = None
 
     class Config:
@@ -225,6 +227,7 @@ class BetStatus(BaseModel):
 class BuyRequest(BaseModel):
     itemId: int
     userEmail: str
+    isPermanent: Optional[bool] = False
 
 class InventoryItem(BaseModel):
     id: int
@@ -237,3 +240,29 @@ class InventoryItem(BaseModel):
 
 class EquipRequest(BaseModel):
     itemId: int
+
+class LoanCreateRequest(BaseModel):
+    lender_id: str
+    borrower_id: str
+    principal: int
+    interest_rate: float
+
+class LoanRepayRequest(BaseModel):
+    amount: Optional[int] = None
+
+class PlayerLoanSchema(BaseModel):
+    id: int
+    lender_id: str
+    borrower_id: str
+    lender_name: str
+    borrower_name: str
+    principal: int
+    interest_rate: float
+    total_due: int
+    repaid_amount: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

@@ -52,30 +52,27 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   const activeFrame = player.active_frame?.name;
   const activeBackground = player.active_background?.name;
 
-  const isFlowingFrame = ["傳奇黃金", "極光幻彩", "鑽石星辰"].includes(activeFrame || "");
-  const isFallingFeathers = activeBackground === "飄零羽落";
+  const isFlowingFrame = ["頂尖菁英流光框", "萬象星空邊框"].includes(activeFrame || "");
+  const isFallingFeathers = activeBackground === "終極：飄零羽落";
 
-  const frameClass = activeFrame === "初學者青銅" 
-    ? "border-amber-700/50 shadow-[0_0_10px_rgba(180,83,9,0.2)]" 
-    : activeFrame === "熱血火紅"
-    ? "border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse-subtle"
-    : activeFrame === "純白羽框"
-    ? "border-white dark:border-white/80 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/20"
-    : activeFrame === "暗影雷鳴"
-    ? "border-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.4)]"
-    : activeFrame === "翡翠之心"
-    ? "border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
-    : isFlowingFrame
-    ? "border-transparent shadow-none"
+  const frameBorderClass = activeFrame === "倔強鐵牌木框" ? "border-slate-500 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+    : activeFrame === "不屈青銅邊框" ? "border-amber-800 shadow-[0_0_10px_rgba(146,64,14,0.4)]"
+    : activeFrame === "傲氣白銀邊框" ? "border-slate-300 shadow-[0_0_12px_rgba(203,213,225,0.6)]"
+    : activeFrame === "榮耀黃金邊框" ? "border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+    : activeFrame === "華麗白金邊框" ? "border-teal-300 shadow-[0_0_15px_rgba(94,234,212,0.6)]"
+    : activeFrame === "璀璨翡翠邊框" ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)]"
+    : activeFrame === "璀璨鑽石邊框" ? "border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.8)]"
+    : activeFrame === "大師紫羅蘭框" ? "border-purple-500 shadow-[0_0_18px_rgba(168,85,247,0.8)]"
+    : activeFrame === "宗師傲紅邊框" ? "border-rose-600 shadow-[0_0_20px_rgba(225,29,72,0.8)]"
+    : activeFrame === "聖白羽翼邊框" ? "border-white dark:border-white/80 shadow-[0_0_15px_rgba(255,255,255,0.8)] ring-1 ring-white/20"
+    : isFlowingFrame ? "border-transparent shadow-none"
     : null;
 
   // 定義流光特效的顏色
-  const flowingGradient = activeFrame === "傳奇黃金"
-    ? "conic-gradient(from 0deg, transparent 0deg, #fbbf24 90deg, transparent 180deg, #fbbf24 270deg, transparent 360deg)"
-    : activeFrame === "極光幻彩"
+  const flowingGradient = activeFrame === "頂尖菁英流光框"
+    ? "conic-gradient(from 0deg, #fbbf24, #d946ef, #8b5cf6, #fbbf24)"
+    : activeFrame === "萬象星空邊框"
     ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)"
-    : activeFrame === "鑽石星辰"
-    ? "conic-gradient(from 0deg, #fff 0deg, #e2e8f0 45deg, transparent 90deg, #fff 135deg, #f8fafc 180deg, transparent 225deg, #fff 270deg, #e2e8f0 315deg, #fff 360deg)"
     : "";
 
   return (
@@ -85,16 +82,16 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
     )}>
 
       {/* Pure White Frame Corner Feather */}
-      {activeFrame === "純白羽框" && (
+      {activeFrame === "聖白羽翼邊框" && (
         <Feather size={12} className="absolute -top-1 -right-1 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-[70]" />
       )}
 
       {/* Diamond Stardust Sparkles */}
-      {activeFrame === "鑽石星辰" && (
+      {activeFrame === "璀璨鑽石邊框" && (
         <div className="absolute inset-0 z-[60] pointer-events-none">
-          <Sparkles size={12} className="absolute -top-1 -left-1 text-white animate-pulse" />
-          <Sparkles size={10} className="absolute -bottom-1 -right-1 text-blue-200 animate-pulse [animation-delay:1s]" />
-          <Sparkles size={8} className="absolute top-1/2 -right-2 text-white animate-bounce-slow" />
+          <Sparkles size={12} className="absolute -top-1 -left-1 text-blue-300 animate-pulse" />
+          <Sparkles size={10} className="absolute -bottom-1 -right-1 text-cyan-200 animate-pulse [animation-delay:1s]" />
+          <Sparkles size={8} className="absolute top-1/2 -right-2 text-blue-100 animate-bounce-slow" />
         </div>
       )}
 
@@ -127,10 +124,13 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             >
               {(() => {
                 const titleText = activeTitle.toLowerCase();
-                const isLegendary = titleText.includes('傳說') || titleText.includes('守護') || titleText.includes('殺手') || titleText.includes('鬼') || titleText.includes('裁判');
-                const isEpic = titleText.includes('機器') || titleText.includes('大師') || titleText.includes('100');
+                const isUltimate = titleText.includes('跪求') || titleText.includes('戴資穎') || titleText.includes('殺氣');
+                const isLegendary = titleText.includes('裁判') || titleText.includes('鬼');
+                const isEpic = titleText.includes('姿勢') || titleText.includes('線上') || titleText.includes('殺手');
                 
-                const theme = isLegendary 
+                const theme = isUltimate
+                  ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-500 text-white border-amber-300 shadow-[0_0_15px_rgba(217,70,239,0.5)] font-black"
+                  : isLegendary 
                   ? "bg-amber-400 text-amber-950 border-amber-200 shadow-[0_2px_10px_rgba(245,158,11,0.2)]"
                   : isEpic
                   ? "bg-indigo-500 text-white border-indigo-300 shadow-[0_2px_8px_rgba(99,102,241,0.2)]"
@@ -142,9 +142,9 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                       "absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500",
                       theme
                     )}>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-40" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer opacity-60" />
                     </div>
-                    <span className="relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1">
+                    <span className="relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1 drop-shadow-md">
                       {activeTitle}
                     </span>
                   </>
@@ -167,20 +167,16 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         }}
         disabled={status === "playing" || status === "finishing" || !hasControl}
         className={cn(
-          "flex flex-col items-center justify-center p-2 rounded-2xl border-2 transition-all duration-300 shadow-sm w-[68px] h-[80px] md:w-20 md:h-24 relative overflow-hidden",
+          "flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl border-2 border-transparent transition-all duration-300 w-[68px] h-[88px] md:p-2 md:w-20 md:h-[102px] relative overflow-hidden",
           
           /* 基礎背景與文字顏色 */
           status === "playing" 
-            ? "bg-slate-50 dark:bg-slate-900 text-slate-400 border-slate-200"
+            ? "bg-slate-50 dark:bg-slate-900 text-slate-400"
             : status === "ready"
               ? isSelected 
                 ? "bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" 
                 : "bg-white dark:bg-slate-900 text-slate-800"
-              : "bg-white/80 dark:bg-slate-800/80 text-slate-600",
-          
-          /* 造型邊框類別 */
-          frameClass,
-          isFlowingFrame && "border-transparent shadow-none"
+              : "bg-white/80 dark:bg-slate-800/80 text-slate-600"
         )}
       >
         {/* [新結構] 流光背景層：放在 Button 內部最底層 */}
@@ -203,35 +199,40 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
 
         {/* [新結構] 背景特效層：與邊框分離 */}
         {activeBackground && (
-          <div className="absolute inset-0 z-[10] overflow-hidden pointer-events-none">
-            {/* 飄零羽落 */}
-            {activeBackground === "飄零羽落" && (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-br from-sky-50/40 to-indigo-50/20 dark:from-sky-900/10 dark:to-indigo-900/10" />
-                <div className="absolute inset-0 pointer-events-none">
-                  <Feather size={14} className="absolute top-0 left-1/4 text-sky-500/60 animate-feather-fall" />
-                  <Feather size={12} className="absolute top-0 left-2/3 text-indigo-400/50 animate-feather-fall [animation-delay:1.5s]" />
-                  <Feather size={16} className="absolute top-0 left-1/2 text-amber-300/40 animate-feather-fall [animation-delay:0.8s]" />
-                </div>
-              </>
+          <div className={cn(
+            "absolute z-[10] overflow-hidden pointer-events-none",
+            isFlowingFrame ? "inset-[2px] rounded-[14px]" : "inset-0"
+          )}>
+            
+            {/* 鐵牌：霧霾灰階 */}
+            {activeBackground === "鐵牌：霧霾灰階" && (
+              <div className="absolute inset-0 bg-slate-700/30 backdrop-blur-[1px]" />
             )}
 
-            {/* 落櫻繽紛 */}
-            {activeBackground === "落櫻繽紛" && (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-br from-rose-50/40 to-pink-50/20 dark:from-rose-900/10 dark:to-pink-900/10" />
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-0 left-[20%] text-rose-300/60 animate-feather-fall text-xs">🌸</div>
-                  <div className="absolute top-0 left-[60%] text-pink-300/50 animate-feather-fall [animation-delay:2s] text-[10px]">🌸</div>
-                  <div className="absolute top-0 left-[80%] text-rose-200/40 animate-feather-fall [animation-delay:1s] text-xs">🌸</div>
-                </div>
-              </>
+            {/* 銅牌：大地岩落 */}
+            {activeBackground === "銅牌：大地岩落" && (
+              <div className="absolute inset-0 bg-amber-900/20 backdrop-blur-[1px]" />
             )}
 
-            {/* 螢火之森 */}
-            {activeBackground === "螢火之森" && (
+            {/* 白銀：微光銀河 */}
+            {activeBackground === "白銀：微光銀河" && (
+              <div className="absolute inset-0 bg-slate-400/20 backdrop-blur-[1px]" />
+            )}
+
+            {/* 黃金：金光閃耀 */}
+            {activeBackground === "黃金：金光閃耀" && (
+              <div className="absolute inset-0 bg-gradient-to-t from-amber-400/20 to-transparent" />
+            )}
+
+            {/* 白金：海克斯科技 */}
+            {activeBackground === "白金：海克斯科技" && (
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-blue-500/10" />
+            )}
+
+            {/* 翡翠：螢火之森 */}
+            {activeBackground === "翡翠：螢火之森" && (
               <>
-                <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent dark:from-emerald-900/10" />
+                <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/20 to-transparent dark:from-emerald-900/20" />
                 <div className="absolute inset-0 pointer-events-none">
                   {[...Array(6)].map((_, i) => (
                     <div 
@@ -248,65 +249,64 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
               </>
             )}
 
-            {/* 雷霆萬鈞 */}
-            {activeBackground === "雷霆萬鈞" && (
+            {/* 鑽石：星辰風暴 */}
+            {activeBackground === "鑽石：星辰風暴" && (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-indigo-500/20 hover:from-blue-300/50 hover:to-cyan-400/40 transition-colors duration-500" />
+            )}
+
+            {/* 大師：虛空星河 */}
+            {activeBackground === "大師：虛空星河" && (
               <>
-                <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-950/20" />
-                <div className="absolute inset-0 bg-purple-500/20 animate-lightning" />
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-900 animate-nebula opacity-80" />
+                <div className="absolute inset-0 bg-purple-600/10 rounded-[50%] blur-[20px] scale-150 animate-pulse" />
+              </>
+            )}
+
+            {/* 宗師：雷霆萬鈞 */}
+            {activeBackground === "宗師：雷霆萬鈞" && (
+              <>
+                <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/20" />
+                <div className="absolute inset-0 bg-rose-500/20 animate-lightning" />
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                  <div className="absolute top-[-10%] left-[30%] w-[1px] h-[120%] bg-purple-400/30 rotate-[20deg] blur-[2px] animate-pulse" />
-                  <div className="absolute top-[-10%] left-[70%] w-[1px] h-[120%] bg-indigo-400/30 rotate-[-15deg] blur-[2px] animate-pulse [animation-delay:1.5s]" />
+                  <div className="absolute top-[-10%] left-[30%] w-[1px] h-[120%] bg-red-400/40 rotate-[20deg] blur-[2px] animate-pulse" />
+                  <div className="absolute top-[-10%] left-[70%] w-[1px] h-[120%] bg-rose-400/40 rotate-[-15deg] blur-[2px] animate-pulse [animation-delay:1.5s]" />
                 </div>
               </>
             )}
 
-            {/* 星河燦爛 */}
-            {activeBackground === "星河燦爛" && (
+            {/* 菁英：傲世神巔 */}
+            {activeBackground === "菁英：傲世神巔" && (
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-400/30 via-purple-500/20 to-blue-500/30 animate-pulse" />
+            )}
+
+            {/* 終極：起源矩陣 */}
+            {activeBackground === "終極：起源矩陣" && (
+              <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 to-black/80 flex items-end justify-center overflow-hidden">
+                 <div className="text-[6px] text-fuchsia-400/30 font-mono text-center tracking-widest break-all">
+                    01010011 01011001 01010011 01010100 01000101 01001101
+                 </div>
+              </div>
+            )}
+
+            {/* 終極：飄零羽落 */}
+            {activeBackground === "終極：飄零羽落" && (
               <>
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 animate-nebula opacity-80" />
+                <div className="absolute inset-0 bg-gradient-to-br from-sky-50/40 to-indigo-50/20 dark:from-sky-900/10 dark:to-indigo-900/10" />
                 <div className="absolute inset-0 pointer-events-none">
-                  {[...Array(8)].map((_, i) => (
-                    <div 
-                      key={i}
-                      className="absolute w-[2px] h-[2px] bg-white rounded-full animate-pulse"
-                      style={{ 
-                        top: `${Math.random() * 100}%`, 
-                        left: `${Math.random() * 100}%`, 
-                        animationDelay: `${Math.random() * 3}s`,
-                        animationDuration: `${Math.random() * 2 + 1}s`
-                      }}
-                    />
-                  ))}
+                  <Feather size={14} className="absolute top-0 left-1/4 text-sky-500/60 animate-feather-fall" />
+                  <Feather size={12} className="absolute top-0 left-2/3 text-indigo-400/50 animate-feather-fall [animation-delay:1.5s]" />
+                  <Feather size={16} className="absolute top-0 left-1/2 text-amber-300/40 animate-feather-fall [animation-delay:0.8s]" />
                 </div>
               </>
-            )}
-
-            {/* 溫暖夕陽 */}
-            {activeBackground === "溫暖夕陽" && (
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-400/30 via-rose-400/20 to-amber-500/10" />
-            )}
-
-            {/* 薄荷涼感 */}
-            {activeBackground === "薄荷涼感" && (
-              <div className="absolute inset-0 bg-gradient-to-br from-teal-400/20 via-emerald-300/10 to-cyan-400/20" />
-            )}
-
-            {/* 夢幻粉紫 */}
-            {activeBackground === "夢幻粉紫" && (
-              <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/20 via-purple-400/10 to-pink-500/20" />
-            )}
-
-            {/* 迷霧灰藍 */}
-            {activeBackground === "迷霧灰藍" && (
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-blue-900/20 to-slate-800/40" />
-            )}
-
-            {/* 極致純黑 */}
-            {activeBackground === "極致純黑" && (
-              <div className="absolute inset-0 bg-slate-950 shadow-inner" />
             )}
           </div>
         )}
+
+        {/* 邊框覆蓋層 (Frame Overlay) - 保證在背景之上 */}
+        <div className={cn(
+          "absolute inset-0 z-[30] rounded-2xl pointer-events-none border-2",
+          frameBorderClass || "border-transparent"
+        )} />
         {status === "finishing" && (
           <div className="absolute inset-0 bg-amber-400/10 dark:bg-amber-400/20 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
             <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded shadow-sm rotate-3 scale-110">
@@ -319,7 +319,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         )}
         {status === "playing" && (
           <div className={cn(
-            "absolute inset-0 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]",
+            "absolute inset-0 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)] z-[50]",
             isFallingFeathers ? "bg-transparent" : "bg-slate-900/10 dark:bg-slate-950/40"
           )}>
             <div className="bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded shadow-sm rotate-[-12deg]">
@@ -386,6 +386,15 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             isFallingFeathers ? "text-emerald-600" : "text-emerald-600/70 dark:text-emerald-400/70"
           )}>
             {Math.round((player.mu || 25) * 10)}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5 mt-0.5 z-20">
+          <Feather size={8} className="text-sky-500 shrink-0" />
+          <span className={cn(
+            "text-[8px] font-black tabular-nums transition-colors",
+            isFallingFeathers ? "text-sky-600" : "text-sky-600 dark:text-sky-400"
+          )}>
+            {player.feathers ?? 0}
           </span>
         </div>
       </button>

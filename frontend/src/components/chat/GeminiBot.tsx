@@ -9,7 +9,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useAuth } from '@/src/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMatches } from '@/src/hooks/useMatches';
-import { usePlayerProfile, type PlayerProfileData } from '@/src/hooks/usePlayerProfile';
+import { usePlayerProfile } from '@/src/hooks/usePlayerProfile';
 import type { MatchRecord } from '@/src/types';
 import * as gasApi from '@/src/lib/gasApi';
 import { type UserBinding } from '@/src/lib/gasApi';
