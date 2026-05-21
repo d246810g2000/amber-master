@@ -9,6 +9,12 @@ import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
 import { calculateWeightedMu } from "../lib/matchEngine";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
+import {
+  isFlowingFrame,
+  getFlowingGradient,
+  renderFrameOverlay,
+  renderBackgroundEffects
+} from "../lib/itemEffects";
 
 interface CourtCardProps {
   title: string;
@@ -71,31 +77,8 @@ const PlayerSlot = React.memo(({
   const activeFrame = player?.active_frame?.name;
   const activeBackground = player?.active_background?.name;
 
-  const isFlowingFrame = ["傳奇黃金", "極光幻彩", "鑽石星辰"].includes(activeFrame || "");
-  const isFallingFeathers = activeBackground === "飄零羽落";
-
-  const frameClass = activeFrame === "初學者青銅" 
-    ? "border-amber-700/50 shadow-[0_0_10px_rgba(180,83,9,0.2)]" 
-    : activeFrame === "熱血火紅"
-    ? "border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-pulse-subtle"
-    : activeFrame === "純白羽框"
-    ? "border-white dark:border-white/80 shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-    : activeFrame === "暗影雷鳴"
-    ? "border-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.4)]"
-    : activeFrame === "翡翠之心"
-    ? "border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
-    : isFlowingFrame
-    ? "border-transparent shadow-none"
-    : null;
-
-  // 定義流光特效的顏色
-  const flowingGradient = activeFrame === "傳奇黃金"
-    ? "conic-gradient(from 0deg, transparent 0deg, #fbbf24 90deg, transparent 180deg, #fbbf24 270deg, transparent 360deg)"
-    : activeFrame === "極光幻彩"
-    ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)"
-    : activeFrame === "鑽石星辰"
-    ? "conic-gradient(from 0deg, #fff 0deg, #e2e8f0 45deg, transparent 90deg, #fff 135deg, #f8fafc 180deg, transparent 225deg, #fff 270deg, #e2e8f0 315deg, #fff 360deg)"
-    : "";
+  const isFlowing = isFlowingFrame(activeFrame);
+  const flowingGradient = getFlowingGradient(activeFrame);
 
   return (
     <button 
@@ -103,14 +86,14 @@ const PlayerSlot = React.memo(({
       type="button"
       tabIndex={interactive ? undefined : -1}
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm",
+        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm overflow-hidden",
         interactive && "hover:z-20",
         !interactive && "pointer-events-none cursor-default",
         player 
-          ? isFlowingFrame || activeBackground
-            ? "bg-transparent opacity-100 ring-1 ring-black/5 dark:ring-white/10"
-            : "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2" 
-          : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10 border-2",
+          ? (activeFrame || activeBackground)
+            ? "bg-transparent opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-transparent"
+            : "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-slate-200 dark:border-slate-800" 
+          : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10 border-2 border-transparent",
         
         /* 選中狀態 */
         isSelected && player && interactive && cn(
@@ -121,15 +104,14 @@ const PlayerSlot = React.memo(({
         !activeFrame && !isSelected && "border-transparent",
         
         interactive && "active:scale-95 group/slot",
-        frameClass,
         className
       )}
     >
       {player && (
-        <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none z-0">
+        <>
           {/* [底層] 流光特效 */}
-          {isFlowingFrame && (
-            <div className="absolute inset-0">
+          {isFlowing && (
+            <div className="absolute inset-0 z-0 overflow-hidden rounded-xl pointer-events-none">
               <div 
                 className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow"
                 style={{ background: flowingGradient }}
@@ -138,59 +120,19 @@ const PlayerSlot = React.memo(({
           )}
 
           {/* [中層] 內容遮罩 */}
-          {isFlowingFrame && (
+          {isFlowing && (
             <div className={cn(
-              "absolute inset-[2.5px] rounded-[8px] z-[5]",
+              "absolute inset-[2.5px] rounded-[8px] z-[5] pointer-events-none",
               "bg-white dark:bg-slate-900"
             )} />
           )}
 
           {/* [背景] 各種環境特效 */}
-          {activeBackground && (
-            <div className="absolute inset-0 z-0 pointer-events-none">
-              {activeBackground === "飄零羽落" && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-sky-50/50 to-indigo-50/30 dark:from-sky-900/20 dark:to-indigo-900/10 z-0" />
-                  <div className="absolute inset-0 z-[5]">
-                    <Feather size={8} className="absolute top-0 left-1/4 text-sky-500/80 animate-feather-fall" />
-                    <Feather size={6} className="absolute top-0 left-2/3 text-indigo-400/70 animate-feather-fall [animation-delay:1.5s]" />
-                    <Feather size={10} className="absolute top-0 left-1/2 text-amber-300/60 animate-feather-fall [animation-delay:0.8s]" />
-                  </div>
-                </>
-              )}
-              {activeBackground === "落櫻繽紛" && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-rose-50/50 to-pink-50/30 dark:from-rose-900/20 dark:to-pink-900/10 z-0" />
-                  <div className="absolute inset-0 z-[5]">
-                    <div className="absolute top-0 left-[20%] text-rose-300/80 animate-feather-fall text-[8px]">🌸</div>
-                    <div className="absolute top-0 left-[60%] text-pink-300/70 animate-feather-fall [animation-delay:2s] text-[6px]">🌸</div>
-                    <div className="absolute top-0 left-[80%] text-rose-200/60 animate-feather-fall [animation-delay:1s] text-[7px]">🌸</div>
-                  </div>
-                </>
-              )}
-              {activeBackground === "螢火之森" && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent dark:from-emerald-900/10 z-0" />
-                  <div className="absolute inset-0 z-[5]">
-                    {[...Array(4)].map((_, i) => (
-                      <div key={i} className="absolute bottom-0 w-1 h-1 bg-emerald-400 rounded-full blur-[1px] animate-float-up" style={{ left: `${20 * i + 10}%`, animationDelay: `${i * 1.2}s`, opacity: 0.6 }} />
-                    ))}
-                  </div>
-                </>
-              )}
-              {activeBackground === "深海氣泡" && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-t from-blue-500/10 to-transparent dark:from-blue-900/10 z-0" />
-                  <div className="absolute inset-0 z-[5]">
-                    {[...Array(4)].map((_, i) => (
-                      <div key={i} className="absolute bottom-0 w-1 h-1 border border-blue-200 rounded-full animate-float-up" style={{ left: `${25 * i + 5}%`, animationDelay: `${i * 0.8}s`, opacity: 0.5 }} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+          {renderBackgroundEffects(activeBackground, activeFrame, "court")}
+          
+          {/* 邊框覆蓋層 */}
+          {renderFrameOverlay(activeFrame, "court")}
+        </>
       )}
 
       {player ? (
@@ -233,10 +175,6 @@ const PlayerSlot = React.memo(({
 
           {/* [上層] 內容層：大頭照、姓名、戰力 */}
           <div className="absolute inset-0 isolate flex flex-col items-center justify-center overflow-visible rounded-xl p-0.5 md:p-1 z-10">
-            {/* Pure White Frame Corner Feather */}
-            {activeFrame === "純白羽框" && (
-              <Feather size={10} className="absolute -top-0.5 -right-0.5 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-30" />
-            )}
 
             <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
             <img
@@ -244,7 +182,7 @@ const PlayerSlot = React.memo(({
               alt={player.name}
               className={cn(
                 "hidden md:block w-7 h-7 rounded-full object-cover shadow-sm mb-1 border transition-all duration-300 z-10",
-                activeBackground || isFlowingFrame
+                activeBackground || isFlowing
                   ? "bg-white/10 border-white/20 backdrop-blur-[1px]" 
                   : "bg-white border-slate-200/50"
               )}
@@ -253,7 +191,7 @@ const PlayerSlot = React.memo(({
             <div className="flex flex-col items-center w-full min-w-0 mb-0.5 md:mb-1 z-10">
               <div className={cn(
                 "font-black text-[11px] md:text-[13px] tracking-tighter truncate w-full text-center px-0.5 md:px-1 leading-none drop-shadow-sm transition-colors",
-                activeBackground || isFlowingFrame ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-100"
+                activeBackground || isFlowing ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-100"
               )}>
                 {player.name}
               </div>
@@ -261,14 +199,14 @@ const PlayerSlot = React.memo(({
             <div className="flex items-center gap-1 mt-0.5 md:mt-1 z-10">
                <span className={cn(
                  "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                 activeBackground || isFlowingFrame ? "text-slate-600 dark:text-slate-400" : "text-slate-500 dark:text-slate-400"
+                 activeBackground || isFlowing ? "text-slate-600 dark:text-slate-400" : "text-slate-500 dark:text-slate-400"
                )}>
                  {player.matchCount || 0}場
                </span>
                <span className="text-[8px] font-bold text-slate-300 dark:text-slate-700">|</span>
                <span className={cn(
                  "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                 activeBackground || isFlowingFrame ? "text-emerald-700" : "text-emerald-600 dark:text-emerald-400"
+                 activeBackground || isFlowing ? "text-emerald-700" : "text-emerald-600 dark:text-emerald-400"
                )}>
                  {Math.round((player.mu || 0) * 10)}
                  {useCareerWeight && ` (${Math.round(calculateWeightedMu(player.mu || 0, player.mu || 0) * 10)})`}

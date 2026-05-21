@@ -153,7 +153,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
           initial={{ opacity: 0, scale: 0.95, y: 50 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 50 }}
-          className="relative bg-white dark:bg-slate-900 w-full md:max-w-5xl h-[92vh] md:h-[700px] md:rounded-[2.5rem] rounded-t-[2rem] mt-auto md:mt-0 shadow-2xl flex flex-col overflow-hidden border border-white dark:border-slate-800"
+          className="relative bg-white dark:bg-slate-900 w-full md:max-w-5xl h-[82dvh] md:h-[700px] rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white dark:border-slate-800"
         >
           <div className="flex items-center justify-between px-4 py-3 md:p-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div className="flex items-center gap-2 md:gap-3">
@@ -183,25 +183,25 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
 
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             {previewPlayer && (
-              <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 flex flex-row md:flex-col items-center p-3 md:p-8 bg-slate-50/30 dark:bg-slate-950/10 shrink-0 gap-3 md:gap-0">
+              <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 flex flex-row md:flex-col items-center p-2.5 md:p-8 bg-slate-50/30 dark:bg-slate-950/10 shrink-0 gap-2.5 md:gap-0">
                 <div className="hidden md:flex text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 items-center gap-2">
                   <Sparkles size={14} className="text-amber-500" />造型即時預覽
                 </div>
-                <div className="relative p-3 md:p-10 bg-white dark:bg-slate-900 rounded-xl md:rounded-[3rem] border border-slate-100 dark:border-white/5 flex justify-center items-center shadow-sm shrink-0 overflow-hidden w-24 h-28 md:w-auto md:h-auto">
-                   <div className="scale-[0.95] md:scale-125 origin-center transform transition-all duration-500">
+                <div className="relative p-2 md:p-10 bg-white dark:bg-slate-900 rounded-xl md:rounded-[3rem] border border-slate-100 dark:border-white/5 flex justify-center items-center shadow-sm shrink-0 overflow-hidden w-20 h-24 md:w-auto md:h-auto">
+                   <div className="scale-[0.8] md:scale-125 origin-center transform transition-all duration-500">
                       <PlayerPill player={previewPlayer} status="ready" onClick={() => {}} onProfileClick={() => {}} />
                    </div>
                 </div>
-                <div className="flex-1 md:w-full space-y-4 ml-4 md:ml-0">
+                <div className="flex-1 md:w-full space-y-2 md:space-y-4 ml-3 md:ml-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">當前搭配</span>
+                    <span className="text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">當前搭配</span>
                     {(previewTitle || previewFrame || previewBackground) && (
-                      <button onClick={() => { setPreviewTitle(null); setPreviewFrame(null); setPreviewBackground(null); }} className="text-[10px] font-bold text-amber-600 hover:text-amber-700 transition-colors flex items-center gap-1">
+                      <button onClick={() => { setPreviewTitle(null); setPreviewFrame(null); setPreviewBackground(null); }} className="text-[9px] md:text-[10px] font-bold text-amber-600 hover:text-amber-700 transition-colors flex items-center gap-1">
                         <RefreshCw size={10} />重設
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1.5 md:gap-2">
                     {previewTitle && <PreviewBadge label="稱" text={previewTitle} color="amber" />}
                     {previewFrame && <PreviewBadge icon={<Square size={10} />} text={previewFrame} color="blue" />}
                     {previewBackground && <PreviewBadge icon={<Layers size={10} />} text={previewBackground} color="emerald" />}
@@ -230,10 +230,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 md:p-8 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-3 pb-10 md:p-8 custom-scrollbar">
                 {isLoading ? (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-                    {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-40 md:h-64 bg-slate-100 dark:bg-slate-800 rounded-2xl md:rounded-[2.5rem] animate-pulse" />)}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-6">
+                    {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-32 xs:h-36 md:h-64 bg-slate-100 dark:bg-slate-800 rounded-xl md:rounded-[2.5rem] animate-pulse" />)}
                   </div>
                 ) : activeCategory === 'inventory' ? (
                   <div className="mt-2 md:mt-4">
@@ -260,7 +260,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-8">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
                     {filteredItems.map(item => (
                       <ShopItemCard 
                         key={item.id}
@@ -288,12 +288,12 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
 };
 
 const PreviewBadge: React.FC<{ label?: string, icon?: React.ReactNode, text: string, color: string }> = ({ label, icon, text, color }) => (
-  <div className={cn(`p-2 md:p-3 bg-${color}-50 dark:bg-${color}-900/20 rounded-xl border border-${color}-100 dark:border-${color}-800/50 flex items-center justify-between group animate-in fade-in slide-in-from-left-2`)}>
-    <div className="flex items-center gap-2">
-      <div className={cn(`w-5 h-5 rounded-lg bg-${color}-400/20 flex items-center justify-center text-${color}-600 font-black`)}>
+  <div className={cn(`p-1.5 md:p-3 bg-${color}-50 dark:bg-${color}-900/20 rounded-lg md:rounded-xl border border-${color}-100 dark:border-${color}-800/50 flex items-center justify-between group animate-in fade-in slide-in-from-left-2`)}>
+    <div className="flex items-center gap-1.5 md:gap-2">
+      <div className={cn(`w-4 h-4 md:w-5 md:h-5 rounded-md md:rounded-lg bg-${color}-400/20 flex items-center justify-center text-${color}-600 text-[8px] md:text-xs font-black shrink-0`)}>
         {label || icon}
       </div>
-      <span className={cn(`text-xs font-black text-${color}-800 dark:text-${color}-400`)}>{text}</span>
+      <span className={cn(`text-[9px] md:text-xs font-black text-${color}-800 dark:text-${color}-400 truncate`)}>{text}</span>
     </div>
   </div>
 );
@@ -349,15 +349,15 @@ const ShopItemCard: React.FC<{
     <motion.div
       onClick={() => onPreview(item.item_type, item.name)}
       className={cn(
-        "group relative bg-white dark:bg-slate-800/40 rounded-2xl md:rounded-[2.5rem] p-3 md:p-6 border border-slate-100 dark:border-slate-800 transition-all flex flex-col cursor-pointer",
+        "group relative bg-white dark:bg-slate-800/40 rounded-xl md:rounded-[2.5rem] p-2 md:p-6 border border-slate-100/70 dark:border-slate-800/80 transition-all flex flex-col cursor-pointer",
         tierInfo.borderHover,
         tierInfo.glow
       )}
     >
-      <div className="aspect-video bg-slate-50 dark:bg-slate-900 rounded-xl md:rounded-[2rem] mb-3 md:mb-6 flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-100/50 dark:border-white/5">
+      <div className="aspect-[16/10] bg-slate-50 dark:bg-slate-900 rounded-lg md:rounded-[2rem] mb-2 md:mb-6 flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-100/50 dark:border-white/5">
         {/* LoL style Tier Badge */}
-        <div className="absolute top-2 left-2 z-20">
-          <span className={cn("text-[9px] md:text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider", tierInfo.class)}>
+        <div className="absolute top-1.5 left-1.5 z-20">
+          <span className={cn("text-[8px] md:text-[10px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider", tierInfo.class)}>
             {tierInfo.label}
           </span>
         </div>
@@ -378,15 +378,15 @@ const ShopItemCard: React.FC<{
         </div>
 
         {item.item_type === 'title' ? (
-          <div className="relative w-[85%] flex justify-center z-10 px-1">
+          <div className="relative w-[90%] flex justify-center z-10 px-0.5">
             <div 
-              className="relative w-full font-black text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-900/40 px-2 md:px-3 py-1.5 md:py-2 rounded-lg md:rounded-xl border border-amber-500/30 dark:border-amber-500/40 shadow-sm overflow-hidden flex items-center justify-center backdrop-blur-sm"
+              className="relative w-full font-black text-amber-700 dark:text-amber-400 bg-amber-100/85 dark:bg-amber-900/40 px-1.5 md:px-3 py-1 md:py-2 rounded md:rounded-xl border border-amber-500/30 dark:border-amber-500/40 shadow-sm overflow-hidden flex items-center justify-center backdrop-blur-sm"
               style={{ 
                 fontSize: item.name.length > 8 
-                  ? 'clamp(8px, 2.5cqw, 10px)' 
+                  ? 'clamp(7px, 2.2cqw, 9px)' 
                   : item.name.length > 5
-                  ? 'clamp(10px, 3.5cqw, 12px)'
-                  : 'clamp(12px, 4cqw, 16px)'
+                  ? 'clamp(9px, 3.2cqw, 11px)'
+                  : 'clamp(11px, 3.8cqw, 14px)'
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-shimmer" />
@@ -395,8 +395,8 @@ const ShopItemCard: React.FC<{
           </div>
         ) : (
           <div className={cn(
-            "w-12 h-12 md:w-20 md:h-20 rounded-full flex items-center justify-center relative transition-all duration-500 group-hover:scale-110 overflow-hidden z-10 shadow-lg",
-            item.price >= 3000 ? "border-0" : "border-2 border-white/50"
+            "w-9 h-9 md:w-20 md:h-20 rounded-full flex items-center justify-center relative transition-all duration-500 group-hover:scale-110 overflow-hidden z-10 shadow-md",
+            item.price >= 3000 ? "border-0" : "border border-white/50"
           )}>
             {/* 特效背景顏色預覽 (關鍵字匹配邏輯) */}
             {item.item_type === 'background' && (
@@ -445,24 +445,24 @@ const ShopItemCard: React.FC<{
                </div>
             )}
             
-            <div className="absolute inset-[2.5px] rounded-full bg-slate-50/30 dark:bg-slate-900/30 backdrop-blur-[2px] z-[5]" />
+            <div className="absolute inset-[2px] rounded-full bg-slate-50/30 dark:bg-slate-900/30 backdrop-blur-[2px] z-[5]" />
           </div>
         )}
       </div>
 
-      <h3 className={cn("text-sm md:text-lg font-black mb-1 md:mb-2 truncate", tierInfo.textClass)}>
+      <h3 className={cn("text-xs md:text-lg font-black mb-0.5 md:mb-2 truncate", tierInfo.textClass)}>
         {item.name}
       </h3>
       <p className="hidden md:block text-xs text-slate-400 dark:text-slate-500 mb-2 line-clamp-2 leading-relaxed flex-1">{item.description || '一件神祕的珍寶'}</p>
 
       {/* 雙規格切換器 */}
-      <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 my-3 w-full self-center">
+      <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 my-1.5 md:my-3 w-full self-center">
         <button
           type="button"
           disabled={isOwnedPermanent}
           onClick={(e) => { e.stopPropagation(); setIsPermanent(false); }}
           className={cn(
-            "flex-1 py-1 rounded-md text-[9px] md:text-xs font-black transition-all",
+            "flex-1 py-0.5 md:py-1 rounded-md text-[8px] md:text-xs font-black transition-all",
             !isPermanent 
               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
               : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
@@ -475,7 +475,7 @@ const ShopItemCard: React.FC<{
           disabled={isOwnedPermanent}
           onClick={(e) => { e.stopPropagation(); setIsPermanent(true); }}
           className={cn(
-            "flex-1 py-1 rounded-md text-[9px] md:text-xs font-black transition-all",
+            "flex-1 py-0.5 md:py-1 rounded-md text-[8px] md:text-xs font-black transition-all",
             isPermanent 
               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
               : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
@@ -485,14 +485,14 @@ const ShopItemCard: React.FC<{
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-auto pt-2 md:pt-4 border-t border-slate-50 dark:border-slate-800 gap-2">
-        <div className="flex flex-col">
-           <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider">
-             {isPermanent ? "永久持有" : `有效期 ${item.duration_days} 天`}
+      <div className="flex items-center justify-between mt-auto pt-1.5 md:pt-4 border-t border-slate-100 dark:border-slate-800/80 gap-1">
+        <div className="flex flex-col min-w-0">
+           <span className="text-[7px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider truncate">
+             {isPermanent ? "永久" : "7天"}
            </span>
-           <div className="flex items-center gap-1 mt-0.5 md:mt-1">
-              <Feather size={12} className="text-sky-500 md:w-3.5 md:h-3.5" />
-              <span className="text-sm md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none">
+           <div className="flex items-center gap-0.5 mt-0.5 md:mt-1">
+              <Feather size={10} className="text-sky-500 md:w-3.5 md:h-3.5 shrink-0" />
+              <span className="text-xs md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none truncate">
                 {currentPrice}
               </span>
            </div>
@@ -505,7 +505,7 @@ const ShopItemCard: React.FC<{
             isOwnedPermanent
           }
           className={cn(
-            "px-3 py-2 md:px-6 md:py-3 rounded-xl font-black text-[10px] md:text-xs transition-all active:scale-95 whitespace-nowrap shadow-sm",
+            "px-2 py-1 md:px-6 md:py-3 rounded-lg md:rounded-xl font-black text-[9px] md:text-xs transition-all active:scale-95 whitespace-nowrap shadow-sm shrink-0",
             isOwnedPermanent 
               ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default" 
               : (boundPlayer?.feathers || 0) < currentPrice 
@@ -516,9 +516,9 @@ const ShopItemCard: React.FC<{
           {buyingId === item.id ? (
             <div className="w-3 h-3 md:w-4 md:h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
           ) : isOwnedPermanent ? (
-            '已永久擁有'
+            '已擁有'
           ) : isOwned ? (
-            isPermanent ? '升級永久' : '續期'
+            isPermanent ? '升級' : '續期'
           ) : (
             '兌換'
           )}

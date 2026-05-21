@@ -9,6 +9,7 @@ import type { MatchRecord, Player } from '../../types';
 import { getAvatarUrl } from '../../lib/utils';
 import { computeDailyPlayerSummary, type DailyPlayerSummaryRow } from '../../lib/dailySummaryStats';
 import { PowerMedalIcon, computePowerMedalTiers } from './PowerMedalIcon';
+import { getFrameBorderClass } from '../../lib/itemEffects';
 
 type SummaryRowWithAvatar = DailyPlayerSummaryRow & { avatarUrl: string };
 
@@ -99,15 +100,7 @@ function SummaryTableCard({
                       <div className="flex items-center gap-1.5 min-w-0 max-w-[10rem]">
                         {(() => {
                           const activeFrame = r.active_frame?.name;
-                          const frameClass = activeFrame === "初學者青銅" 
-                            ? "border-amber-700/50 shadow-[0_0_4px_rgba(180,83,9,0.2)]" 
-                            : activeFrame === "熱血火紅"
-                            ? "border-rose-500 shadow-[0_0_4px_rgba(244,63,94,0.3)]"
-                            : activeFrame === "純白羽框"
-                            ? "border-white dark:border-white/80 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-                            : activeFrame === "飄零羽落"
-                            ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_4px_rgba(186,230,253,0.3)]"
-                            : "border-slate-200/90";
+                          const frameClass = getFrameBorderClass(activeFrame);
 
                           return (
                             <img

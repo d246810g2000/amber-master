@@ -16,6 +16,8 @@ import { useDialog } from "../context/DialogContext";
 import { updateMatch, deleteMatch } from "../lib/gasApi";
 import { AdminMatchEditModal } from "./AdminMatchEditModal";
 
+import { getFrameBorderClass } from "../lib/itemEffects";
+
 // --- Sub-components (Moved Outside for Clarity) ---
 
 const getPowerBefore = (p: any) => {
@@ -101,15 +103,11 @@ const PlayerItem = React.memo(({
   const activeTitle = p.active_title?.name || playerInList?.active_title?.name;
   const activeFrame = p.active_frame?.name || playerInList?.active_frame?.name;
 
-  const frameClass = activeFrame === "初學者青銅" 
-    ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
-    : activeFrame === "熱血火紅"
-    ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
-    : activeFrame === "純白羽框"
-    ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-    : activeFrame === "飄零羽落"
-    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
-    : null;
+  const frameBorderClass = activeFrame
+    ? getFrameBorderClass(activeFrame)
+    : (isWinner 
+      ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" 
+      : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900");
 
   return (
     <div className={cn(
@@ -120,9 +118,7 @@ const PlayerItem = React.memo(({
       <div className={cn("flex items-center gap-1.5 min-w-0 w-full", isRight ? "flex-row-reverse" : "flex-row")}>
         <div className={cn(
           "w-5 h-5 md:w-6 md:h-6 rounded-full border shadow-sm shrink-0 p-0.5 transition-transform group-hover/player:scale-110 relative",
-          frameClass ? frameClass : (isWinner 
-            ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" 
-            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900")
+          frameBorderClass
         )}>
           <img src={avatarUrl} alt={p.name} className="w-full h-full rounded-full object-cover" />
         </div>

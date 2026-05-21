@@ -21,6 +21,12 @@ import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Handshake from "lucide-react/dist/esm/icons/handshake";
 import { PlayerPill } from "./PlayerPill";
 import { Player } from '../types';
+import {
+  isFlowingFrame,
+  getFlowingGradient,
+  renderFrameOverlay,
+  renderBackgroundEffects
+} from '../lib/itemEffects';
 import { BadmintonLoader } from "./BadmintonLoader";
 import * as gasApi from '../lib/gasApi';
 import { useAuth } from '../context/AuthContext';
@@ -435,18 +441,10 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
 
   const activeTitle = player.active_title?.name;
   const activeFrame = player.active_frame?.name;
+  const activeBackground = player.active_background?.name;
 
-  const frameClass = activeFrame === "初學者青銅" 
-    ? "border-amber-700/50 shadow-[0_0_15px_rgba(180,83,9,0.3)] ring-4 ring-amber-700/10" 
-    : activeFrame === "熱血火紅"
-    ? "border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)] ring-4 ring-rose-500/10 animate-pulse-subtle"
-    : activeFrame === "純白羽框"
-    ? "border-white dark:border-white/80 shadow-[0_0_20px_rgba(255,255,255,0.5)] ring-4 ring-white/10"
-    : activeFrame === "飄零羽落"
-    ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_15px_rgba(186,230,253,0.4)]"
-    : null;
-
-  const isFallingFeathers = activeFrame === "飄零羽落";
+  const isFlowing = isFlowingFrame(activeFrame);
+  const flowingGradient = getFlowingGradient(activeFrame);
 
   const handleBindAndEnter = async () => {
     if (!currentUser?.email || !player?.id) {
@@ -599,29 +597,42 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               }
             }}
             className={cn(
-              "relative w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 border-slate-100 dark:border-white/10 shadow-lg transition-all flex items-center justify-center group shrink-0",
+              "relative w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white dark:bg-zinc-800 overflow-hidden border-2 transition-all flex items-center justify-center group shrink-0 shadow-lg",
               canEdit ? 'cursor-pointer hover:border-emerald-500/50' : 'opacity-80',
-              frameClass
+              activeFrame || activeBackground
+                ? "bg-transparent border-transparent"
+                : "border-slate-100 dark:border-white/10"
             )}
             title={canEdit ? "點擊修改頭像" : "已綁定，無法修改"}
           >
-            {/* Falling Feathers Animation Overlay for Profile */}
-            {isFallingFeathers && (
-              <div className="absolute inset-0 pointer-events-none opacity-40 z-0">
-                <Feather size={10} className="absolute top-0 left-1/4 text-sky-400/40" style={{ animation: 'feather-fall 4s linear infinite' }} />
-                <Feather size={8} className="absolute top-0 left-2/3 text-sky-300/40" style={{ animation: 'feather-fall 5s linear infinite 1.5s' }} />
+            {/* [底層] 流光特效 */}
+            {isFlowing && (
+              <div className="absolute inset-0 z-0 overflow-hidden rounded-xl md:rounded-2xl pointer-events-none">
+                <div 
+                  className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow"
+                  style={{ background: flowingGradient }}
+                />
               </div>
             )}
-            
-            {/* Pure White Frame Corner Feather for Profile */}
-            {activeFrame === "純白羽框" && (
-              <Feather size={14} className="absolute -top-0.5 -right-0.5 text-white rotate-45 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)] z-30" />
+
+            {/* [中層] 內容遮罩 */}
+            {isFlowing && (
+              <div className={cn(
+                "absolute inset-[2px] rounded-[10px] md:rounded-[14px] z-[5] pointer-events-none",
+                "bg-white dark:bg-zinc-800"
+              )} />
             )}
+
+            {/* [背景] 各種環境特效 */}
+            {renderBackgroundEffects(activeBackground, activeFrame, "pill")}
+            
+            {/* 邊框覆蓋層 */}
+            {renderFrameOverlay(activeFrame, "pill")}
 
             <img
               src={getAvatarUrl(currentAvatarFull, player.name)}
               alt={player.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform z-20"
               referrerPolicy="no-referrer"
             />
           </div>

@@ -3,6 +3,7 @@ import { Player } from "../types";
 import Trophy from "lucide-react/dist/esm/icons/trophy";
 import X from "lucide-react/dist/esm/icons/x";
 import { getAvatarUrl, cn } from "../lib/utils";
+import { getFrameBorderClass } from "../lib/itemEffects";
 
 interface WinnerModalProps {
   isOpen: boolean;
@@ -111,15 +112,9 @@ export function WinnerModal({
               {team1.map((p, index) => {
                 const activeTitle = p?.active_title?.name;
                 const activeFrame = p?.active_frame?.name;
-                const frameClass = activeFrame === "初學者青銅" 
-                  ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
-                  : activeFrame === "熱血火紅"
-                  ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
-                  : activeFrame === "純白羽框"
-                  ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                  : activeFrame === "飄零羽落"
-                  ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
-                  : null;
+                const frameBorderClass = activeFrame
+                  ? getFrameBorderClass(activeFrame)
+                  : "border-rose-100 dark:border-rose-900";
 
                 return (
                   <React.Fragment key={p?.id || `t1p${index}`}>
@@ -130,7 +125,7 @@ export function WinnerModal({
                         alt={p?.name || 'Unknown'}
                         className={cn(
                           "w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2",
-                          frameClass ? frameClass : "border-rose-100 dark:border-rose-900"
+                          frameBorderClass
                         )}
                       />
                       <div className="flex flex-col items-center">
@@ -168,15 +163,9 @@ export function WinnerModal({
               {team2.map((p, index) => {
                 const activeTitle = p?.active_title?.name;
                 const activeFrame = p?.active_frame?.name;
-                const frameClass = activeFrame === "初學者青銅" 
-                  ? "border-amber-700/50 shadow-[0_0_5px_rgba(180,83,9,0.2)]" 
-                  : activeFrame === "熱血火紅"
-                  ? "border-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.3)]"
-                  : activeFrame === "純白羽框"
-                  ? "border-white dark:border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                  : activeFrame === "飄零羽落"
-                  ? "border-sky-200/50 dark:border-sky-400/30 shadow-[0_0_5px_rgba(186,230,253,0.3)]"
-                  : null;
+                const frameBorderClass = activeFrame
+                  ? getFrameBorderClass(activeFrame)
+                  : "border-blue-100 dark:border-blue-900";
 
                 return (
                   <React.Fragment key={p?.id || `t2p${index}`}>
@@ -187,7 +176,7 @@ export function WinnerModal({
                         alt={p?.name || 'Unknown'}
                         className={cn(
                           "w-8 h-8 rounded-full object-cover bg-white dark:bg-slate-800 shadow-sm border-2",
-                          frameClass ? frameClass : "border-blue-100 dark:border-blue-900"
+                          frameBorderClass
                         )}
                       />
                       <div className="flex flex-col items-center">
