@@ -8,7 +8,13 @@ interface EggRendererProps {
 }
 
 export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPercent, className }) => {
-  const isHatchedReady = progressPercent >= 100;
+  const percent = progressPercent ?? 0;
+  
+  const isIdle = percent <= 30;
+  const isFloating = percent >= 31 && percent <= 60;
+  const isGlowing = percent >= 61 && percent <= 90;
+  const isShaking = percent >= 91 && percent <= 99;
+  const isHatchedReady = percent >= 100;
   
   // Choose egg image path
   const eggImgSrc = `/amber-master/assets/eggs/${eggType}.png`;
@@ -17,8 +23,10 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
     <div 
       className={cn(
         "relative w-36 h-48 select-none flex items-center justify-center transition-all duration-300",
-        isHatchedReady && "animate-[bounce_2s_infinite] drop-shadow-[0_0_15px_rgba(253,224,71,0.85)]",
-        !isHatchedReady && progressPercent > 0 && "hover:scale-105",
+        isFloating && "animate-egg-float",
+        isGlowing && "animate-egg-glow",
+        isShaking && "animate-egg-shake",
+        isHatchedReady && "animate-egg-hatch-ready",
         className
       )}
     >
@@ -26,10 +34,7 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
       <img 
         src={eggImgSrc} 
         alt={eggType} 
-        className={cn(
-          "w-full h-full object-contain pointer-events-none select-none transition-all duration-500",
-          isHatchedReady && "animate-[wiggle_0.5s_infinite_ease-in-out]"
-        )} 
+        className="w-full h-full object-contain pointer-events-none select-none transition-all duration-500" 
       />
 
       {/* SVG Crack Overlay */}
@@ -44,8 +49,8 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
           </filter>
         </defs>
 
-        {/* Crack 1 (Left hair crack): shown at 25% or more */}
-        {progressPercent >= 25 && (
+        {/* Crack 1 (Left hair crack): shown at 91% or more */}
+        {percent >= 91 && (
           <path 
             d="M 38,32 L 44,40 L 37,47 L 41,56" 
             fill="none" 
@@ -61,8 +66,8 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
           />
         )}
 
-        {/* Crack 2 (Right branch crack): shown at 50% or more */}
-        {progressPercent >= 50 && (
+        {/* Crack 2 (Right branch crack): shown at 91% or more */}
+        {percent >= 91 && (
           <path 
             d="M 64,42 L 57,51 L 62,60 L 55,68" 
             fill="none" 
@@ -75,8 +80,8 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
           />
         )}
 
-        {/* Crack 3 (Middle major crack): shown at 75% or more */}
-        {progressPercent >= 75 && (
+        {/* Crack 3 (Middle major crack): shown at 91% or more */}
+        {percent >= 91 && (
           <path 
             d="M 48,22 L 51,35 L 46,48 L 54,61 L 49,75" 
             fill="none" 
@@ -115,9 +120,9 @@ export const EggRenderer: React.FC<EggRendererProps> = ({ eggType, progressPerce
       </svg>
 
       {/* Progress Badge overlay when not 100% */}
-      {progressPercent > 0 && !isHatchedReady && (
+      {percent > 0 && !isHatchedReady && (
         <div className="absolute bottom-4 bg-slate-900/80 backdrop-blur-[2px] text-white text-[9px] font-black px-2 py-0.5 rounded-full border border-white/10 tracking-widest pointer-events-none">
-          {Math.round(progressPercent)}%
+          {Math.round(percent)}%
         </div>
       )}
     </div>

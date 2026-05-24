@@ -337,9 +337,10 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
             
             # 孵蛋進度更新
             if db_p.active_egg_id:
-                db_p.egg_progress_games = (db_p.egg_progress_games or 0) + 1
-                if is_winner_p:
-                    db_p.egg_progress_wins = (db_p.egg_progress_wins or 0) + 1
+                rarity = db_p.active_egg_id.replace("egg_", "")
+                energy_gain = calculate_egg_energy_gain(rarity, is_winner_p)
+                db_p.egg_progress_games = max(0, min(100, (db_p.egg_progress_games or 0) + energy_gain))
+                db_p.egg_progress_wins = 0
             
             db.add(models.FeatherTransaction(
                 player_id=pid,
@@ -1737,6 +1738,18 @@ def repay_loan(db: Session, loan_id: int, repay_amount: Optional[int] = None):
     return {"status": "success", "message": f"成功還款 {actual_repay} 根羽毛給 {lender.name}！"}
 
 
+HATCH_CONFIG = {
+    "classic": {"participation": 25, "win": 15},
+    "epic": {"participation": 18, "win": 12},
+    "legendary": {"participation": 14, "win": 10},
+    "ultimate": {"participation": 10, "win": 8},
+}
+
+def calculate_egg_energy_gain(rarity: str, is_win: bool) -> int:
+    cfg = HATCH_CONFIG.get(rarity, {"participation": 0, "win": 0})
+    return cfg["participation"] + (cfg["win"] if is_win else 0)
+
+
 def buy_egg(db: Session, email: str, egg_type: str):
     player = get_player_by_email(db, email)
     if not player:
@@ -1781,10 +1794,10 @@ def hatch_egg(db: Session, email: str):
         raise ValueError("你目前沒有正在孵化的蛋")
         
     egg_requirements = {
-        "egg_classic": {"games": 2, "wins": 1, "pets": ["pet_corgi", "pet_black_cat", "pet_chick"]},
-        "egg_epic": {"games": 5, "wins": 2, "pets": ["pet_cat", "pet_slime", "pet_rabbit"]},
-        "egg_legendary": {"games": 10, "wins": 5, "pets": ["pet_dog", "pet_fox", "pet_dragon"]},
-        "egg_ultimate": {"games": 20, "wins": 10, "pets": ["pet_phoenix", "pet_unicorn", "pet_panda"]}
+        "egg_classic": {"pets": ["pet_corgi", "pet_black_cat", "pet_chick"]},
+        "egg_epic": {"pets": ["pet_cat", "pet_slime", "pet_rabbit"]},
+        "egg_legendary": {"pets": ["pet_dog", "pet_fox", "pet_dragon"]},
+        "egg_ultimate": {"pets": ["pet_phoenix", "pet_unicorn", "pet_panda"]}
     }
     
     egg_id = player.active_egg_id
@@ -1792,11 +1805,10 @@ def hatch_egg(db: Session, email: str):
         raise ValueError("無效的蛋種類")
         
     reqs = egg_requirements[egg_id]
-    games_progress = player.egg_progress_games or 0
-    wins_progress = player.egg_progress_wins or 0
+    current_energy = player.egg_progress_games or 0
     
-    if games_progress < reqs["games"] or wins_progress < reqs["wins"]:
-        raise ValueError("孵化條件未達成 (場次或勝場不足)")
+    if current_energy < 100:
+        raise ValueError("孵化條件未達成 (能量未滿 100%)")
         
     unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
     tier_pets = reqs["pets"]

@@ -215,12 +215,17 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           <RestStreakCornerBadge count={cornerMissed} />
         )}
         {/* Avatar + Pet Container */}
-        <div className="relative flex items-center justify-center gap-0.5 mb-1 z-20">
+        <div className={cn(
+          "relative mb-1 z-20 flex items-center justify-center transition-all duration-300",
+          player.active_pet_id 
+            ? "w-12 h-10 md:w-[58px] md:h-12" 
+            : "w-8 h-8 md:w-10 md:h-10"
+        )}>
           <div className={cn(
             "shrink-0 overflow-hidden rounded-full border-2 transition-all duration-300",
             player.active_pet_id 
-              ? "h-6.5 w-6.5 md:h-8 md:w-8"
-              : "h-8 w-8 md:h-10 md:w-10",
+              ? "absolute top-0 left-0 h-6.5 w-6.5 md:h-8 md:w-8" 
+              : "w-full h-full",
             isFallingFeathers 
               ? "bg-white/10 border-white/20 backdrop-blur-[1px] shadow-sm" 
               : "bg-slate-100 dark:bg-slate-700 border-white dark:border-slate-800 shadow-inner"
@@ -232,8 +237,8 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             />
           </div>
           {player.active_pet_id && (
-            <div className="-ml-0.5 -mt-1 origin-bottom animate-bounce-slow">
-              <PetRenderer petId={player.active_pet_id} className="w-5 h-5 md:w-6.5 md:h-6.5" />
+            <div className="absolute bottom-0 right-0 shrink-0 origin-bottom animate-bounce-slow flex items-center justify-center filter drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.55)]">
+              <PetRenderer petId={player.active_pet_id} className="w-5.5 h-5.5 md:w-6.5 md:h-6.5" />
             </div>
           )}
         </div>

@@ -55,11 +55,24 @@ export const PETS_CATALOG = [
   { id: 'pet_panda', name: '功夫熊貓', tier: 'ultimate', eggType: 'egg_ultimate', desc: '啃著竹子、擅長太極跟翻滾的功夫黑白胖熊貓。', icon: '🐼' },
 ];
 
-export const EGG_REQUIREMENTS: Record<string, { games: number; wins: number; feathers: number; name: string; desc: string }> = {
-  egg_classic: { games: 2, wins: 1, feathers: 500, name: '經典之蛋', desc: '有機會與呆萌柯基、傲嬌黑貓、元氣小雞成為夥伴' },
-  egg_epic: { games: 5, wins: 2, feathers: 1000, name: '史詩之蛋', desc: '有機會與慵懶小貓、果凍史萊姆、蹦蹦粉兔成為夥伴' },
-  egg_legendary: { games: 10, wins: 5, feathers: 1500, name: '傳說之蛋', desc: '有機會與元氣柴犬、傲嬌赤狐、黃金幼龍成為夥伴' },
-  egg_ultimate: { games: 20, wins: 10, feathers: 2000, name: '終極之蛋', desc: '有機會與霓虹鳳凰、炫彩獨角獸、功夫熊貓成為夥伴' },
+export const hatchConfig = {
+  classic: { participation: 25, win: 15 },
+  epic: { participation: 18, win: 12 },
+  legendary: { participation: 14, win: 10 },
+  ultimate: { participation: 10, win: 8 },
+};
+
+export function calculateEggEnergyGain(rarity: string, isWin: boolean): number {
+  const config = hatchConfig[rarity as keyof typeof hatchConfig];
+  if (!config) return 0;
+  return config.participation + (isWin ? config.win : 0);
+}
+
+export const EGG_REQUIREMENTS: Record<string, { feathers: number; name: string; desc: string }> = {
+  egg_classic: { feathers: 500, name: '經典之蛋', desc: '有機會與呆萌柯基、傲嬌黑貓、元氣小雞成為夥伴' },
+  egg_epic: { feathers: 1000, name: '史詩之蛋', desc: '有機會與慵懶小貓、果凍史萊姆、蹦蹦粉兔成為夥伴' },
+  egg_legendary: { feathers: 1500, name: '傳說之蛋', desc: '有機會與元氣柴犬、傲嬌赤狐、黃金幼龍成為夥伴' },
+  egg_ultimate: { feathers: 2000, name: '終極之蛋', desc: '有機會與霓虹鳳凰、炫彩獨角獸、功夫熊貓成為夥伴' },
 };
 
 const getPetTierStyle = (tier: string, isUnlocked: boolean, isEquipped: boolean) => {
@@ -321,18 +334,9 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
 
     const activeEggId = boundPlayer.active_egg_id;
     const reqs = activeEggId ? EGG_REQUIREMENTS[activeEggId] : null;
-    const eggProgressGames = boundPlayer.egg_progress_games || 0;
-    const eggProgressWins = boundPlayer.egg_progress_wins || 0;
-
-    let overallProgress = 0;
-    let gamesPercent = 0;
-    let winsPercent = 0;
-
-    if (reqs) {
-      gamesPercent = Math.min(100, (eggProgressGames / reqs.games) * 100);
-      winsPercent = Math.min(100, (eggProgressWins / reqs.wins) * 100);
-      overallProgress = Math.round((gamesPercent + winsPercent) / 2);
-    }
+    const currentEnergy = boundPlayer.egg_progress_games || 0;
+    const overallProgress = Math.max(0, Math.min(100, currentEnergy));
+    const isReadyToHatch = overallProgress >= 100;
 
     const unlockedList = boundPlayer.unlocked_pets ? boundPlayer.unlocked_pets.split(',') : [];
 
@@ -359,41 +363,41 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                   </span>
                 </h3>
                 <p className="text-xs text-slate-450 dark:text-slate-550 mt-1 font-bold">
-                  與此蛋產生共鳴！上場與勝場次數達到要求後，蛋將破殼誕生一位可愛夥伴隨行您的頭像！
+                  與此蛋產生共鳴！上場累積孵化能量，能量達到 100% 後，蛋將破殼誕生一位可愛夥伴隨行您的頭像！
                 </p>
               </div>
 
-              {/* Progress: Games */}
-              <div className="space-y-1.5">
+              {/* Progress: Hatching Energy */}
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs font-black">
-                  <span className="text-slate-600 dark:text-slate-400">對戰場次進度</span>
-                  <span className="text-slate-800 dark:text-slate-200 tabular-nums">
-                    {eggProgressGames} / {reqs.games} 場
+                  <span className="text-slate-600 dark:text-slate-400">孵化能量進度</span>
+                  <span className="text-sky-500 tabular-nums">
+                    {currentEnergy} / 100
                   </span>
                 </div>
-                <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden relative border border-slate-300 dark:border-slate-700/50">
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden relative border border-slate-350 dark:border-slate-700/50 p-[2px]">
                   <div 
-                    className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full transition-all duration-500" 
-                    style={{ width: `${gamesPercent}%` }}
+                    className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]" 
+                    style={{ width: `${overallProgress}%` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-40" />
                 </div>
               </div>
 
-              {/* Progress: Wins */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-black">
-                  <span className="text-slate-600 dark:text-slate-400">勝場次數進度</span>
-                  <span className="text-emerald-650 dark:text-emerald-400 tabular-nums">
-                    {eggProgressWins} / {reqs.wins} 勝
-                  </span>
-                </div>
-                <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden relative border border-slate-300 dark:border-slate-700/50">
-                  <div 
-                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500" 
-                    style={{ width: `${winsPercent}%` }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-40" />
+              {/* Energy Gain Values */}
+              <div className="bg-slate-100/60 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/5 space-y-2">
+                <h4 className="text-xs font-black text-slate-700 dark:text-slate-300">每場對戰獲得能量：</h4>
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400">
+                    <span className="bg-sky-50 dark:bg-sky-950/80 px-2 py-1 rounded-lg border border-sky-200/30">
+                      +{hatchConfig[activeEggId.replace('egg_', '') as keyof typeof hatchConfig]?.participation || 0} 參賽能量
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-650 dark:text-emerald-400">
+                    <span className="bg-emerald-50 dark:bg-emerald-950/80 px-2 py-1 rounded-lg border border-emerald-250/30">
+                      +{hatchConfig[activeEggId.replace('egg_', '') as keyof typeof hatchConfig]?.win || 0} 勝利加成
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -401,10 +405,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
               <div className="pt-2">
                 <button
                   onClick={handleHatchEgg}
-                  disabled={isHatchingActionLoading || overallProgress < 100}
+                  disabled={isHatchingActionLoading || !isReadyToHatch}
                   className={cn(
                     "w-full py-3 md:py-3.5 rounded-2xl font-black text-xs md:text-sm tracking-widest transition-all duration-300 transform active:scale-[0.98]",
-                    overallProgress >= 100
+                    isReadyToHatch
                       ? "bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20 hover:scale-[1.01] hover:brightness-110 animate-pulse cursor-pointer"
                       : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-200 dark:border-slate-700/50"
                   )}
@@ -413,10 +417,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="animate-spin" size={16} /> 孵化處理中...
                     </div>
-                  ) : overallProgress >= 100 ? (
+                  ) : isReadyToHatch ? (
                     "✨ 點擊破蛋！孵化寵物 ✨"
                   ) : (
-                    `孵化中... (尚需 ${Math.max(0, reqs.games - eggProgressGames)} 場 / ${Math.max(0, reqs.wins - eggProgressWins)} 勝)`
+                    `孵化中... (尚需 ${100 - currentEnergy} 能量)`
                   )}
                 </button>
               </div>
@@ -476,14 +480,14 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                         {req.desc}
                       </p>
                       
-                      <div className="flex flex-col gap-1 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-950/40 p-2 rounded-xl border border-slate-255/10">
+                      <div className="flex flex-col gap-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-255/10">
                         <div className="flex justify-between">
-                          <span>上場場次需求:</span>
-                          <span className="text-slate-800 dark:text-slate-200">{req.games} 場</span>
+                          <span>完賽獲得能量:</span>
+                          <span className="text-sky-600 dark:text-sky-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.participation || 0}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>勝場次數需求:</span>
-                          <span className="text-emerald-650 dark:text-emerald-400">{req.wins} 勝</span>
+                          <span>勝利加成能量:</span>
+                          <span className="text-emerald-650 dark:text-emerald-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.win || 0}</span>
                         </div>
                       </div>
                     </div>

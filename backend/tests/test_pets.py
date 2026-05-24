@@ -33,17 +33,17 @@ class TestPetSystem(unittest.TestCase):
         db.add(player)
         db.commit()
 
-        # 2. Buy an Epic Egg (requires 400 feathers)
+        # 2. Buy an Epic Egg (requires 1000 feathers)
         result = crud.buy_egg(db, "test@example.com", "egg_epic")
         self.assertEqual(result["status"], "success")
         
         db.refresh(player)
-        self.assertEqual(player.feathers, 600)
+        self.assertEqual(player.feathers, 0)
         self.assertEqual(player.active_egg_id, "egg_epic")
         self.assertEqual(player.egg_progress_games, 0)
         self.assertEqual(player.egg_progress_wins, 0)
 
-        # 3. Try to buy Ultimate Egg (requires 2500 feathers, should fail due to insufficient funds)
+        # 3. Try to buy Ultimate Egg (requires 2000 feathers, should fail due to insufficient funds)
         with self.assertRaises(ValueError) as context:
             crud.buy_egg(db, "test@example.com", "egg_ultimate")
         self.assertIn("羽毛不足", str(context.exception))
@@ -74,16 +74,16 @@ class TestPetSystem(unittest.TestCase):
         crud.record_match_and_update(db, req)
         
         db.refresh(p1)
-        self.assertEqual(p1.egg_progress_games, 1)
-        self.assertEqual(p1.egg_progress_wins, 1)
+        self.assertEqual(p1.egg_progress_games, 30)
+        self.assertEqual(p1.egg_progress_wins, 0)
 
     def test_hatch_egg(self):
         db = self.db
-        # 1. Create a player who has completed the progress for egg_epic (5 games, 2 wins)
+        # 1. Create a player who has completed the progress for egg_epic (energy 100)
         player = models.Player(
             id="p1", email="test@example.com", name="Test Player", 
             feathers=1000, active_egg_id="egg_epic",
-            egg_progress_games=5, egg_progress_wins=2,
+            egg_progress_games=100, egg_progress_wins=0,
             unlocked_pets=""
         )
         db.add(player)
