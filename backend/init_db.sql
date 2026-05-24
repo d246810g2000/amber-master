@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS players (
     active_title_id INT,
     active_frame_id INT,
     active_background_id INT,
+    active_pet_id VARCHAR(50) DEFAULT NULL,
+    active_egg_id VARCHAR(50) DEFAULT NULL,
+    egg_progress_games INT DEFAULT 0,
+    egg_progress_wins INT DEFAULT 0,
+    unlocked_pets TEXT DEFAULT NULL,
     INDEX idx_name (name),
     INDEX idx_email (email)
 );
@@ -116,7 +121,7 @@ CREATE TABLE IF NOT EXISTS player_inventory (
 INSERT INTO shop_items (name, description, price, price_permanent, item_type, duration_days, tier) VALUES 
 ('球場邊緣人', '永遠在場邊等主揪叫名字', 150, 600, 'title', 7, 'classic'),
 ('撿球大師', '打球五分鐘，撿球兩小時', 150, 600, 'title', 7, 'classic'),
-('報隊請排隊', '場邊磁鐵永遠掛最後一個', 150, 600, 'title', 7, 'classic'),
+('職業請假選手', '請假手速比報名還快', 150, 600, 'title', 7, 'classic'),
 ('發球姿勢 100 分', '姿勢很帥，但球通常沒過網', 250, 1000, 'title', 7, 'epic'),
 ('活在線上的男人', '專打壓線界內球，鷹眼都沒用', 250, 1000, 'title', 7, 'epic'),
 ('微笑殺手(肉球製造機)', '送對手滿滿的甜球（肉球）', 250, 1000, 'title', 7, 'epic'),

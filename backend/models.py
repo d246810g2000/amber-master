@@ -19,6 +19,11 @@ class Player(Base):
     active_title_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
     active_frame_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
     active_background_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
+    active_pet_id = Column(String(50), nullable=True)
+    active_egg_id = Column(String(50), nullable=True)
+    egg_progress_games = Column(Integer, default=0)
+    egg_progress_wins = Column(Integer, default=0)
+    unlocked_pets = Column(Text, nullable=True)
 
     stats = relationship("PlayerStat", back_populates="player")
     active_title = relationship("ShopItem", foreign_keys=[active_title_id])

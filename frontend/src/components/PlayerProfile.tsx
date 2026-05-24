@@ -2,12 +2,15 @@ import React, { useState, useMemo, Suspense, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { useDialog } from '../context/DialogContext';
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import Target from "lucide-react/dist/esm/icons/target";
 import Activity from "lucide-react/dist/esm/icons/activity";
 import Calendar from "lucide-react/dist/esm/icons/calendar";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
+import Heart from "lucide-react/dist/esm/icons/heart";
+import { PETS_CATALOG } from "./dashboard/ShopModal";
 import Lock from "lucide-react/dist/esm/icons/lock";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus";
@@ -161,6 +164,8 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     showAlert("已解除授權", "已清除此瀏覽器的解密紀錄。");
   };
 
+  const location = useLocation();
+
   // ─── UI-only 狀態 ───
   const [currentAvatarFull, setCurrentAvatarFull] = useState("");
   const [saving, setSaving] = useState(false);
@@ -168,7 +173,22 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
-  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers' | 'inventory' | 'loans'>('trend');
+
+  const queryTab = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const t = params.get('tab');
+    if (t === 'inventory' || t === 'trend' || t === 'partners' || t === 'history' || t === 'feathers' || t === 'loans') {
+      return t as 'inventory' | 'trend' | 'partners' | 'history' | 'feathers' | 'loans';
+    }
+    return 'trend';
+  }, [location.search]);
+
+  const [activeTab, setActiveTab] = useState<'trend' | 'partners' | 'history' | 'feathers' | 'inventory' | 'loans'>(queryTab);
+
+  useEffect(() => {
+    setActiveTab(queryTab);
+  }, [queryTab]);
+
   const [partnerSort, setPartnerSort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'winRate', dir: 'desc' });
   const [historySort, setHistorySort] = useState<{ key: string, dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [bindingNow, setBindingNow] = useState(false);
@@ -187,6 +207,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
   const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const [previewBackground, setPreviewBackground] = useState<string | null>(null);
+  const [previewPetId, setPreviewPetId] = useState<string | null>(null);
   const [hasInitializedPreview, setHasInitializedPreview] = useState(false);
 
   useEffect(() => {
@@ -194,6 +215,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       setPreviewTitle(data.player.active_title?.name || null);
       setPreviewFrame(data.player.active_frame?.name || null);
       setPreviewBackground(data.player.active_background?.name || null);
+      setPreviewPetId(data.player.active_pet_id || null);
       setHasInitializedPreview(true);
     }
   }, [data?.player, hasInitializedPreview]);
@@ -203,8 +225,9 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       setPreviewTitle(data.player.active_title?.name || null);
       setPreviewFrame(data.player.active_frame?.name || null);
       setPreviewBackground(data.player.active_background?.name || null);
+      setPreviewPetId(data.player.active_pet_id || null);
     }
-  }, [data?.player?.active_title_id, data?.player?.active_frame_id, data?.player?.active_background_id]);
+  }, [data?.player?.active_title_id, data?.player?.active_frame_id, data?.player?.active_background_id, data?.player?.active_pet_id]);
 
   const previewPlayer = useMemo(() => {
     if (!data?.player) return null;
@@ -212,8 +235,9 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
     if (previewTitle) p.active_title = { id: 0, name: previewTitle, item_type: 'title' };
     if (previewFrame) p.active_frame = { id: 0, name: previewFrame, item_type: 'frame' };
     if (previewBackground) p.active_background = { id: 0, name: previewBackground, item_type: 'background' };
+    if (previewPetId) p.active_pet_id = previewPetId;
     return p;
-  }, [data?.player, previewTitle, previewFrame, previewBackground]);
+  }, [data?.player, previewTitle, previewFrame, previewBackground, previewPetId]);
 
   const featherHistoryQuery = useQuery({
     queryKey: ['playerFeathers', playerId],
@@ -831,9 +855,9 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                     <div className="flex-1 md:w-full space-y-4">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">當前搭配</span>
-                        {(previewTitle || previewFrame || previewBackground) && (
+                        {(previewTitle || previewFrame || previewBackground || previewPetId) && (
                           <button 
-                            onClick={() => { setPreviewTitle(null); setPreviewFrame(null); setPreviewBackground(null); }} 
+                            onClick={() => { setPreviewTitle(null); setPreviewFrame(null); setPreviewBackground(null); setPreviewPetId(null); }} 
                             className="text-[10px] font-bold text-amber-600 hover:text-amber-700 transition-colors flex items-center gap-1"
                           >
                             <RefreshCw size={10} />重設
@@ -844,6 +868,18 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                         {previewTitle && <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-amber-400/20 flex items-center justify-center text-amber-600 font-black text-xs">稱</div><span className="text-xs font-black text-amber-800 dark:text-amber-400">{previewTitle}</span></div></div>}
                         {previewFrame && <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-blue-400/20 flex items-center justify-center text-blue-600 font-black text-xs"><Square size={10} /></div><span className="text-xs font-black text-blue-800 dark:text-blue-400">{previewFrame}</span></div></div>}
                         {previewBackground && <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-emerald-400/20 flex items-center justify-center text-emerald-600 font-black text-xs"><Layers size={10} /></div><span className="text-xs font-black text-emerald-800 dark:text-emerald-400">{previewBackground}</span></div></div>}
+                        {previewPetId && (
+                          <div className="p-2 bg-pink-50 dark:bg-pink-900/20 rounded-xl border border-pink-100 dark:border-pink-800/50 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-lg bg-pink-400/20 flex items-center justify-center text-pink-600 font-black text-xs">
+                                <Heart size={10} />
+                              </div>
+                              <span className="text-xs font-black text-pink-800 dark:text-pink-400">
+                                {PETS_CATALOG.find(p => p.id === previewPetId)?.name || '未知寵物'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -858,10 +894,11 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                       playerData={player}
                       hidePreview={true}
                       initialFilter="all"
-                      onPreview={(type, name) => {
-                        if (type === 'title') setPreviewTitle(name);
-                        if (type === 'frame') setPreviewFrame(name);
-                        if (type === 'background') setPreviewBackground(name);
+                      onPreview={(type, nameOrId) => {
+                        if (type === 'title') setPreviewTitle(nameOrId);
+                        if (type === 'frame') setPreviewFrame(nameOrId);
+                        if (type === 'background') setPreviewBackground(nameOrId);
+                        if (type === 'pet') setPreviewPetId(nameOrId);
                       }}
                       onUpdate={onUpdate}
                     />

@@ -9,11 +9,13 @@ import { cn, getAvatarUrl } from "../lib/utils";
 import { Player } from "../types";
 import { calculateWeightedMu } from "../lib/matchEngine";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
+import { PetRenderer } from "./PetRenderer";
 import {
   isFlowingFrame,
   getFlowingGradient,
   renderFrameOverlay,
-  renderBackgroundEffects
+  renderBackgroundEffects,
+  getTitleStyle
 } from "../lib/itemEffects";
 
 interface CourtCardProps {
@@ -81,156 +83,173 @@ const PlayerSlot = React.memo(({
   const flowingGradient = getFlowingGradient(activeFrame);
 
   return (
-    <button 
-      onClick={interactive ? onClick : undefined}
-      type="button"
-      tabIndex={interactive ? undefined : -1}
+    <div 
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl transition-all duration-300 absolute shadow-sm overflow-hidden",
+        "absolute transition-all duration-300", 
+        isSelected && player && interactive ? "z-30 scale-[1.03]" : "z-10",
         interactive && "hover:z-20",
-        !interactive && "pointer-events-none cursor-default",
-        player 
-          ? (activeFrame || activeBackground)
-            ? "bg-transparent opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-transparent"
-            : "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-slate-200 dark:border-slate-800" 
-          : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10 border-2 border-transparent",
-        
-        /* 選中狀態 */
-        isSelected && player && interactive && cn(
-          "z-30 shadow-2xl scale-[1.03] ring-4 ring-amber-400",
-          !activeFrame && "border-amber-400"
-        ),
-
-        !activeFrame && !isSelected && "border-transparent",
-        
-        interactive && "active:scale-95 group/slot",
         className
       )}
     >
-      {player && (
-        <>
-          {/* [底層] 流光特效 */}
-          {isFlowing && (
-            <div className="absolute inset-0 z-0 overflow-hidden rounded-xl pointer-events-none">
-              <div 
-                className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow"
-                style={{ background: flowingGradient }}
-              />
-            </div>
-          )}
-
-          {/* [中層] 內容遮罩 */}
-          {isFlowing && (
-            <div className={cn(
-              "absolute inset-[2.5px] rounded-[8px] z-[5] pointer-events-none",
-              "bg-white dark:bg-slate-900"
-            )} />
-          )}
-
-          {/* [背景] 各種環境特效 */}
-          {renderBackgroundEffects(activeBackground, activeFrame, "court")}
-          
-          {/* 邊框覆蓋層 */}
-          {renderFrameOverlay(activeFrame, "court")}
-        </>
-      )}
-
-      {player ? (
-        <>
-          {/* [頂層] 懸浮稱號 (不受裁切影響) */}
-          <AnimatePresence mode="wait">
-            {activeTitle && (
-              <div className="absolute -top-4 left-0 w-full z-[50] flex flex-col items-center pointer-events-none">
-                <motion.div 
-                  key={activeTitle}
-                  initial={{ y: 2, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 2, opacity: 0 }}
-                  className="relative h-3 md:h-3.5 flex items-center px-1.5"
-                >
-                  {(() => {
-                    const titleText = activeTitle.toLowerCase();
-                    const isLegendary = titleText.includes('傳說') || titleText.includes('守護') || titleText.includes('殺手') || titleText.includes('鬼');
-                    const isEpic = titleText.includes('機器') || titleText.includes('大師');
-                    const theme = isLegendary 
-                      ? "bg-amber-400 text-amber-950 border-amber-200 shadow-[0_2px_8px_rgba(245,158,11,0.2)]"
-                      : isEpic
-                      ? "bg-indigo-500 text-white border-indigo-300 shadow-[0_2px_6px_rgba(99,102,241,0.2)]"
-                      : "bg-slate-700/90 text-slate-100 border-slate-500/50 shadow-sm";
-                    return (
-                      <>
-                        <div className={cn("absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500", theme)}>
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-30" />
-                        </div>
-                        <span className="relative text-[7px] md:text-[8.5px] font-black uppercase tracking-wider whitespace-nowrap leading-none">
-                          {activeTitle}
-                        </span>
-                      </>
-                    );
-                  })()}
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* [上層] 內容層：大頭照、姓名、戰力 */}
-          <div className="absolute inset-0 isolate flex flex-col items-center justify-center overflow-visible rounded-xl p-0.5 md:p-1 z-10">
-
-            <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
-            <img
-              src={getAvatarUrl(player.avatar, player.name)}
-              alt={player.name}
-              className={cn(
-                "hidden md:block w-7 h-7 rounded-full object-cover shadow-sm mb-1 border transition-all duration-300 z-10",
-                activeBackground || isFlowing
-                  ? "bg-white/10 border-white/20 backdrop-blur-[1px]" 
-                  : "bg-white border-slate-200/50"
-              )}
-            />
-            
-            <div className="flex flex-col items-center w-full min-w-0 mb-0.5 md:mb-1 z-10">
-              <div className={cn(
-                "font-black text-[11px] md:text-[13px] tracking-tighter truncate w-full text-center px-0.5 md:px-1 leading-none drop-shadow-sm transition-colors",
-                activeBackground || isFlowing ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-100"
-              )}>
-                {player.name}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 mt-0.5 md:mt-1 z-10">
-               <span className={cn(
-                 "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                 activeBackground || isFlowing ? "text-slate-600 dark:text-slate-400" : "text-slate-500 dark:text-slate-400"
-               )}>
-                 {player.matchCount || 0}場
-               </span>
-               <span className="text-[8px] font-bold text-slate-300 dark:text-slate-700">|</span>
-               <span className={cn(
-                 "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                 activeBackground || isFlowing ? "text-emerald-700" : "text-emerald-600 dark:text-emerald-400"
-               )}>
-                 {Math.round((player.mu || 0) * 10)}
-                 {useCareerWeight && ` (${Math.round(calculateWeightedMu(player.mu || 0, player.mu || 0) * 10)})`}
-               </span>
-            </div>
-
-            {/* Team Badge Badge */}
-            {teamColor && (
-              <div className={cn(
-                "absolute top-1 left-1 px-1.5 py-0.5 rounded text-[7px] font-black shadow-sm z-30",
-                teamColor === "red" ? "bg-rose-500 text-white" : "bg-blue-500 text-white"
-              )}>
-                {teamColor === "red" ? "T1" : "T2"}
-              </div>
-            )}
+      {/* [頂層] 懸浮稱號 (不受裁切影響，移出 overflow-hidden 的 button 外) */}
+      <AnimatePresence mode="wait">
+        {player && activeTitle && (
+          <div className="absolute -top-4 left-0 w-full z-[50] flex flex-col items-center pointer-events-none">
+            <motion.div 
+              key={activeTitle}
+              initial={{ y: 2, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 2, opacity: 0 }}
+              className="relative h-3 md:h-3.5 flex items-center px-1.5"
+            >
+              {(() => {
+                const titleStyle = getTitleStyle(activeTitle);
+                return (
+                  <>
+                    <div className={cn(
+                      "absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500",
+                      titleStyle.bg
+                    )}>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-30" />
+                    </div>
+                    <span className={cn(
+                      "relative text-[7px] md:text-[8.5px] font-black uppercase tracking-wider whitespace-nowrap leading-none",
+                      titleStyle.text
+                    )}>
+                      {activeTitle}
+                    </span>
+                  </>
+                );
+              })()}
+            </motion.div>
           </div>
-        </>
-      ) : (
-        <div className="flex flex-col items-center opacity-40">
-           <Users size={16} className="hidden md:block text-white mb-0.5" />
-           <span className="text-[9px] md:text-[10px] font-black text-white uppercase tracking-widest leading-none">PICK</span>
-        </div>
-      )}
-    </button>
+        )}
+      </AnimatePresence>
+
+      <button 
+        onClick={interactive ? onClick : undefined}
+        type="button"
+        tabIndex={interactive ? undefined : -1}
+        className={cn(
+          "relative w-full h-full flex flex-col items-center justify-center rounded-xl transition-all duration-300 shadow-sm overflow-hidden",
+          !interactive && "pointer-events-none cursor-default",
+          player 
+            ? (activeFrame || activeBackground)
+              ? "bg-transparent opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-transparent"
+              : "bg-white dark:bg-slate-900 opacity-100 ring-1 ring-black/5 dark:ring-white/10 border-2 border-slate-200 dark:border-slate-800" 
+            : "bg-black/5 dark:bg-white/5 opacity-0 hover:opacity-10 border-2 border-transparent",
+          
+          /* 選中狀態 */
+          isSelected && player && interactive && cn(
+            "shadow-2xl ring-4 ring-amber-400",
+            !activeFrame && "border-amber-400"
+          ),
+
+          !activeFrame && !isSelected && "border-transparent",
+          
+          interactive && "active:scale-95 group/slot"
+        )}
+      >
+        {player && (
+          <>
+            {/* [底層] 流光特效 */}
+            {isFlowing && (
+              <div className="absolute inset-0 z-0 overflow-hidden rounded-xl pointer-events-none">
+                <div 
+                  className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow"
+                  style={{ background: flowingGradient }}
+                />
+              </div>
+            )}
+
+            {/* [中層] 內容遮罩 */}
+            {isFlowing && (
+              <div className={cn(
+                "absolute inset-[2.5px] rounded-[8px] z-[5] pointer-events-none",
+                "bg-white dark:bg-slate-900"
+              )} />
+            )}
+
+            {/* [背景] 各種環境特效 */}
+            {renderBackgroundEffects(activeBackground, activeFrame, "court")}
+            
+            {/* 邊框覆蓋層 */}
+            {renderFrameOverlay(activeFrame, "court")}
+
+            {/* 右上角未上場角標 (移至最外層 button 內以利 overflow-hidden 裁切角緣) */}
+            <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
+          </>
+        )}
+
+        {player ? (
+          <>
+            {/* [上層] 內容層：大頭照、姓名、戰力 */}
+            <div className="absolute inset-0 isolate flex flex-col items-center justify-center overflow-visible rounded-xl p-0.5 md:p-1 z-10">
+
+              {/* Avatar + Pet Container */}
+              <div className="relative flex items-center justify-center gap-0.5 mb-1 z-10">
+                <img
+                  src={getAvatarUrl(player.avatar, player.name)}
+                  alt={player.name}
+                  className={cn(
+                    "hidden md:block rounded-full object-cover shadow-sm border transition-all duration-300",
+                    player.active_pet_id ? "w-5.5 h-5.5" : "w-7 h-7",
+                    activeBackground || isFlowing
+                      ? "bg-white/10 border-white/20 backdrop-blur-[1px]" 
+                      : "bg-white border-slate-200/50"
+                  )}
+                />
+                {player.active_pet_id && (
+                  <div className="hidden md:block -ml-0.5 -mt-1 origin-bottom animate-bounce-slow">
+                    <PetRenderer petId={player.active_pet_id} className="w-5.5 h-5.5" />
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex flex-col items-center w-full min-w-0 mb-0.5 md:mb-1 z-10">
+                <div className={cn(
+                  "font-black text-[11px] md:text-[13px] tracking-tighter truncate w-full text-center px-0.5 md:px-1 leading-none drop-shadow-sm transition-colors",
+                  activeBackground || isFlowing ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-100"
+                )}>
+                  {player.name}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-0.5 md:mt-1 z-10">
+                 <span className={cn(
+                   "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
+                   activeBackground || isFlowing ? "text-slate-600 dark:text-slate-400" : "text-slate-500 dark:text-slate-400"
+                 )}>
+                   {player.matchCount || 0}場
+                 </span>
+                 <span className="text-[8px] font-bold text-slate-300 dark:text-slate-700">|</span>
+                 <span className={cn(
+                   "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
+                   activeBackground || isFlowing ? "text-emerald-700" : "text-emerald-600 dark:text-emerald-400"
+                 )}>
+                   {Math.round((player.mu || 0) * 10)}
+                   {useCareerWeight && ` (${Math.round(calculateWeightedMu(player.mu || 0, player.mu || 0) * 10)})`}
+                 </span>
+              </div>
+
+              {/* Team Badge Badge */}
+              {teamColor && (
+                <div className={cn(
+                  "absolute top-1 left-1 px-1.5 py-0.5 rounded text-[7px] font-black shadow-sm z-30",
+                  teamColor === "red" ? "bg-rose-500 text-white" : "bg-blue-500 text-white"
+                )}>
+                  {teamColor === "red" ? "T1" : "T2"}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center opacity-40">
+             <Users size={16} className="hidden md:block text-white mb-0.5" />
+             <span className="text-[9px] md:text-[10px] font-black text-white uppercase tracking-widest leading-none">PICK</span>
+          </div>
+        )}
+      </button>
+    </div>
   );
 });
 

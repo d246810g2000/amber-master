@@ -18,6 +18,11 @@ export const RawPlayerSchema = z.object({
   active_frame: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
   active_background: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
   email: z.string().nullable().optional(),
+  active_pet_id: z.string().nullable().optional(),
+  active_egg_id: z.string().nullable().optional(),
+  egg_progress_games: z.coerce.number().optional().default(0),
+  egg_progress_wins: z.coerce.number().optional().default(0),
+  unlocked_pets: z.string().nullable().optional(),
 });
 
 export const PlayerBindingSchema = z.object({
@@ -72,6 +77,7 @@ export const RawMatchPlayerSchema = z.object({
   active_title: z.object({ id: z.number(), name: z.string(), item_type: z.string() }).nullable().optional(),
   active_frame: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
   active_background: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
+  active_pet_id: z.string().nullable().optional(),
 });
 
 export const RawMatchSchema = z.object({

@@ -14,9 +14,11 @@ import {
   isFlowingFrame, 
   getFlowingGradient, 
   renderFrameOverlay, 
-  renderBackgroundEffects 
+  renderBackgroundEffects,
+  getTitleStyle
 } from "../lib/itemEffects";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
+import { PetRenderer } from "./PetRenderer";
 
 interface PlayerPillProps {
   player: Player;
@@ -96,28 +98,19 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
               className="relative px-2 py-0.5"
             >
               {(() => {
-                const titleText = activeTitle.toLowerCase();
-                const isUltimate = titleText.includes('跪求') || titleText.includes('戴資穎') || titleText.includes('殺氣');
-                const isLegendary = titleText.includes('裁判') || titleText.includes('鬼');
-                const isEpic = titleText.includes('姿勢') || titleText.includes('線上') || titleText.includes('殺手');
-                
-                const theme = isUltimate
-                  ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-500 text-white border-amber-300 shadow-[0_0_15px_rgba(217,70,239,0.5)] font-black"
-                  : isLegendary 
-                  ? "bg-amber-400 text-amber-950 border-amber-200 shadow-[0_2px_10px_rgba(245,158,11,0.2)]"
-                  : isEpic
-                  ? "bg-indigo-500 text-white border-indigo-300 shadow-[0_2px_8px_rgba(99,102,241,0.2)]"
-                  : "bg-slate-700/90 text-slate-100 border-slate-500/50 shadow-sm";
-
+                const titleStyle = getTitleStyle(activeTitle);
                 return (
                   <>
                     <div className={cn(
                       "absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500",
-                      theme
+                      titleStyle.bg
                     )}>
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer opacity-60" />
                     </div>
-                    <span className="relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1 drop-shadow-md">
+                    <span className={cn(
+                      "relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1 drop-shadow-md",
+                      titleStyle.text
+                    )}>
                       {activeTitle}
                     </span>
                   </>
@@ -221,17 +214,28 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         {(status === "ready" || status === "finishing") && (
           <RestStreakCornerBadge count={cornerMissed} />
         )}
-        <div className={cn(
-          "mb-1 h-8 w-8 md:h-10 md:w-10 shrink-0 overflow-hidden rounded-full border-2 transition-all duration-300 z-20",
-          isFallingFeathers 
-            ? "bg-white/10 border-white/20 backdrop-blur-[1px] shadow-sm" 
-            : "bg-slate-100 dark:bg-slate-700 border-white dark:border-slate-800 shadow-inner"
-        )}>
-          <img
-            src={getAvatarUrl(player.avatar, player.name)}
-            alt={player.name}
-            className="h-full w-full object-cover"
-          />
+        {/* Avatar + Pet Container */}
+        <div className="relative flex items-center justify-center gap-0.5 mb-1 z-20">
+          <div className={cn(
+            "shrink-0 overflow-hidden rounded-full border-2 transition-all duration-300",
+            player.active_pet_id 
+              ? "h-6.5 w-6.5 md:h-8 md:w-8"
+              : "h-8 w-8 md:h-10 md:w-10",
+            isFallingFeathers 
+              ? "bg-white/10 border-white/20 backdrop-blur-[1px] shadow-sm" 
+              : "bg-slate-100 dark:bg-slate-700 border-white dark:border-slate-800 shadow-inner"
+          )}>
+            <img
+              src={getAvatarUrl(player.avatar, player.name)}
+              alt={player.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          {player.active_pet_id && (
+            <div className="-ml-0.5 -mt-1 origin-bottom animate-bounce-slow">
+              <PetRenderer petId={player.active_pet_id} className="w-5 h-5 md:w-6.5 md:h-6.5" />
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-center w-full min-w-0 z-20">
           <span className={cn(

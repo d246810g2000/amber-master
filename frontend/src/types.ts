@@ -19,6 +19,11 @@ export interface Player {
   active_frame?: { id: number; name: string; item_type: string; image_url?: string };
   active_background?: { id: number; name: string; item_type: string; image_url?: string };
   isGoogleLinked?: boolean;
+  active_pet_id?: string;
+  active_egg_id?: string;
+  egg_progress_games?: number;
+  egg_progress_wins?: number;
+  unlocked_pets?: string;
 }
 
 export interface MatchPlayer {
@@ -37,6 +42,7 @@ export interface MatchPlayer {
   active_title?: { id: number; name: string; item_type: string };
   active_frame?: { id: number; name: string; item_type: string; image_url?: string };
   active_background?: { id: number; name: string; item_type: string; image_url?: string };
+  active_pet_id?: string;
 }
 
 export interface MatchRecord {

@@ -64,6 +64,11 @@ class Player(PlayerBase):
     active_title: Optional[ShopItem] = None
     active_frame: Optional[ShopItem] = None
     active_background: Optional[ShopItem] = None
+    active_pet_id: Optional[str] = None
+    active_egg_id: Optional[str] = None
+    egg_progress_games: int = 0
+    egg_progress_wins: int = 0
+    unlocked_pets: Optional[str] = None
     hasBinding: bool = False
     isGoogleLinked: bool = False
 
@@ -265,4 +270,15 @@ class PlayerLoanSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class BuyEggRequest(BaseModel):
+    userEmail: str
+    eggType: str
+
+class HatchRequest(BaseModel):
+    userEmail: str
+
+class EquipPetRequest(BaseModel):
+    userEmail: str
+    petId: Optional[str] = None
 

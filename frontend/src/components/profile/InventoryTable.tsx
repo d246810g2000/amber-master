@@ -8,9 +8,12 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Tag from "lucide-react/dist/esm/icons/tag";
 import Star from "lucide-react/dist/esm/icons/star";
+import Heart from "lucide-react/dist/esm/icons/heart";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { PlayerPill } from '../PlayerPill';
+import { PETS_CATALOG } from '../dashboard/ShopModal';
+import { PetRenderer } from '../PetRenderer';
 
 interface InventoryTableProps {
   playerId: string;
@@ -19,8 +22,8 @@ interface InventoryTableProps {
   activeBackgroundId?: number | null;
   playerData: any;
   hidePreview?: boolean;
-  initialFilter?: 'all' | 'title' | 'frame' | 'background';
-  onPreview?: (type: 'title' | 'frame' | 'background', name: string) => void;
+  initialFilter?: 'all' | 'title' | 'frame' | 'background' | 'pet';
+  onPreview?: (type: 'title' | 'frame' | 'background' | 'pet', name: string) => void;
   onUpdate?: () => void;
 }
 
@@ -36,7 +39,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onUpdate 
 }) => {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'title' | 'frame' | 'background'>(initialFilter);
+  const [filter, setFilter] = useState<'all' | 'title' | 'frame' | 'background' | 'pet'>(initialFilter);
 
   // Sync filter when initialFilter changes
   useEffect(() => {
@@ -51,17 +54,23 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   });
 
   const equipMutation = useMutation({
-    mutationFn: (itemId: number) => gasApi.equipItem(playerId, itemId),
-    onSuccess: () => {
-      toast.success('裝備成功！');
+    mutationFn: ({ itemId, isPet }: { itemId: number | string; isPet?: boolean }) => {
+      if (isPet) {
+        return gasApi.equipPet(playerData.email, itemId as string);
+      } else {
+        return gasApi.equipItem(playerId, itemId as number);
+      }
+    },
+    onSuccess: (_, variables) => {
+      toast.success(variables.isPet ? '已邀請夥伴隨行！' : '套用成功！');
       queryClient.invalidateQueries({ queryKey: ['playerInventory', playerId] });
       queryClient.invalidateQueries({ queryKey: ['playerProfile', playerId] });
       queryClient.invalidateQueries({ queryKey: ['players-base'] });
       queryClient.invalidateQueries({ queryKey: ['players'] });
       onUpdate?.();
     },
-    onError: (err: any) => {
-      toast.error(err.message || '裝備失敗');
+    onError: (err: any, variables) => {
+      toast.error(err.message || (variables.isPet ? '隨行設置失敗' : '套用失敗'));
     }
   });
 
@@ -79,10 +88,36 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   };
 
   const filteredItems = useMemo(() => {
-    if (!items || !Array.isArray(items)) return [];
-    if (filter === 'all') return items;
-    return items.filter((inv: any) => inv?.item?.item_type === filter);
-  }, [items, filter]);
+    const invItems = Array.isArray(items) ? items : [];
+    
+    // Construct mock pet inventory items from unlocked pets
+    const pets = (playerData?.unlocked_pets ? playerData.unlocked_pets.split(',') : [])
+      .map((petId: string) => {
+        const pet = PETS_CATALOG.find(p => p.id === petId);
+        if (!pet) return null;
+        return {
+          id: `pet_${petId}`,
+          isPet: true,
+          item: {
+            id: pet.id,
+            name: pet.name,
+            item_type: 'pet',
+            description: pet.desc,
+            tier: pet.tier
+          },
+          expires_at: null
+        };
+      })
+      .filter(Boolean);
+
+    if (filter === 'all') {
+      return [...invItems, ...pets];
+    }
+    if (filter === 'pet') {
+      return pets;
+    }
+    return invItems.filter((inv: any) => inv?.item?.item_type === filter);
+  }, [items, filter, playerData?.unlocked_pets]);
 
   if (isLoading) {
     return (
@@ -106,19 +141,19 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   return (
     <div className="flex flex-col gap-6">
       {/* 分類切換 */}
-      <div className="flex gap-2 mb-4 md:mb-6">
-        {(['all', 'title', 'background', 'frame'] as const).map((f) => (
+      <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto no-scrollbar py-1">
+        {(['all', 'title', 'background', 'frame', 'pet'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              "px-3 py-1.5 md:px-6 md:py-2 rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all",
+              "px-3 py-1.5 md:px-6 md:py-2 rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all shrink-0",
               filter === f 
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm" 
                 : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
             )}
           >
-            {f === 'all' ? '全部' : f === 'title' ? '稱號' : f === 'background' ? '背景' : '邊框'}
+            {f === 'all' ? '全部' : f === 'title' ? '稱號' : f === 'background' ? '背景' : f === 'frame' ? '邊框' : '寵物'}
           </button>
         ))}
       </div>
@@ -128,9 +163,12 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
         {filteredItems.map((inv: any) => {
           const item = inv?.item;
           if (!item) return null;
-          const isEquipped = (item.item_type === 'title' && Number(activeTitleId) === Number(item.id)) || 
-                            (item.item_type === 'frame' && Number(activeFrameId) === Number(item.id)) ||
-                            (item.item_type === 'background' && Number(activeBackgroundId) === Number(item.id));
+          const isPet = inv.isPet;
+          const isEquipped = isPet
+            ? playerData.active_pet_id === item.id
+            : (item.item_type === 'title' && Number(activeTitleId) === Number(item.id)) || 
+              (item.item_type === 'frame' && Number(activeFrameId) === Number(item.id)) ||
+              (item.item_type === 'background' && Number(activeBackgroundId) === Number(item.id));
           // duration text will be parsed inside the card
 
           return (
@@ -138,7 +176,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               key={inv.id}
               onClick={() => {
                 if (onPreview) {
-                  onPreview(item.item_type, item.name);
+                  onPreview(item.item_type, isPet ? item.id : item.name);
                 } else {
                   if (item.item_type === 'title') setPreviewTitle(item.name);
                   if (item.item_type === 'frame' || item.item_type === 'background') setPreviewFrame(item.name);
@@ -157,19 +195,28 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                   "p-1.5 md:p-2 rounded-lg md:rounded-xl",
                   item.item_type === 'title' ? "bg-amber-100 text-amber-600" : 
                   item.item_type === 'background' ? "bg-emerald-100 text-emerald-600" :
+                  item.item_type === 'pet' ? "bg-pink-100 text-pink-600" :
                   "bg-sky-100 text-sky-600"
                 )}>
                   {item.item_type === 'title' ? <Tag size={12} className="md:w-4 md:h-4" /> : 
                    item.item_type === 'background' ? <Sparkles size={12} className="md:w-4 md:h-4" /> :
+                   item.item_type === 'pet' ? <Heart size={12} className="md:w-4 md:h-4" /> :
                    <Star size={12} className="md:w-4 md:h-4" />}
                 </div>
                 {isEquipped && (
                   <div className="bg-emerald-500 text-white px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg text-[7px] md:text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5 md:gap-1">
                     <Check size={8} strokeWidth={4} className="md:w-3 md:h-3" />
-                    使用中
+                    {isPet ? '隨行中' : '使用中'}
                   </div>
                 )}
               </div>
+
+              {/* Pet SVG Preview inside Backpack card */}
+              {isPet && (
+                <div className="w-12 h-12 flex items-center justify-center my-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-white/5 relative overflow-hidden self-center shrink-0">
+                  <PetRenderer petId={item.id} className="w-8 h-8 scale-110" />
+                </div>
+              )}
 
               {/* 內容 */}
               <div className="flex-1">
@@ -194,7 +241,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!isEquipped) equipMutation.mutate(item.id);
+                  if (!isEquipped) equipMutation.mutate({ itemId: item.id, isPet });
                 }}
                 disabled={isEquipped || equipMutation.isPending}
                 className={cn(
@@ -207,9 +254,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 {equipMutation.isPending ? (
                   <Loader2 size={10} className="animate-spin md:w-4 md:h-4" />
                 ) : isEquipped ? (
-                   <>使用中</>
+                  isPet ? <>隨行中</> : <>使用中</>
                 ) : (
-                  <>立即裝備</>
+                  isPet ? <>邀請隨行</> : <>立即套用</>
                 )}
               </button>
             </div>

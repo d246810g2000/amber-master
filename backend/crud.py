@@ -334,6 +334,13 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
                          (winner == 2 and (pid == req.t2p1 or pid == req.t2p2))
             reward = 100 if is_winner_p else 50
             db_p.feathers = (db_p.feathers or 0) + reward
+            
+            # 孵蛋進度更新
+            if db_p.active_egg_id:
+                db_p.egg_progress_games = (db_p.egg_progress_games or 0) + 1
+                if is_winner_p:
+                    db_p.egg_progress_wins = (db_p.egg_progress_wins or 0) + 1
+            
             db.add(models.FeatherTransaction(
                 player_id=pid,
                 amount=reward,
@@ -1728,4 +1735,110 @@ def repay_loan(db: Session, loan_id: int, repay_amount: Optional[int] = None):
     db.commit()
 
     return {"status": "success", "message": f"成功還款 {actual_repay} 根羽毛給 {lender.name}！"}
+
+
+def buy_egg(db: Session, email: str, egg_type: str):
+    player = get_player_by_email(db, email)
+    if not player:
+        raise ValueError("USER_NOT_BOUND")
+        
+    egg_costs = {
+        "egg_classic": 500,
+        "egg_epic": 1000,
+        "egg_legendary": 1500,
+        "egg_ultimate": 2000
+    }
+    
+    if egg_type not in egg_costs:
+        raise ValueError("無效的蛋種類")
+        
+    cost = egg_costs[egg_type]
+    if (player.feathers or 0) < cost:
+        raise ValueError("羽毛不足")
+        
+    player.feathers = (player.feathers or 0) - cost
+    player.active_egg_id = egg_type
+    player.egg_progress_games = 0
+    player.egg_progress_wins = 0
+    
+    db.add(models.FeatherTransaction(
+        player_id=player.id,
+        amount=-cost,
+        type="buy_egg",
+        description=f"購買寵物蛋：{egg_type}"
+    ))
+    db.commit()
+    return {"status": "success", "player": player}
+
+
+def hatch_egg(db: Session, email: str):
+    import random
+    player = get_player_by_email(db, email)
+    if not player:
+        raise ValueError("USER_NOT_BOUND")
+        
+    if not player.active_egg_id:
+        raise ValueError("你目前沒有正在孵化的蛋")
+        
+    egg_requirements = {
+        "egg_classic": {"games": 2, "wins": 1, "pets": ["pet_corgi", "pet_black_cat", "pet_chick"]},
+        "egg_epic": {"games": 5, "wins": 2, "pets": ["pet_cat", "pet_slime", "pet_rabbit"]},
+        "egg_legendary": {"games": 10, "wins": 5, "pets": ["pet_dog", "pet_fox", "pet_dragon"]},
+        "egg_ultimate": {"games": 20, "wins": 10, "pets": ["pet_phoenix", "pet_unicorn", "pet_panda"]}
+    }
+    
+    egg_id = player.active_egg_id
+    if egg_id not in egg_requirements:
+        raise ValueError("無效的蛋種類")
+        
+    reqs = egg_requirements[egg_id]
+    games_progress = player.egg_progress_games or 0
+    wins_progress = player.egg_progress_wins or 0
+    
+    if games_progress < reqs["games"] or wins_progress < reqs["wins"]:
+        raise ValueError("孵化條件未達成 (場次或勝場不足)")
+        
+    unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
+    tier_pets = reqs["pets"]
+    unowned_pets = [p for p in tier_pets if p not in unlocked_list]
+    
+    if unowned_pets:
+        new_pet = random.choice(unowned_pets)
+    else:
+        new_pet = random.choice(tier_pets)
+        
+    if new_pet not in unlocked_list:
+        unlocked_list.append(new_pet)
+        player.unlocked_pets = ",".join(unlocked_list)
+        
+    player.active_pet_id = new_pet
+    player.active_egg_id = None
+    player.egg_progress_games = 0
+    player.egg_progress_wins = 0
+    
+    db.commit()
+    return {
+        "status": "success",
+        "pet_id": new_pet,
+        "hatched_pet": new_pet,
+        "active_pet_id": player.active_pet_id,
+        "unlocked_pets": player.unlocked_pets,
+        "active_egg_id": None
+    }
+
+
+def equip_pet(db: Session, email: str, pet_id: str | None):
+    player = get_player_by_email(db, email)
+    if not player:
+        raise ValueError("USER_NOT_BOUND")
+        
+    if pet_id:
+        unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
+        if pet_id not in unlocked_list:
+            raise ValueError("未解鎖該寵物")
+            
+    player.active_pet_id = pet_id
+    db.commit()
+    return {"status": "success", "player": player}
+
 

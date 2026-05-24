@@ -820,6 +820,30 @@ def get_inventory(player_id: str, db: Session = Depends(get_db)):
 def equip_item(player_id: str, req: schemas.EquipRequest, db: Session = Depends(get_db)):
     return crud.equip_item(db, player_id, req.itemId)
 
+@app.post("/players/buy-egg")
+def buy_egg(req: schemas.BuyEggRequest, db: Session = Depends(get_db)):
+    try:
+        result = crud.buy_egg(db, req.userEmail, req.eggType)
+        return success(result)
+    except ValueError as e:
+        return error(str(e))
+
+@app.post("/players/hatch")
+def hatch_egg(req: schemas.HatchRequest, db: Session = Depends(get_db)):
+    try:
+        result = crud.hatch_egg(db, req.userEmail)
+        return success(result)
+    except ValueError as e:
+        return error(str(e))
+
+@app.post("/players/equip-pet")
+def equip_pet(req: schemas.EquipPetRequest, db: Session = Depends(get_db)):
+    try:
+        result = crud.equip_pet(db, req.userEmail, req.petId)
+        return success(result)
+    except ValueError as e:
+        return error(str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

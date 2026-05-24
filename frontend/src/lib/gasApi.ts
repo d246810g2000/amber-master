@@ -470,3 +470,18 @@ export async function cancelLoan(loanId: number) {
   return apiPost(`/loans/${loanId}/cancel`, {}, z.any());
 }
 
+/** 購買寵物蛋 */
+export async function buyEgg(userEmail: string, eggType: string) {
+  return apiPost('/players/buy-egg', { userEmail, eggType }, z.any());
+}
+
+/** 孵化寵物蛋 */
+export async function hatchEgg(userEmail: string) {
+  return apiPost('/players/hatch', { userEmail }, z.any());
+}
+
+/** 裝備/更換寵物 */
+export async function equipPet(userEmail: string, petId: string | null) {
+  return apiPost('/players/equip-pet', { userEmail, petId }, z.any());
+}
+
