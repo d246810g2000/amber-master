@@ -87,12 +87,12 @@ const getPetTierStyle = (tier: string, isUnlocked: boolean, isEquipped: boolean)
 
   if (tier === 'epic') {
     return {
-      cardClass: isUnlocked 
+      cardClass: isUnlocked
         ? "border-purple-200 dark:border-purple-900/40 bg-gradient-to-b from-purple-50/30 via-slate-50/50 to-slate-100/30 dark:from-purple-950/10 dark:via-slate-900/30 dark:to-slate-950/10 hover:border-purple-300 hover:shadow-[0_6px_16px_rgba(168,85,247,0.15)] hover:scale-[1.01]"
         : "border-slate-200/50 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-900/10 hover:border-purple-200/30 hover:scale-[1.01] hover:shadow-sm",
       badgeClass: "bg-purple-100 dark:bg-purple-900/90 text-purple-700 dark:text-purple-300 border border-purple-200/30 dark:border-purple-800/30",
       glowClass: isUnlocked ? "drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]" : "drop-shadow-[0_0_6px_rgba(168,85,247,0.15)]",
-      bgDecor: isUnlocked 
+      bgDecor: isUnlocked
         ? "absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.1)_0%,transparent_65%)] z-0 pointer-events-none"
         : "absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.03)_0%,transparent_60%)] z-0 pointer-events-none"
     };
@@ -109,12 +109,12 @@ const getPetTierStyle = (tier: string, isUnlocked: boolean, isEquipped: boolean)
     };
   } else if (tier === 'classic') {
     return {
-      cardClass: isUnlocked 
+      cardClass: isUnlocked
         ? "border-slate-200 dark:border-slate-800 bg-gradient-to-b from-slate-50/35 via-slate-50/50 to-slate-100/30 dark:from-slate-900/10 dark:via-slate-900/30 dark:to-slate-950/10 hover:border-slate-350 hover:shadow-[0_6px_16px_rgba(100,116,139,0.15)] hover:scale-[1.01]"
         : "border-slate-200/50 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-900/10 hover:border-slate-200/30 hover:scale-[1.01] hover:shadow-sm",
       badgeClass: "bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-400 border border-slate-200/30 dark:border-slate-700/30",
       glowClass: isUnlocked ? "drop-shadow-[0_0_8px_rgba(148,163,184,0.35)]" : "drop-shadow-[0_0_4px_rgba(148,163,184,0.1)]",
-      bgDecor: isUnlocked 
+      bgDecor: isUnlocked
         ? "absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.08)_0%,transparent_65%)] z-0 pointer-events-none"
         : "absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.02)_0%,transparent_60%)] z-0 pointer-events-none"
     };
@@ -156,7 +156,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     staleTime: 5000,
   });
 
-  const boundPlayer = useMemo(() => 
+  const boundPlayer = useMemo(() =>
     players.find((p: any) => p.email?.toLowerCase() === currentUser?.email?.toLowerCase()) as Player | undefined,
     [players, currentUser?.email]
   );
@@ -203,7 +203,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     return p;
   }, [boundPlayer, previewTitle, previewFrame, previewBackground, previewPetId]);
 
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     activeCategory === 'all' || item.item_type === activeCategory
   );
 
@@ -376,8 +376,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                   </span>
                 </div>
                 <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden relative border border-slate-350 dark:border-slate-700/50 p-[2px]">
-                  <div 
-                    className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]" 
+                  <div
+                    className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
                     style={{ width: `${overallProgress}%` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-40" />
@@ -441,20 +441,20 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
               {Object.entries(EGG_REQUIREMENTS).map(([eggType, req]) => {
                 const isAffordable = (boundPlayer?.feathers || 0) >= req.feathers;
-                const eggColorClass = 
+                const eggColorClass =
                   eggType === 'egg_classic' ? 'border-slate-200/55 dark:border-slate-800/40 bg-slate-50/10 dark:bg-slate-900/5' :
-                  eggType === 'egg_epic' ? 'border-purple-200/55 dark:border-purple-900/40 bg-purple-50/10 dark:bg-purple-950/5' :
-                  eggType === 'egg_legendary' ? 'border-orange-200/55 dark:border-orange-900/40 bg-orange-50/10 dark:bg-orange-950/5' :
-                  'border-pink-200/55 dark:border-purple-900/40 bg-gradient-to-br from-pink-50/10 via-purple-50/10 to-indigo-50/10 dark:from-pink-950/5 dark:via-purple-950/5 dark:to-indigo-950/5';
-                
+                    eggType === 'egg_epic' ? 'border-purple-200/55 dark:border-purple-900/40 bg-purple-50/10 dark:bg-purple-950/5' :
+                      eggType === 'egg_legendary' ? 'border-orange-200/55 dark:border-orange-900/40 bg-orange-50/10 dark:bg-orange-950/5' :
+                        'border-pink-200/55 dark:border-purple-900/40 bg-gradient-to-br from-pink-50/10 via-purple-50/10 to-indigo-50/10 dark:from-pink-950/5 dark:via-purple-950/5 dark:to-indigo-950/5';
+
                 const badgeColorClass =
                   eggType === 'egg_classic' ? 'bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400' :
-                  eggType === 'egg_epic' ? 'bg-purple-100 dark:bg-purple-900/90 text-purple-700 dark:text-purple-300' :
-                  eggType === 'egg_legendary' ? 'bg-orange-100 dark:bg-orange-900/90 text-orange-700 dark:text-orange-300' :
-                  'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white';
+                    eggType === 'egg_epic' ? 'bg-purple-100 dark:bg-purple-900/90 text-purple-700 dark:text-purple-300' :
+                      eggType === 'egg_legendary' ? 'bg-orange-100 dark:bg-orange-900/90 text-orange-700 dark:text-orange-300' :
+                        'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white';
 
                 return (
-                  <div 
+                  <div
                     key={eggType}
                     className={cn(
                       "rounded-3xl border p-4 md:p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-lg relative overflow-hidden backdrop-blur-md",
@@ -462,10 +462,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     )}
                   >
                     <div className="h-28 sm:h-32 md:h-36 w-full bg-slate-50 dark:bg-slate-950 rounded-2xl mb-4 flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-200/20 dark:border-white/5 shrink-0">
-                      <img 
-                        src={`/amber-master/assets/eggs/${eggType}.png`} 
-                        alt={req.name} 
-                        className="w-20 h-20 md:w-24 md:h-24 object-contain pointer-events-none select-none hover:rotate-3 transition-transform" 
+                      <img
+                        src={`/amber-master/assets/eggs/${eggType}.png`}
+                        alt={req.name}
+                        className="w-20 h-20 md:w-24 md:h-24 object-contain pointer-events-none select-none hover:rotate-3 transition-transform"
                       />
                       <div className="absolute top-2 left-2 z-20">
                         <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider", badgeColorClass)}>
@@ -479,7 +479,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                       <p className="text-xs text-slate-450 dark:text-slate-550 leading-relaxed min-h-[2.5rem] font-bold">
                         {req.desc}
                       </p>
-                      
+
                       <div className="flex flex-col gap-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-255/10">
                         <div className="flex justify-between">
                           <span>完賽獲得能量:</span>
@@ -505,8 +505,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                         disabled={isHatchingActionLoading || !isAffordable}
                         className={cn(
                           "px-4 py-2 rounded-xl font-black text-xs transition-all active:scale-95 shadow-sm whitespace-nowrap cursor-pointer",
-                          !isAffordable 
-                            ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed" 
+                          !isAffordable
+                            ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
                             : "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/10"
                         )}
                       >
@@ -539,7 +539,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
               const tierStyle = getPetTierStyle(pet.tier, isUnlocked || isPreviewing, isEquipped);
 
               return (
-                <div 
+                <div
                   key={pet.id}
                   onClick={() => setPreviewPetId(pet.id)}
                   className={cn(
@@ -553,8 +553,21 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
 
                   {/* Top tier badge */}
                   <div className="absolute top-1.5 left-1.5 z-10">
-                    <span className={cn("text-[7px] md:text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded", tierStyle.badgeClass)}>
-                      {pet.tier === 'epic' ? '史詩' : pet.tier === 'legendary' ? '傳說' : '終極'}
+                    <span
+                      className={cn(
+                        "text-[7px] md:text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                        tierStyle.badgeClass
+                      )}
+                    >
+                      {
+                        pet.tier === 'classic'
+                          ? '經典'
+                          : pet.tier === 'epic'
+                            ? '史詩'
+                            : pet.tier === 'legendary'
+                              ? '傳說'
+                              : '終極'
+                      }
                     </span>
                   </div>
 
@@ -662,7 +675,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
             <div className="flex items-center gap-2 md:gap-4">
               {boundPlayer && (
                 <>
-                  <button 
+                  <button
                     onClick={() => {
                       navigate(`/players/${boundPlayer.id}?tab=inventory`);
                       onClose();
@@ -693,9 +706,9 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                   <Sparkles size={14} className="text-amber-500" />造型即時預覽
                 </div>
                 <div className="relative p-1 md:p-10 bg-white dark:bg-slate-900 rounded-xl md:rounded-[3rem] border border-slate-100 dark:border-white/5 flex justify-center items-center shadow-sm shrink-0 overflow-hidden w-16 h-20 md:w-auto md:h-auto">
-                   <div className="scale-[0.8] md:scale-125 origin-center transform transition-all duration-500">
-                      <PlayerPill player={previewPlayer} status="ready" onClick={() => {}} onProfileClick={() => {}} />
-                   </div>
+                  <div className="scale-[0.8] md:scale-125 origin-center transform transition-all duration-500">
+                    <PlayerPill player={previewPlayer} status="ready" onClick={() => { }} onProfileClick={() => { }} />
+                  </div>
                 </div>
                 <div className="flex-1 md:w-full space-y-2 md:space-y-4 ml-3 md:ml-0">
                   <div className="flex items-center justify-between">
@@ -711,15 +724,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     {previewFrame && <PreviewBadge icon={<Square size={10} />} text={previewFrame} color="blue" />}
                     {previewBackground && <PreviewBadge icon={<Layers size={10} />} text={previewBackground} color="emerald" />}
                     {previewPetId && (
-                      <PreviewBadge 
-                        icon={<Heart size={10} />} 
-                        text={PETS_CATALOG.find(p => p.id === previewPetId)?.name || '未知寵物'} 
-                        color="pink" 
+                      <PreviewBadge
+                        icon={<Heart size={10} />}
+                        text={PETS_CATALOG.find(p => p.id === previewPetId)?.name || '未知寵物'}
+                        color="pink"
                       />
                     )}
                   </div>
                   {boundPlayer && (
-                    <button 
+                    <button
                       onClick={() => {
                         navigate(`/players/${boundPlayer.id}?tab=inventory`);
                         onClose();
@@ -742,7 +755,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     onClick={() => setActiveCategory(cat.id)}
                     className={cn(
                       "flex items-center gap-1.5 md:gap-2.5 px-3 py-2.5 md:px-6 md:py-3 rounded-lg md:rounded-xl font-black text-[10px] md:text-xs transition-all relative overflow-hidden shrink-0",
-                      activeCategory === cat.id 
+                      activeCategory === cat.id
                         ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200 dark:ring-white/10"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-white/5"
                     )}
@@ -762,7 +775,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 ) : activeCategory === 'inventory' ? (
                   <div className="mt-2 md:mt-4">
                     {boundPlayer ? (
-                      <InventoryTable 
+                      <InventoryTable
                         playerId={boundPlayer.id}
                         activeTitleId={boundPlayer.active_title_id}
                         activeFrameId={boundPlayer.active_frame_id}
@@ -788,7 +801,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
                     {filteredItems.map(item => (
-                      <ShopItemCard 
+                      <ShopItemCard
                         key={item.id}
                         item={item}
                         ownedItemsMap={ownedItemsMap}
@@ -826,7 +839,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 <div className="absolute animate-ping text-cyan-400 text-3xl bottom-1/4 right-1/4 [animation-delay:0.7s]">✦</div>
                 <div className="absolute animate-ping text-pink-400 text-2xl top-1/3 right-1/3 [animation-delay:1.3s]">✦</div>
 
-                <motion.div 
+                <motion.div
                   initial={{ scale: 0.5, y: 100 }}
                   animate={{ scale: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 15 } }}
                   className="relative space-y-8 flex flex-col items-center"
@@ -965,7 +978,7 @@ const ShopItemCard: React.FC<{
   const ownedInfo = ownedItemsMap[item.id];
   const isOwned = !!ownedInfo;
   const isOwnedPermanent = !!ownedInfo?.isPermanent;
-  
+
   const currentPrice = isPermanent ? item.price_permanent : item.price;
 
   const tierStyle = useMemo(() => {
@@ -1024,13 +1037,13 @@ const ShopItemCard: React.FC<{
         </div>
 
         <div className="absolute inset-0 z-0">
-          <img 
+          <img
             src={
-              item.item_type === 'title' 
+              item.item_type === 'title'
                 ? "/amber-master/assets/shop/title_badge.png"
                 : item.item_type === 'frame'
-                ? "/amber-master/assets/shop/frame_badge.png"
-                : "/amber-master/assets/shop/background_badge.png"
+                  ? "/amber-master/assets/shop/frame_badge.png"
+                  : "/amber-master/assets/shop/background_badge.png"
             }
             alt={item.name}
             className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700"
@@ -1040,17 +1053,17 @@ const ShopItemCard: React.FC<{
 
         {item.item_type === 'title' ? (
           <div className="relative w-[90%] flex justify-center z-10 px-1">
-            <div 
+            <div
               className={cn(
                 "relative w-full font-black px-2 md:px-4 py-1.5 md:py-2.5 rounded-lg md:rounded-xl border shadow-sm overflow-hidden flex items-center justify-center backdrop-blur-sm transition-all duration-300 group-hover:scale-105",
                 tierStyle.titleBanner
               )}
-              style={{ 
-                fontSize: item.name.length > 8 
-                  ? 'clamp(7px, 2.2cqw, 9px)' 
+              style={{
+                fontSize: item.name.length > 8
+                  ? 'clamp(7px, 2.2cqw, 9px)'
                   : item.name.length > 5
-                  ? 'clamp(9px, 3.2cqw, 11px)'
-                  : 'clamp(11px, 3.8cqw, 14px)'
+                    ? 'clamp(9px, 3.2cqw, 11px)'
+                    : 'clamp(11px, 3.8cqw, 14px)'
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer" />
@@ -1064,40 +1077,40 @@ const ShopItemCard: React.FC<{
         ) : item.item_type === 'frame' ? (
           <div className="relative w-12 h-12 md:w-24 md:h-24 flex items-center justify-center z-10 transition-all duration-500 group-hover:scale-110">
             <div className="absolute inset-0 rounded-full flex items-center justify-center p-[2px] md:p-[4px] border border-white/20 shadow-inner">
-              <div 
+              <div
                 className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full"
-                style={{ 
-                  background: 
+                style={{
+                  background:
                     item.name.includes("鐵牌") ? "conic-gradient(from 0deg, #64748b, #334155, transparent, #64748b)" :
-                    item.name.includes("青銅") ? "conic-gradient(from 0deg, #b45309, #78350f, transparent, #b45309)" :
-                    item.name.includes("白銀") ? "conic-gradient(from 0deg, #cbd5e1, #94a3b8, transparent, #cbd5e1)" :
-                    item.name.includes("黃金") ? "conic-gradient(from 0deg, #fbbf24, #d97706, transparent, #fbbf24)" :
-                    item.name.includes("白金") ? "conic-gradient(from 0deg, #2dd4bf, #0284c7, transparent, #2dd4bf)" :
-                    item.name.includes("翡翠") ? "conic-gradient(from 0deg, #10b981, #065f46, transparent, #10b981)" :
-                    item.name.includes("鑽石") ? "conic-gradient(from 0deg, #60a5fa, #3b82f6, transparent, #60a5fa)" :
-                    item.name.includes("大師") ? "conic-gradient(from 0deg, #8b5cf6, #581c87, transparent, #8b5cf6)" :
-                    item.name.includes("宗師") ? "conic-gradient(from 0deg, #e11d48, #9f1239, transparent, #e11d48)" :
-                    item.name.includes("菁英") ? "conic-gradient(from 0deg, #fbbf24, #d946ef, #8b5cf6, #fbbf24)" :
-                    item.name.includes("萬象星空") ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)" :
-                    item.name.includes("聖白羽翼") ? "conic-gradient(from 0deg, #ffffff, #e0f2fe, transparent, #ffffff)" :
-                    "conic-gradient(from 0deg, #e2e8f0, #f8fafc, transparent, #e2e8f0)"
+                      item.name.includes("青銅") ? "conic-gradient(from 0deg, #b45309, #78350f, transparent, #b45309)" :
+                        item.name.includes("白銀") ? "conic-gradient(from 0deg, #cbd5e1, #94a3b8, transparent, #cbd5e1)" :
+                          item.name.includes("黃金") ? "conic-gradient(from 0deg, #fbbf24, #d97706, transparent, #fbbf24)" :
+                            item.name.includes("白金") ? "conic-gradient(from 0deg, #2dd4bf, #0284c7, transparent, #2dd4bf)" :
+                              item.name.includes("翡翠") ? "conic-gradient(from 0deg, #10b981, #065f46, transparent, #10b981)" :
+                                item.name.includes("鑽石") ? "conic-gradient(from 0deg, #60a5fa, #3b82f6, transparent, #60a5fa)" :
+                                  item.name.includes("大師") ? "conic-gradient(from 0deg, #8b5cf6, #581c87, transparent, #8b5cf6)" :
+                                    item.name.includes("宗師") ? "conic-gradient(from 0deg, #e11d48, #9f1239, transparent, #e11d48)" :
+                                      item.name.includes("菁英") ? "conic-gradient(from 0deg, #fbbf24, #d946ef, #8b5cf6, #fbbf24)" :
+                                        item.name.includes("萬象星空") ? "conic-gradient(from 0deg, #ff0000, #ff00ff, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)" :
+                                          item.name.includes("聖白羽翼") ? "conic-gradient(from 0deg, #ffffff, #e0f2fe, transparent, #ffffff)" :
+                                            "conic-gradient(from 0deg, #e2e8f0, #f8fafc, transparent, #e2e8f0)"
                 }}
               />
               <div className="absolute inset-[3px] md:inset-[5px] rounded-full bg-slate-100 dark:bg-slate-950 z-10" />
             </div>
 
             <div className="w-8 h-8 md:w-16 md:h-16 rounded-full overflow-hidden relative z-20 border border-slate-200/10 shadow-inner">
-               <img 
-                 src={boundPlayer ? getAvatarUrl(boundPlayer.avatar, boundPlayer.name) : getAvatarUrl(null, "Preview")} 
-                 alt="Avatar Preview" 
-                 className="w-full h-full object-cover"
-               />
+              <img
+                src={boundPlayer ? getAvatarUrl(boundPlayer.avatar, boundPlayer.name) : getAvatarUrl(null, "Preview")}
+                alt="Avatar Preview"
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         ) : (
           <div className="relative w-[70%] aspect-[2/1] rounded-xl overflow-hidden z-10 shadow-md border border-white/20 flex flex-col justify-between p-2 md:p-3 transition-all duration-500 group-hover:scale-105">
             {renderBackgroundEffects(item.name, undefined, "court")}
-            
+
             <div className="relative z-20 flex items-center gap-1.5 md:gap-2">
               <div className="w-3.5 h-3.5 md:w-6 md:h-6 rounded-full bg-white/20 border border-white/30 backdrop-blur-[1px]" />
               <div className="flex flex-col gap-0.5 md:gap-1">
@@ -1128,8 +1141,8 @@ const ShopItemCard: React.FC<{
           onClick={(e) => { e.stopPropagation(); setIsPermanent(false); }}
           className={cn(
             "flex-1 py-0.5 md:py-1 rounded-md text-[8px] md:text-xs font-black transition-all",
-            !isPermanent 
-              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
+            !isPermanent
+              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
               : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
           )}
         >
@@ -1141,8 +1154,8 @@ const ShopItemCard: React.FC<{
           onClick={(e) => { e.stopPropagation(); setIsPermanent(true); }}
           className={cn(
             "flex-1 py-0.5 md:py-1 rounded-md text-[8px] md:text-xs font-black transition-all",
-            isPermanent 
-              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" 
+            isPermanent
+              ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
               : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-40"
           )}
         >
@@ -1152,30 +1165,30 @@ const ShopItemCard: React.FC<{
 
       <div className="flex items-center justify-between mt-auto pt-1.5 md:pt-4 border-t border-slate-100 dark:border-slate-800/80 gap-1">
         <div className="flex flex-col min-w-0">
-           <span className="text-[7px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">
-             {isPermanent ? "永久" : "7天"}
-           </span>
-           <div className="flex items-center gap-0.5 mt-0.5 md:mt-1">
-              <Feather size={10} className="text-sky-500 md:w-3.5 md:h-3.5 shrink-0" />
-              <span className="text-xs md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none truncate">
-                {currentPrice}
-              </span>
-           </div>
+          <span className="text-[7px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">
+            {isPermanent ? "永久" : "7天"}
+          </span>
+          <div className="flex items-center gap-0.5 mt-0.5 md:mt-1">
+            <Feather size={10} className="text-sky-500 md:w-3.5 md:h-3.5 shrink-0" />
+            <span className="text-xs md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none truncate">
+              {currentPrice}
+            </span>
+          </div>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onBuy(item, isPermanent); }}
           disabled={
-            buyingId === item.id || 
-            (boundPlayer?.feathers || 0) < currentPrice || 
+            buyingId === item.id ||
+            (boundPlayer?.feathers || 0) < currentPrice ||
             isOwnedPermanent
           }
           className={cn(
             "px-2 py-1 md:px-6 md:py-3 rounded-lg md:rounded-xl font-black text-[9px] md:text-xs transition-all active:scale-95 whitespace-nowrap shadow-sm shrink-0",
-            isOwnedPermanent 
-              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default" 
-              : (boundPlayer?.feathers || 0) < currentPrice 
-              ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed" 
-              : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 dark:shadow-none"
+            isOwnedPermanent
+              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default"
+              : (boundPlayer?.feathers || 0) < currentPrice
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 dark:shadow-none"
           )}
         >
           {buyingId === item.id ? (
