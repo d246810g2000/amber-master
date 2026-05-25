@@ -525,12 +525,18 @@ def get_player_profile(db: Session, player_id: str):
             "sigma": db_player.sigma,
             "avatar": db_player.avatar,
             "feathers": db_player.feathers,
+            "email": db_player.email,
             "active_title_id": db_player.active_title_id,
             "active_frame_id": db_player.active_frame_id,
             "active_background_id": db_player.active_background_id,
             "active_title": { "name": db_player.active_title.name } if db_player.active_title else None,
             "active_frame": { "name": db_player.active_frame.name } if db_player.active_frame else None,
             "active_background": { "name": db_player.active_background.name } if db_player.active_background else None,
+            "active_pet_id": db_player.active_pet_id,
+            "active_egg_id": db_player.active_egg_id,
+            "egg_progress_games": db_player.egg_progress_games,
+            "egg_progress_wins": db_player.egg_progress_wins,
+            "unlocked_pets": db_player.unlocked_pets,
             "hasBinding": db_player.email is not None,
             "isGoogleLinked": db_player.email is not None and "@" in db_player.email
         },
@@ -1845,12 +1851,36 @@ def equip_pet(db: Session, email: str, pet_id: str | None):
         raise ValueError("USER_NOT_BOUND")
         
     if pet_id:
-        unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
-        if pet_id not in unlocked_list:
-            raise ValueError("未解鎖該寵物")
+        if pet_id.startswith("egg_"):
+            if player.active_egg_id != pet_id:
+                raise ValueError("未擁有或未在孵化該寵物蛋")
+        else:
+            unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
+            if pet_id not in unlocked_list:
+                raise ValueError("未解鎖該寵物")
             
     player.active_pet_id = pet_id
     db.commit()
     return {"status": "success", "player": player}
+
+
+def create_chat_message(db: Session, match_date: date, type: str, content: str, timestamp: datetime = None):
+    db_msg = models.ChatMessage(
+        match_date=match_date,
+        type=type,
+        content=content,
+        timestamp=timestamp or datetime.utcnow()
+    )
+    db.add(db_msg)
+    db.commit()
+    db.refresh(db_msg)
+    return db_msg
+
+
+def get_chat_messages(db: Session, target_date: date):
+    return db.query(models.ChatMessage).filter(
+        models.ChatMessage.match_date == target_date
+    ).order_by(models.ChatMessage.timestamp.asc()).all()
+
 
 

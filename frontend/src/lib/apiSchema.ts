@@ -54,6 +54,9 @@ export const RawPlayerStatSchema = z.object({
   winCount: z.coerce.number().nullable().optional(),
   WinRate: z.coerce.number().nullable().optional(),
   winRate: z.coerce.number().nullable().optional(),
+  feathersEarned: z.coerce.number().optional().default(0),
+  feathersLost: z.coerce.number().optional().default(0),
+  feathersNet: z.coerce.number().optional().default(0),
 }).transform(val => ({
   date: val.date || val.Date || '',
   id: val.id || val.ID || '',
@@ -63,6 +66,9 @@ export const RawPlayerStatSchema = z.object({
   matchCount: val.matchCount ?? val.MatchCount,
   winCount: val.winCount ?? val.WinCount,
   winRate: val.winRate ?? val.WinRate,
+  feathersEarned: val.feathersEarned,
+  feathersLost: val.feathersLost,
+  feathersNet: val.feathersNet,
 }));
 
 export const RawMatchPlayerSchema = z.object({

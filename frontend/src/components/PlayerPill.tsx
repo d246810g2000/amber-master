@@ -238,7 +238,22 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           </div>
           {player.active_pet_id && (
             <div className="absolute bottom-0 right-0 shrink-0 origin-bottom animate-bounce-slow flex items-center justify-center filter drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.55)]">
-              <PetRenderer petId={player.active_pet_id} className="w-5.5 h-5.5 md:w-6.5 md:h-6.5" />
+              {player.active_pet_id.startsWith('egg_') ? (
+                <div className="relative w-5.5 h-5.5 md:w-6.5 md:h-6.5 flex items-center justify-center">
+                  <img
+                    src={`/amber-master/assets/eggs/${player.active_pet_id}.png`}
+                    alt="equipped egg"
+                    className="w-full h-full object-contain"
+                  />
+                  {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games < 100 && (
+                    <div className="absolute -top-1.5 -right-1.5 bg-sky-500 text-[7px] text-white font-black rounded-full px-1 min-w-[12px] h-[12px] flex items-center justify-center scale-90 transform origin-top-right shadow-sm border border-white dark:border-slate-900 leading-none">
+                      {player.egg_progress_games}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <PetRenderer petId={player.active_pet_id} className="w-5.5 h-5.5 md:w-6.5 md:h-6.5" />
+              )}
             </div>
           )}
         </div>

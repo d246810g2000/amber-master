@@ -53,6 +53,9 @@ export function usePlayers(targetDate: string = getTaipeiDateString()) {
         feathers: p.feathers || 0,
         last_feather_claim: p.last_feather_claim,
         streak: 0,
+        feathersEarned: s ? (s.feathersEarned || 0) : 0,
+        feathersLost: s ? (s.feathersLost || 0) : 0,
+        feathersNet: s ? (s.feathersNet || 0) : 0,
       } as DerivedPlayer;
     }).sort((a: any, b: any) => b.mu - a.mu);
   }, [playersBaseQuery.data, playerStatsQuery.data]);

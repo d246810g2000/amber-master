@@ -133,3 +133,13 @@ class PlayerLoan(Base):
     lender = relationship("Player", foreign_keys=[lender_id])
     borrower = relationship("Player", foreign_keys=[borrower_id])
 
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    match_date = Column(Date, nullable=False, index=True)
+    type = Column(String(20), nullable=False) # 'announcement' or 'bet'
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+

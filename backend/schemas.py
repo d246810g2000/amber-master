@@ -282,3 +282,17 @@ class EquipPetRequest(BaseModel):
     userEmail: str
     petId: Optional[str] = None
 
+
+class ChatMessageBase(BaseModel):
+    match_date: date
+    type: str
+    content: str
+
+class ChatMessage(ChatMessageBase):
+    id: int
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+

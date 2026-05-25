@@ -11,7 +11,12 @@ import { computeDailyPlayerSummary, type DailyPlayerSummaryRow } from '../../lib
 import { PowerMedalIcon, computePowerMedalTiers } from './PowerMedalIcon';
 import { getFrameBorderClass } from '../../lib/itemEffects';
 
-type SummaryRowWithAvatar = DailyPlayerSummaryRow & { avatarUrl: string };
+type SummaryRowWithAvatar = DailyPlayerSummaryRow & {
+  avatarUrl: string;
+  feathersEarned: number;
+  feathersLost: number;
+  feathersNet: number;
+};
 
 function formatDateLabel(ymd: string): string {
   const parts = ymd.split('-').map(Number);
@@ -79,6 +84,9 @@ function SummaryTableCard({
                   <th className="px-1 py-2.5 text-center whitespace-nowrap">勝-敗</th>
                   <th className="px-1.5 py-2.5 text-center whitespace-nowrap">勝率</th>
                   <th className="px-1.5 py-2.5 text-center whitespace-nowrap">戰力</th>
+                  <th className="px-1 py-2.5 text-center whitespace-nowrap">賺羽</th>
+                  <th className="px-1 py-2.5 text-center whitespace-nowrap">噴羽</th>
+                  <th className="px-1 py-2.5 text-center whitespace-nowrap">淨羽</th>
                   <th className="px-1.5 py-2.5 text-center whitespace-nowrap">連休</th>
                   <th className="px-1.5 py-2.5 text-center normal-case whitespace-nowrap">夥伴</th>
                   <th className="px-1.5 py-2.5 text-center normal-case whitespace-nowrap">天敵</th>
@@ -139,6 +147,29 @@ function SummaryTableCard({
                         })()}
                         {r.powerCp}
                       </span>
+                    </td>
+                    <td className="px-1 py-2 text-center text-[12px] font-black tabular-nums border-t border-slate-100 whitespace-nowrap align-middle">
+                      {r.feathersEarned > 0 ? (
+                        <span className="text-amber-500 font-extrabold">+{r.feathersEarned}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="px-1 py-2 text-center text-[12px] font-black tabular-nums border-t border-slate-100 whitespace-nowrap align-middle">
+                      {r.feathersLost > 0 ? (
+                        <span className="text-rose-500 font-extrabold">-{r.feathersLost}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="px-1 py-2 text-center text-[12px] font-black tabular-nums border-t border-slate-100 whitespace-nowrap align-middle">
+                      {r.feathersNet > 0 ? (
+                        <span className="text-emerald-600 font-extrabold">+{r.feathersNet}</span>
+                      ) : r.feathersNet < 0 ? (
+                        <span className="text-rose-600 font-extrabold">{r.feathersNet}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
                     </td>
                     <td className="px-1.5 py-2 text-center text-[11px] font-bold tabular-nums text-amber-800 border-t border-slate-100 whitespace-nowrap align-middle">
                       {r.maxRestMatches}
@@ -261,9 +292,14 @@ export const DailyBattleSummaryModal: React.FC<DailyBattleSummaryModalProps> = (
         ? byName.get(r.name)
         : byId.get(r.key);
       const avatarUrl = getAvatarUrl(p?.avatar, r.name);
-      return { ...r, avatarUrl };
+      const feathersEarned = p?.feathersEarned || 0;
+      const feathersLost = p?.feathersLost || 0;
+      const feathersNet = p?.feathersNet || 0;
+      return { ...r, avatarUrl, feathersEarned, feathersLost, feathersNet };
     });
   }, [matchHistory, players]);
+
+  const [sortBy, setSortBy] = useState<'powerCp' | 'winRate' | 'feathersEarned' | 'feathersLost' | 'feathersNet'>('powerCp');
 
   const topN = useMemo(() => {
     const n = Math.floor(Number(topNInput));
@@ -271,18 +307,52 @@ export const DailyBattleSummaryModal: React.FC<DailyBattleSummaryModalProps> = (
     return Math.min(999, n);
   }, [topNInput]);
 
+  const sortedRows = useMemo(() => {
+    const data = [...rows];
+    data.sort((a, b) => {
+      if (sortBy === 'powerCp') {
+        if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+        if (b.feathersNet !== a.feathersNet) return b.feathersNet - a.feathersNet;
+      } else if (sortBy === 'winRate') {
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+        if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
+        if (b.feathersNet !== a.feathersNet) return b.feathersNet - a.feathersNet;
+      } else if (sortBy === 'feathersEarned') {
+        if (b.feathersEarned !== a.feathersEarned) return b.feathersEarned - a.feathersEarned;
+        if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+      } else if (sortBy === 'feathersLost') {
+        if (b.feathersLost !== a.feathersLost) return b.feathersLost - a.feathersLost;
+        if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+      } else if (sortBy === 'feathersNet') {
+        if (b.feathersNet !== a.feathersNet) return b.feathersNet - a.feathersNet;
+        if (b.powerCp !== a.powerCp) return b.powerCp - a.powerCp;
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+      }
+      return a.name.localeCompare(b.name, 'zh-Hant');
+    });
+    return data;
+  }, [rows, sortBy]);
+
   const displayRows = useMemo(() => {
-    if (!limitTopEnabled) return rows;
-    return rows.slice(0, Math.min(rows.length, topN));
-  }, [rows, limitTopEnabled, topN]);
+    if (!limitTopEnabled) return sortedRows;
+    return sortedRows.slice(0, Math.min(sortedRows.length, topN));
+  }, [sortedRows, limitTopEnabled, topN]);
 
   const rangeHint = useMemo(() => {
-    if (!limitTopEnabled || rows.length === 0) return null;
-    if (displayRows.length >= rows.length) {
-      return `依「前 ${topN} 名」篩選 · 共 ${rows.length} 人已全部列出`;
+    if (!limitTopEnabled || sortedRows.length === 0) return null;
+    const sortLabel = 
+      sortBy === 'powerCp' ? '戰力' : 
+      sortBy === 'winRate' ? '勝率' : 
+      sortBy === 'feathersEarned' ? '賺羽' : 
+      sortBy === 'feathersLost' ? '噴羽' : '淨羽';
+    if (displayRows.length >= sortedRows.length) {
+      return `依「前 ${topN} 名」篩選 · 共 ${sortedRows.length} 人已全部列出（依${sortLabel}排序）`;
     }
-    return `依「前 ${topN} 名」篩選 · 第 1–${displayRows.length} 名（共 ${rows.length} 人，依戰力排序）`;
-  }, [limitTopEnabled, rows.length, displayRows.length, topN]);
+    return `依「前 ${topN} 名」篩選 · 第 1–${displayRows.length} 名（共 ${sortedRows.length} 人，依${sortLabel}排序）`;
+  }, [limitTopEnabled, sortedRows.length, displayRows.length, topN, sortBy]);
 
   /** 常駐球員中，當日 matchHistory 完全未上場者 */
   const absentResidents = useMemo((): AbsentResidentChip[] => {
@@ -394,9 +464,37 @@ export const DailyBattleSummaryModal: React.FC<DailyBattleSummaryModalProps> = (
                   />
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">名</span>
                 </label>
-                <p className="mt-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
-                  未勾選時匯出全部球員；勾選後依表格排序取前 N 名（預設 {DEFAULT_TOP_N}）。
+                <p className="mt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
+                  未勾選時匯出全部球員；勾選後依表格排序取前 N 名。
                 </p>
+
+                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-3 mb-2">
+                  排序依據
+                </p>
+                <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 w-full">
+                  {(
+                    [
+                      { key: 'powerCp', label: '戰力' },
+                      { key: 'winRate', label: '勝率' },
+                      { key: 'feathersEarned', label: '賺羽' },
+                      { key: 'feathersLost', label: '噴羽' },
+                      { key: 'feathersNet', label: '淨羽' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setSortBy(opt.key)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                        sortBy === opt.key
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="origin-top scale-[0.52] xs:scale-[0.58] sm:scale-[0.68] md:scale-[0.78] mb-4 sm:mb-6 shadow-2xl rounded-[24px]">
                 <div ref={cardRef}>

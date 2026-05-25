@@ -485,3 +485,9 @@ export async function equipPet(userEmail: string, petId: string | null) {
   return apiPost('/players/equip-pet', { userEmail, petId }, z.any());
 }
 
+/** 取得指定日期的聊天與廣播訊息 */
+export async function fetchChatMessages(date: string): Promise<any[]> {
+  return apiGet('/chat/messages', { date }, z.array(z.any()));
+}
+
+

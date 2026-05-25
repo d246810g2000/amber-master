@@ -2,7 +2,7 @@ from typing import List, Optional, Any, Dict
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import os
 import time
 
@@ -338,8 +338,36 @@ def read_player_stats(date: Optional[str] = Query(None), db: Session = Depends(g
 
     stats_map = {str(s.player_id): s for s in stats}
     all_players = crud.get_players(db)
-    formatted_stats = []
     
+    # 查詢當日每位球員的羽毛變化：賺羽、噴羽、淨羽
+    from datetime import time
+    start_utc = datetime.combine(target_date, time.min) - timedelta(hours=8)
+    end_utc = datetime.combine(target_date, time.max) - timedelta(hours=8)
+    
+    txs = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.created_at >= start_utc,
+        models.FeatherTransaction.created_at <= end_utc
+    ).all()
+    
+    feathers_earned_map = {}
+    feathers_lost_map = {}
+    feathers_net_map = {}
+    
+    for tx in txs:
+        pid = str(tx.player_id)
+        amount = tx.amount
+        if pid not in feathers_earned_map:
+            feathers_earned_map[pid] = 0
+            feathers_lost_map[pid] = 0
+            feathers_net_map[pid] = 0
+            
+        feathers_net_map[pid] += amount
+        if amount > 0:
+            feathers_earned_map[pid] += amount
+        else:
+            feathers_lost_map[pid] += abs(amount)
+            
+    formatted_stats = []
     for p in all_players:
         pid = str(p.id)
         s = stats_map.get(pid)
@@ -357,9 +385,13 @@ def read_player_stats(date: Optional[str] = Query(None), db: Session = Depends(g
             "sigma": daily_sigma,
             "matchCount": s.match_count if s else 0,
             "winCount": s.win_count if s else 0,
-            "winRate": s.win_rate if s else 0
+            "winRate": s.win_rate if s else 0,
+            "feathersEarned": feathers_earned_map.get(pid, 0),
+            "feathersLost": feathers_lost_map.get(pid, 0),
+            "feathersNet": feathers_net_map.get(pid, 0)
         })
     return success(formatted_stats)
+
 
 @app.get("/matches/active-dates")
 def get_active_match_dates(db: Session = Depends(get_db)):
@@ -503,6 +535,15 @@ async def record_match_and_update(req: schemas.MatchRecordRequest, db: Session =
                 payout_details += f" {p['name']} (+{p['payout']})"
             announcement += f"{payout_details} (賠率 {odds})"
 
+        # 儲存對戰勝利公告到資料庫
+        match_date = safe_date(req.matchDate) or (datetime.utcnow() + timedelta(hours=8)).date()
+        crud.create_chat_message(
+            db=db,
+            match_date=match_date,
+            type="announcement",
+            content=announcement
+        )
+
         await manager.broadcast({
             "type": "version_update",
             "version": res["data"].get("version"),
@@ -515,6 +556,21 @@ async def record_match_and_update(req: schemas.MatchRecordRequest, db: Session =
 def get_chat_context(playerId: Optional[str] = Query(None), date: Optional[str] = Query(None), db: Session = Depends(get_db)):
     target_date = safe_date(date)
     return success(crud.get_chat_context(db, playerId, target_date))
+
+@app.get("/chat/messages")
+def read_chat_messages(date: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    target_date = safe_date(date) or (datetime.utcnow() + timedelta(hours=8)).date()
+    messages = crud.get_chat_messages(db, target_date)
+    formatted = [
+        {
+            "id": str(msg.id),
+            "type": msg.type,
+            "content": msg.content,
+            "timestamp": int(msg.timestamp.timestamp() * 1000)
+        }
+        for msg in messages
+    ]
+    return success(formatted)
 
 # Court State API
 @app.get("/court_state")
@@ -778,6 +834,16 @@ async def place_bet(req: schemas.BetRequest, db: Session = Depends(get_db)):
     other_team_name = t2 if req.team == 1 else t1
     announcement = f"📣 {player.name} 豪擲了 {req.amount} 根羽毛，在「{court_name}」看好「{target_team_name}」會打敗「{other_team_name}」！"
     
+    # 儲存投注公告到資料庫
+    db_match = db.query(models.Match).filter(models.Match.id == req.matchId).first()
+    match_date = db_match.match_date if db_match else (datetime.utcnow() + timedelta(hours=8)).date()
+    crud.create_chat_message(
+        db=db,
+        match_date=match_date,
+        type="bet",
+        content=announcement
+    )
+
     await manager.broadcast({
         "type": "bet_update",
         "matchId": req.matchId,

@@ -95,6 +95,26 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         0%, 100% { opacity: 0.45; }
         50% { opacity: 0.75; }
       }
+      @keyframes epicSquashBounce {
+        0%, 100% { transform: translateY(0) scale(1.14, 0.86); }
+        15% { transform: translateY(-1px) scale(0.98, 1.02); }
+        50% { transform: translateY(-8px) scale(0.92, 1.08); }
+        85% { transform: translateY(-1px) scale(1.02, 0.98); }
+      }
+      @keyframes ultimateFloat {
+        0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+        25% { transform: translateY(-3px) scale(1.01) rotate(0.8deg); }
+        50% { transform: translateY(-7px) scale(0.99) rotate(-0.8deg); }
+        75% { transform: translateY(-3px) scale(1.01) rotate(1.2deg); }
+      }
+      @keyframes holoShift {
+        0%, 100% { filter: hue-rotate(0deg) saturate(1.3) brightness(1); }
+        50% { filter: hue-rotate(180deg) saturate(1.7) brightness(1.1); }
+      }
+      @keyframes staffSpin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
     `}</style>
   );
 
@@ -104,7 +124,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
       // deliberately simple, 2-3 flat colors, no overlay, basic bounce animation
       case "pet_corgi":
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-bounce", className)} title="呆萌柯基">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center", className)} title="呆萌柯基">
             <svg viewBox="0 0 24 24" className="w-full h-full fill-amber-600 dark:fill-amber-500">
               {/* Body */}
               <ellipse cx="12" cy="15.5" rx="6" ry="4.5" />
@@ -125,7 +145,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
 
       case "pet_black_cat":
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-bounce", className)} title="傲嬌黑貓">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center", className)} title="傲嬌黑貓">
             <svg viewBox="0 0 24 24" className="w-full h-full fill-slate-800 dark:fill-slate-700">
               {/* Body */}
               <circle cx="12" cy="15.5" r="6" />
@@ -148,7 +168,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
 
       case "pet_chick":
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-bounce", className)} title="元氣小雞">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center", className)} title="元氣小雞">
             <svg viewBox="0 0 24 24" className="w-full h-full fill-yellow-400 dark:fill-yellow-350">
               {/* Body */}
               <circle cx="12" cy="13.5" r="6" />
@@ -171,7 +191,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const earGrad = `earGrad-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-bounce-slow", className)} title="慵懶小貓">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[epicSquashBounce_1.3s_infinite_ease-in-out]", className)} title="慵懶小貓">
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_1.5px_3px_rgba(99,102,241,0.45)]">
               <defs>
                 <linearGradient id={catGrad} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -192,14 +212,13 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
                 </filter>
               </defs>
-              {/* Tail (Wiggling) */}
+              {/* Tail (Static) */}
               <path 
                 d="M17.5,16.5 C20.5,15 21.5,12 19.5,10.5" 
                 fill="none" 
                 stroke={`url(#${catGrad})`} 
                 strokeWidth="1.6" 
                 strokeLinecap="round"
-                className="origin-[17.5px_16.5px] animate-[tailWagSlow_2s_infinite_ease-in-out]" 
               />
               {/* Body */}
               <circle cx="12" cy="15" r="7" fill={`url(#${catGrad})`} filter={`url(#${innerShadow})`} />
@@ -207,14 +226,14 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
               <circle cx="12" cy="9" r="5" fill={`url(#${catGrad})`} filter={`url(#${innerShadow})`} />
               {/* Specular Highlight on Head */}
               <ellipse cx="12" cy="5.2" rx="1.5" ry="0.6" fill="white" opacity="0.3" />
-              {/* Ears (Wiggling) */}
-              <g className="origin-[8px_9px] animate-[earWiggleLeft_2.2s_infinite_ease-in-out]">
+              {/* Ears (Static) */}
+              <g>
                 <polygon points="7,6 9,10 6,10" fill={`url(#${catGrad})`} />
-                <polygon points="7.2,6.7 8.5,9.5 6.5,9.5" fill={`url(#${earGrad})`} />
+                <polygon points="7.2,6.7 8.5,9.5 6.5,9.5" fill={`url(#earGrad})`} />
               </g>
-              <g className="origin-[16px_9px] animate-[earWiggleRight_2.2s_infinite_ease-in-out_delay-100]">
+              <g>
                 <polygon points="17,6 15,10 18,10" fill={`url(#${catGrad})`} />
-                <polygon points="16.8,6.7 15.5,9.5 17.5,9.5" fill={`url(#${earGrad})`} />
+                <polygon points="16.8,6.7 15.5,9.5 17.5,9.5" fill={`url(#earGrad})`} />
               </g>
               {/* Eyes with specular highlights */}
               <g>
@@ -243,7 +262,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const slimeGrad = `slimeGrad-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-bounce-slow", className)} title="果凍史萊姆">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[epicSquashBounce_1.3s_infinite_ease-in-out]", className)} title="果凍史萊姆">
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_1.5px_3px_rgba(240,46,170,0.5)]">
               <defs>
                 <linearGradient id={slimeGrad} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -260,12 +279,11 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
                 </filter>
               </defs>
-              {/* Slime Shape (Wobbling) */}
+              {/* Slime Shape (Static) */}
               <path 
                 d="M4,17 Q4,10 12,9 Q20,10 20,17 Q20,20 12,20 Q4,20 4,17 Z" 
                 fill={`url(#${slimeGrad})`} 
                 filter={`url(#${innerShadow})`}
-                className="origin-bottom animate-[petBreath_1.6s_infinite_ease-in-out]" 
               />
               {/* Jelly Specular Gloss Overlay */}
               <path 
@@ -299,7 +317,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const earInnerGrad = `earInnerGrad-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-bounce-slow", className)} title="蹦蹦粉兔">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[epicSquashBounce_1.3s_infinite_ease-in-out]", className)} title="蹦蹦粉兔">
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_1.5px_3px_rgba(244,114,182,0.45)]">
               <defs>
                 <linearGradient id={rabbitGrad} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -320,8 +338,8 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
                 </filter>
               </defs>
-              {/* Fluffy Tail */}
-              <circle cx="5" cy="16" r="2.2" fill="#fdf2f8" className="animate-pulse" />
+              {/* Fluffy Tail (Static) */}
+              <circle cx="5" cy="16" r="2.2" fill="#fdf2f8" />
               <circle cx="5.2" cy="15.8" r="1.3" fill="#fbcfe8" />
               {/* Bunny Body */}
               <ellipse cx="12" cy="15" rx="6.5" ry="5.5" fill={`url(#${rabbitGrad})`} filter={`url(#${innerShadow})`} />
@@ -329,12 +347,12 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
               <path d="M11,12.5 C10.5,13.5 12,14.5 12,14.5 C12,14.5 13.5,13.5 13,12.5 Z" fill="#ffffff" opacity="0.8" />
               {/* Head */}
               <circle cx="12" cy="9" r="4.5" fill={`url(#${rabbitGrad})`} filter={`url(#${innerShadow})`} />
-              {/* Ears (Wiggling) */}
-              <g className="origin-[10px_7px] animate-[earWiggleLeft_2.5s_infinite_ease-in-out_alternate]">
+              {/* Ears (Static) */}
+              <g>
                 <ellipse cx="10" cy="4" rx="1.6" ry="3.8" fill={`url(#${rabbitGrad})`} />
                 <ellipse cx="10" cy="4.2" rx="0.8" ry="2.6" fill={`url(#${earInnerGrad})`} />
               </g>
-              <g className="origin-[14px_7px] animate-[earWiggleRight_2.8s_infinite_ease-in-out_alternate]">
+              <g>
                 <ellipse cx="14" cy="4" rx="1.6" ry="3.8" fill={`url(#${rabbitGrad})`} />
                 <ellipse cx="14" cy="4.2" rx="0.8" ry="2.6" fill={`url(#${earInnerGrad})`} />
               </g>
@@ -351,7 +369,6 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
               <polygon points="12,9.6 11.5,9.1 12.5,9.1" className="fill-pink-400" />
               {/* Cheek blush */}
               <circle cx="8.3" cy="9.8" r="1.1" fill="#f43f5e" opacity="0.4" />
-              <circle cx="15.7" cy="9.8" r="1.1" fill="#f43f5e" opacity="0.4" />
             </svg>
           </div>
         );
@@ -636,12 +653,11 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const wingGrad = `wingGrad-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         const glowFilter = `glow-${uId}`;
-        const noiseFilter = `noise-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-float-slow", className)} title="霓虹鳳凰">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[ultimateFloat_3.5s_infinite_ease-in-out]", className)} title="霓虹鳳凰">
             {/* Multi-layer glowing backdrop with blur */}
-            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-yellow-500 opacity-25 blur-md animate-pulse" />
-            <div className="absolute inset-0 rounded-full bg-rose-500/10 blur-xl pointer-events-none" />
+            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-yellow-500 opacity-30 blur-md animate-[pulse_2s_infinite,holoShift_8s_infinite]" />
+            <div className="absolute inset-0 rounded-full bg-rose-500/15 blur-xl pointer-events-none animate-[holoShift_8s_infinite]" />
 
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_0_7px_rgba(244,63,94,0.85)]">
               <defs>
@@ -673,25 +689,32 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feGaussianBlur stdDeviation="1.2" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
-                <filter id={noiseFilter}>
-                  <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="3" result="noise" />
-                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.035 0" />
-                  <feBlend mode="multiply" in="SourceGraphic" in2="noise" />
-                </filter>
               </defs>
               {/* Background Aura */}
               <circle cx="12" cy="12" r="10.5" fill={`url(#${phoenixAura})`} className="origin-center animate-[auraBreathingSlow_3s_infinite_ease-in-out]" />
-              {/* Rotating Magical Ring */}
+              {/* Outer Rotating Magical Ring (Clockwise) */}
               <circle 
                 cx="12" 
                 cy="12" 
-                r="9.2" 
+                r="9.6" 
                 fill="none" 
                 stroke="#ec4899" 
-                strokeWidth="0.45" 
-                strokeDasharray="4 2 1 2" 
-                opacity="0.35"
-                className="origin-center animate-[spinSlow_12s_linear infinite]"
+                strokeWidth="0.4" 
+                strokeDasharray="5 3 2 3" 
+                opacity="0.3"
+                className="origin-center animate-[rotateCw_8s_linear_infinite]"
+              />
+              {/* Inner Rotating Magical Ring (Counter-Clockwise) */}
+              <circle 
+                cx="12" 
+                cy="12" 
+                r="8.6" 
+                fill="none" 
+                stroke="#f59e0b" 
+                strokeWidth="0.3" 
+                strokeDasharray="3 2" 
+                opacity="0.3"
+                className="origin-center animate-[rotateCcw_10s_linear_infinite]"
               />
               {/* Background Particles */}
               <g filter={`url(#${glowFilter})`}>
@@ -718,15 +741,15 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                 fill={`url(#${wingGrad})`} 
                 className="origin-[19px_9px] animate-[wingFlapRight_0.6s_infinite_ease-in-out_alternate_delay-300]" 
               />
-              {/* Body with inner shadow + noise */}
-              <ellipse cx="12" cy="14" rx="4.5" ry="6" fill={`url(#${phoenixGrad})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              {/* Body with inner shadow */}
+              <ellipse cx="12" cy="14" rx="4.5" ry="6" fill={`url(#${phoenixGrad})`} filter={`url(#${innerShadow})`} />
               {/* Golden chest feathers */}
               <g className="animate-[innerAuraPulse_1.5s_infinite_ease-in-out]">
                 <polygon points="12,10.2 10.2,13 13.8,13" fill="#fef08a" />
                 <polygon points="12,13 9.8,15.8 14.2,15.8" fill="#fde047" />
               </g>
               {/* Head */}
-              <circle cx="12" cy="7.2" r="3.6" fill={`url(#${phoenixGrad})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              <circle cx="12" cy="7.2" r="3.6" fill={`url(#${phoenixGrad})`} filter={`url(#${innerShadow})`} />
               {/* Fire Crest */}
               <path d="M12,4.6 Q10,1.8 12,0.8 Q14,1.8 12,4.6" fill="#f43f5e" className="animate-bounce" />
               {/* Specular Head highlight */}
@@ -755,12 +778,11 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const unicornMane = `unicornMane-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         const glowFilter = `glow-${uId}`;
-        const noiseFilter = `noise-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-float-slow", className)} title="炫彩獨角獸">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[ultimateFloat_3.5s_infinite_ease-in-out]", className)} title="炫彩獨角獸">
             {/* SSR Holographic Backdrop Glow */}
-            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 opacity-25 blur-md animate-pulse" />
-            <div className="absolute inset-0 bg-cyan-400/10 rounded-full blur-xl pointer-events-none" />
+            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 opacity-30 blur-md animate-[pulse_2s_infinite,holoShift_8s_infinite]" />
+            <div className="absolute inset-0 bg-cyan-400/15 rounded-full blur-xl pointer-events-none animate-[holoShift_8s_infinite]" />
 
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_0_7px_rgba(34,211,238,0.85)]">
               <defs>
@@ -791,14 +813,33 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feGaussianBlur stdDeviation="1" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
-                <filter id={noiseFilter}>
-                  <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" result="noise"/>
-                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.03 0" />
-                  <feBlend mode="multiply" in="SourceGraphic" in2="noise"/>
-                </filter>
               </defs>
               {/* Background Aura */}
               <circle cx="12" cy="12" r="10.5" fill={`url(#${unicornAura})`} className="origin-center animate-[auraBreathingSlow_3.2s_infinite_ease-in-out]" />
+              {/* Outer Rotating Magical Ring (Clockwise) */}
+              <circle 
+                cx="12" 
+                cy="12" 
+                r="9.6" 
+                fill="none" 
+                stroke="#22d3ee" 
+                strokeWidth="0.4" 
+                strokeDasharray="5 3 2 3" 
+                opacity="0.3"
+                className="origin-center animate-[rotateCw_9s_linear_infinite]"
+              />
+              {/* Inner Rotating Magical Ring (Counter-Clockwise) */}
+              <circle 
+                cx="12" 
+                cy="12" 
+                r="8.6" 
+                fill="none" 
+                stroke="#c084fc" 
+                strokeWidth="0.3" 
+                strokeDasharray="3 2" 
+                opacity="0.3"
+                className="origin-center animate-[rotateCcw_11s_linear_infinite]"
+              />
               {/* Background Particles */}
               <g filter={`url(#${glowFilter})`}>
                 <circle cx="5" cy="14" r="0.6" fill="#e0f2fe" className="animate-[floatParticleA_2.6s_infinite]" />
@@ -814,11 +855,11 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                 className="origin-[18.5px_14px] animate-[tailWagSlow_2s_infinite_ease-in-out]"
               />
               {/* Body */}
-              <ellipse cx="12" cy="15" rx="6.5" ry="5.1" fill={`url(#${unicornBody})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              <ellipse cx="12" cy="15" rx="6.5" ry="5.1" fill={`url(#${unicornBody})`} filter={`url(#${innerShadow})`} />
               {/* Holographic Pastel Mane */}
               <path d="M9.2,9.2 C7,11.8 8,15.2 8.2,16.2" fill="none" stroke={`url(#${unicornMane})`} strokeWidth="2.5" strokeLinecap="round" className="animate-pulse" />
               {/* Head */}
-              <path d="M8,9 Q8,6 12,6 Q16,6 16,9 C16,11 13,11 12,11 Z" fill={`url(#${unicornBody})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              <path d="M8,9 Q8,6 12,6 Q16,6 16,9 C16,11 13,11 12,11 Z" fill={`url(#${unicornBody})`} filter={`url(#${innerShadow})`} />
               {/* Specular Highlight on Head */}
               <ellipse cx="12" cy="6.4" rx="1.2" ry="0.45" fill="white" opacity="0.4" />
               {/* Glowing Horn */}
@@ -851,12 +892,11 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
         const jadeStaff = `jadeStaff-${uId}`;
         const innerShadow = `innerShadow-${uId}`;
         const glowFilter = `glow-${uId}`;
-        const noiseFilter = `noise-${uId}`;
         return (
-          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-pet-float-slow", className)} title="武神熊貓">
+          <div className={cn("relative w-5 h-5 flex items-center justify-center animate-[ultimateFloat_3.5s_infinite_ease-in-out]", className)} title="武神熊貓">
             {/* SSR Jade Emerald Aura */}
-            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 opacity-25 blur-md animate-pulse" />
-            <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-xl pointer-events-none" />
+            <div className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 opacity-30 blur-md animate-[pulse_2s_infinite,holoShift_8s_infinite]" />
+            <div className="absolute inset-0 bg-emerald-500/15 rounded-full blur-xl pointer-events-none animate-[holoShift_8s_infinite]" />
 
             <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_0_7px_rgba(16,185,129,0.85)]">
               <defs>
@@ -887,25 +927,32 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                   <feGaussianBlur stdDeviation="1.1" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
-                <filter id={noiseFilter}>
-                  <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" result="noise"/>
-                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.035 0" />
-                  <feBlend mode="multiply" in="SourceGraphic" in2="noise"/>
-                </filter>
               </defs>
               {/* Background Aura */}
               <circle cx="12" cy="12" r="10.5" fill={`url(#${pandaAura})`} className="origin-center animate-[auraBreathingSlow_2.8s_infinite_ease-in-out]" />
-              {/* Circular Energy Shield Ring */}
+              {/* Outer Rotating Magical Ring (Clockwise) */}
               <circle 
                 cx="12" 
                 cy="12" 
-                r="9.5" 
+                r="9.6" 
                 fill="none" 
                 stroke="#6ee7b7" 
                 strokeWidth="0.4" 
-                strokeDasharray="5 3 2 3" 
+                strokeDasharray="5 3" 
+                opacity="0.35"
+                className="origin-center animate-[rotateCw_7s_linear_infinite]"
+              />
+              {/* Inner Rotating Magical Ring (Counter-Clockwise) */}
+              <circle 
+                cx="12" 
+                cy="12" 
+                r="8.6" 
+                fill="none" 
+                stroke="#10b981" 
+                strokeWidth="0.3" 
+                strokeDasharray="4 2 1 2" 
                 opacity="0.3"
-                className="origin-center animate-[spinSlow_10s_linear_infinite]"
+                className="origin-center animate-[rotateCcw_9s_linear_infinite]"
               />
               {/* Particles */}
               <g filter={`url(#${glowFilter})`}>
@@ -913,14 +960,14 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
                 <circle cx="19.5" cy="13" r="0.75" fill="#34d399" className="animate-[floatParticleB_2.6s_infinite]" />
               </g>
               {/* Body */}
-              <ellipse cx="12" cy="15" rx="6.5" ry="5.5" fill={`url(#${pandaBody})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              <ellipse cx="12" cy="15" rx="6.5" ry="5.5" fill={`url(#${pandaBody})`} filter={`url(#${innerShadow})`} />
               {/* Black arms & legs overlay */}
               <ellipse cx="5.8" cy="15" rx="1.5" ry="3.5" fill="#0f172a" />
               <ellipse cx="18.2" cy="15" rx="1.5" ry="3.5" fill="#0f172a" />
               <circle cx="7.8" cy="19.5" r="1.5" fill="#0f172a" />
               <circle cx="16.2" cy="19.5" r="1.5" fill="#0f172a" />
               {/* Head */}
-              <circle cx="12" cy="9.2" r="4.8" fill={`url(#${pandaBody})`} filter={`url(#${innerShadow}) url(#${noiseFilter})`} />
+              <circle cx="12" cy="9.2" r="4.8" fill={`url(#${pandaBody})`} filter={`url(#${innerShadow})`} />
               {/* Specular Highlight on Head */}
               <ellipse cx="12" cy="5.2" rx="1.3" ry="0.45" fill="white" opacity="0.35" />
               {/* Black ears (with wiggling animation) */}
@@ -939,10 +986,10 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, className }) =>
               {/* Nose & Mouth */}
               <polygon points="12,10.2 11.5,9.7 12.5,9.7" fill="#020617" />
               <path d="M11,10.8 Q12,11.3 13,10.8" stroke="#0f172a" strokeWidth="0.5" fill="none" />
-              {/* Jade Staff (Wiggling/spinning staff with trail) */}
-              <g className="origin-[15px_14px] animate-[tailWagSlow_2.5s_infinite_ease-in-out_alternate]">
+              {/* Jade Staff (Exaggerated spinning staff) */}
+              <g className="origin-[15px_14px] animate-[staffSpin_2s_linear_infinite]">
                 <rect 
-                  x="14.5" 
+                  x="14.4" 
                   y="10" 
                   width="1.2" 
                   height="8" 

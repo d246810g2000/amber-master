@@ -110,14 +110,34 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
       })
       .filter(Boolean);
 
+    const eggItem = playerData?.active_egg_id ? {
+      id: playerData.active_egg_id,
+      isPet: true,
+      isEgg: true,
+      item: {
+        id: playerData.active_egg_id,
+        name: playerData.active_egg_id === 'egg_classic' ? '經典之蛋' :
+              playerData.active_egg_id === 'egg_epic' ? '史詩之蛋' :
+              playerData.active_egg_id === 'egg_legendary' ? '傳說之蛋' : '終極之蛋',
+        item_type: 'pet',
+        description: `當前孵化能量：${playerData.egg_progress_games || 0}%。可點擊裝備此蛋到球員卡片上，方便在積分對戰後觀察孵化進度。`,
+        tier: playerData.active_egg_id === 'egg_classic' ? 'classic' :
+              playerData.active_egg_id === 'egg_epic' ? 'epic' :
+              playerData.active_egg_id === 'egg_legendary' ? 'legendary' : 'ultimate'
+      },
+      expires_at: null
+    } : null;
+
+    const petList = eggItem ? [eggItem, ...pets] : pets;
+
     if (filter === 'all') {
-      return [...invItems, ...pets];
+      return [...invItems, ...petList];
     }
     if (filter === 'pet') {
-      return pets;
+      return petList;
     }
     return invItems.filter((inv: any) => inv?.item?.item_type === filter);
-  }, [items, filter, playerData?.unlocked_pets]);
+  }, [items, filter, playerData?.unlocked_pets, playerData?.active_egg_id, playerData?.egg_progress_games]);
 
   if (isLoading) {
     return (
@@ -128,7 +148,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
     );
   }
 
-  if (items.length === 0) {
+  if (filteredItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50/50 dark:bg-slate-900/30 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
         <Package className="w-12 h-12 mb-4 opacity-20" />
@@ -211,10 +231,18 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 )}
               </div>
 
-              {/* Pet SVG Preview inside Backpack card */}
+              {/* Pet SVG Preview or Egg Image inside Backpack card */}
               {isPet && (
                 <div className="w-12 h-12 flex items-center justify-center my-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-white/5 relative overflow-hidden self-center shrink-0">
-                  <PetRenderer petId={item.id} className="w-8 h-8 scale-110" />
+                  {inv.isEgg ? (
+                    <img 
+                      src={`/amber-master/assets/eggs/${item.id}.png`} 
+                      alt={item.name}
+                      className="w-10 h-10 object-contain hover:rotate-3 transition-transform" 
+                    />
+                  ) : (
+                    <PetRenderer petId={item.id} className="w-8 h-8 scale-110" />
+                  )}
                 </div>
               )}
 
@@ -241,20 +269,28 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!isEquipped) equipMutation.mutate({ itemId: item.id, isPet });
+                  if (isEquipped) {
+                    if (isPet) {
+                      equipMutation.mutate({ itemId: null, isPet: true });
+                    }
+                  } else {
+                    equipMutation.mutate({ itemId: item.id, isPet: isPet });
+                  }
                 }}
-                disabled={isEquipped || equipMutation.isPending}
+                disabled={(!isPet && isEquipped) || equipMutation.isPending}
                 className={cn(
-                  "w-full py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] transition-all active:scale-95 flex items-center justify-center gap-1 md:gap-2",
+                  "w-full py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.15em] transition-all active:scale-95 flex items-center justify-center gap-1 md:gap-2 cursor-pointer",
                   isEquipped
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 cursor-default"
+                    ? isPet 
+                      ? "bg-emerald-50 text-emerald-600 hover:bg-rose-50 hover:text-rose-600 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-rose-950/20 dark:hover:text-rose-450 border border-emerald-250/30 dark:border-emerald-900/50"
+                      : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 cursor-default"
                     : "bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90"
                 )}
               >
                 {equipMutation.isPending ? (
                   <Loader2 size={10} className="animate-spin md:w-4 md:h-4" />
                 ) : isEquipped ? (
-                  isPet ? <>隨行中</> : <>使用中</>
+                  isPet ? <>隨行中 (點擊取消)</> : <>使用中</>
                 ) : (
                   isPet ? <>邀請隨行</> : <>立即套用</>
                 )}

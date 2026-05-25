@@ -24,6 +24,9 @@ export interface Player {
   egg_progress_games?: number;
   egg_progress_wins?: number;
   unlocked_pets?: string;
+  feathersEarned?: number;
+  feathersLost?: number;
+  feathersNet?: number;
 }
 
 export interface MatchPlayer {

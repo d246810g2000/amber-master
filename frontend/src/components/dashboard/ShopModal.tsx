@@ -461,38 +461,42 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                       eggColorClass
                     )}
                   >
-                    <div className="h-28 sm:h-32 md:h-36 w-full bg-slate-50 dark:bg-slate-950 rounded-2xl mb-4 flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-200/20 dark:border-white/5 shrink-0">
-                      <img
-                        src={`/amber-master/assets/eggs/${eggType}.png`}
-                        alt={req.name}
-                        className="w-20 h-20 md:w-24 md:h-24 object-contain pointer-events-none select-none hover:rotate-3 transition-transform"
-                      />
-                      <div className="absolute top-2 left-2 z-20">
-                        <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider", badgeColorClass)}>
-                          {eggType === 'egg_classic' ? '經典' : eggType === 'egg_epic' ? '史詩' : eggType === 'egg_legendary' ? '傳說' : '終極'}
-                        </span>
+                    <div className="flex gap-4 items-start">
+                      {/* Left: Egg image container */}
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 bg-slate-50 dark:bg-slate-950 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-inner border border-slate-200/20 dark:border-white/5 shrink-0">
+                        <img
+                          src={`/amber-master/assets/eggs/${eggType}.png`}
+                          alt={req.name}
+                          className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 object-contain pointer-events-none select-none hover:rotate-3 transition-transform"
+                        />
+                        <div className="absolute top-2 left-2 z-20">
+                          <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider", badgeColorClass)}>
+                            {eggType === 'egg_classic' ? '經典' : eggType === 'egg_epic' ? '史詩' : eggType === 'egg_legendary' ? '傳說' : '終極'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Info container */}
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <h4 className="font-black text-sm md:text-base text-slate-800 dark:text-slate-100">{req.name}</h4>
+                        <p className="text-xs text-slate-450 dark:text-slate-550 leading-relaxed font-bold">
+                          {req.desc}
+                        </p>
+
+                        <div className="flex flex-col gap-1 text-[9px] md:text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-950/40 p-2 md:p-3 rounded-xl border border-slate-255/10">
+                          <div className="flex justify-between">
+                            <span>完賽獲得能量:</span>
+                            <span className="text-sky-600 dark:text-sky-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.participation || 0}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>勝利加成能量:</span>
+                            <span className="text-emerald-650 dark:text-emerald-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.win || 0}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <h4 className="font-black text-sm md:text-base text-slate-800 dark:text-slate-100">{req.name}</h4>
-                      <p className="text-xs text-slate-450 dark:text-slate-550 leading-relaxed min-h-[2.5rem] font-bold">
-                        {req.desc}
-                      </p>
-
-                      <div className="flex flex-col gap-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-255/10">
-                        <div className="flex justify-between">
-                          <span>完賽獲得能量:</span>
-                          <span className="text-sky-600 dark:text-sky-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.participation || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>勝利加成能量:</span>
-                          <span className="text-emerald-650 dark:text-emerald-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.win || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 gap-2">
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 gap-2">
                       <div className="flex items-center gap-1">
                         <Feather size={12} className="text-sky-500" />
                         <span className="text-base font-black text-slate-800 dark:text-slate-100 tabular-nums">

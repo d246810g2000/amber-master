@@ -67,6 +67,7 @@ export function useCourtSync({
       updatedAt: '',
       updatedBy: ''
     });
+    setChatMessages([]);
     setIsSyncInitialized(false);
     hasFetchedOnceForDateRef.current = false;
   }, [targetDate, commitSyncState]);
@@ -87,6 +88,15 @@ export function useCourtSync({
       if (data && (isNewer || isFirstLoad)) {
         commitSyncState(data);
       }
+
+      // 取得該日期的聊天與廣播訊息
+      try {
+        const messages = await gasApi.fetchChatMessages(targetDate);
+        setChatMessages(messages);
+      } catch (chatErr) {
+        console.error('[Sync] Fetch chat messages failed:', chatErr);
+      }
+
       hasFetchedOnceForDateRef.current = true;
       setIsSyncInitialized(true);
     } catch (err: any) {

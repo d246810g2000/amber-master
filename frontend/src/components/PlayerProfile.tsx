@@ -703,7 +703,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       />
 
       {/* Tab Bar */}
-      <div className="flex bg-slate-100/80 dark:bg-zinc-950/50 p-1.5 rounded-3xl border border-slate-200 dark:border-white/5 w-fit gap-1 sticky top-[88px] z-40 backdrop-blur-lg mx-auto md:mx-0 shadow-xl dark:shadow-2xl transition-all">
+      <div className="flex bg-slate-100/80 dark:bg-zinc-950/50 p-1.5 rounded-3xl border border-slate-200 dark:border-white/5 w-full max-w-full md:w-fit gap-1 sticky top-[88px] z-40 backdrop-blur-lg mx-auto md:mx-0 shadow-xl dark:shadow-2xl transition-all overflow-x-auto scrollbar-hide flex-nowrap">
         {[
           { id: 'trend' as const, label: '戰力趨勢', icon: <Activity size={14} /> },
           { id: 'partners' as const, label: '拍檔分析', icon: <Target size={14} /> },
@@ -716,7 +716,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 sm:gap-2.5 px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] font-black transition-all relative ${
+            className={`flex items-center gap-1.5 sm:gap-2.5 px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] font-black transition-all relative shrink-0 ${
               activeTab === tab.id ? "text-white" : "text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-300"
             }`}
           >
