@@ -333,7 +333,12 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
             is_winner_p = (winner == 1 and (pid == req.t1p1 or pid == req.t1p2)) or \
                          (winner == 2 and (pid == req.t2p1 or pid == req.t2p2))
             reward = 100 if is_winner_p else 50
-            db_p.feathers = (db_p.feathers or 0) + reward
+            bonus_amount = 0
+            if is_winner_p:
+                bonus_rate = get_player_pet_effect(db_p, "match_win_bonus", "bonus_rate")
+                bonus_amount = int(reward * bonus_rate)
+            total_reward = reward + bonus_amount
+            db_p.feathers = (db_p.feathers or 0) + total_reward
             
             # 孵蛋進度更新
             if db_p.active_egg_id:
@@ -342,11 +347,14 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
                 db_p.egg_progress_games = max(0, min(100, (db_p.egg_progress_games or 0) + energy_gain))
                 db_p.egg_progress_wins = 0
             
+            desc = f"完賽獎勵：{'勝場' if is_winner_p else '安慰獎'} (100/50 規則)"
+            if bonus_amount > 0:
+                desc += f" (寵物加成 +{bonus_amount} 根)"
             db.add(models.FeatherTransaction(
                 player_id=pid,
-                amount=reward,
+                amount=total_reward,
                 type="match_reward",
-                description=f"完賽獎勵：{'勝場' if is_winner_p else '安慰獎'} (100/50 規則)"
+                description=desc
             ) )
 
     db.commit()
@@ -879,15 +887,21 @@ def claim_daily_feathers(db: Session, email: str):
         return {"status": "error", "message": "今天已經領取過羽毛了", "amount": 0}
     
     claim_amount = 1000
-    db_player.feathers = (db_player.feathers or 0) + claim_amount
+    daily_bonus = get_player_pet_effect(db_player, "feather_gain", "daily_bonus")
+    bonus_amount = int(claim_amount * daily_bonus)
+    total_claim = claim_amount + bonus_amount
+    db_player.feathers = (db_player.feathers or 0) + total_claim
     db_player.last_feather_claim = today
     
     # 新增交易紀錄
+    desc = f"每日登入獎勵 ({today})"
+    if bonus_amount > 0:
+        desc += f" (寵物加成 +{bonus_amount} 根)"
     transaction = models.FeatherTransaction(
         player_id=db_player.id,
-        amount=claim_amount,
+        amount=total_claim,
         type="daily_claim",
-        description=f"每日登入獎勵 ({today})"
+        description=desc
     )
     db.add(transaction)
 
@@ -1005,8 +1019,6 @@ def get_match_description(db: Session, match_id: str):
 def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int, bet_type: str = "moneyline", line_value: float = 0.0):
     if amount < 50:
         return {"status": "error", "message": "最低投注金額為 50 根羽毛"}
-    if amount > 500:
-        return {"status": "error", "message": "最高投注金額為 500 根羽毛"}
 
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
@@ -1226,14 +1238,38 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                     payout = int(b.amount * odds)
                     p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
                     if p:
-                        p.feathers = (p.feathers or 0) + payout
+                        bet_win_bonus = get_player_pet_effect(p, "feather_gain", "bet_win_bonus")
+                        bonus_payout = int(payout * bet_win_bonus)
+                        total_payout = payout + bonus_payout
+                        p.feathers = (p.feathers or 0) + total_payout
+                        
+                        desc = f"預測成功({bt})：{s1}-{s2} (賠率 {round(odds, 2)})"
+                        if bonus_payout > 0:
+                            desc += f" (寵物加成 +{bonus_payout} 根)"
                         db.add(models.FeatherTransaction(
                             player_id=b.player_id, 
-                            amount=payout, 
+                            amount=total_payout, 
                             type="bet_won", 
-                            description=f"預測成功({bt})：{s1}-{s2} (賠率 {round(odds, 2)})"
+                            description=desc
                         ))
-                        winners_report.append({"name": p.name, "payout": payout, "type": bt})
+                        winners_report.append({"name": p.name, "payout": total_payout, "type": bt})
+
+                # 處理預測失敗退還 (Loss Protection)
+                lose_bets = [b for b in type_bets if not is_bet_won(b)]
+                for b in lose_bets:
+                    p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
+                    if p:
+                        refund_rate = get_player_pet_effect(p, "bet_loss_protection", "refund_rate")
+                        if refund_rate > 0.0:
+                            refund_amount = int(b.amount * refund_rate)
+                            if refund_amount > 0:
+                                p.feathers = (p.feathers or 0) + refund_amount
+                                db.add(models.FeatherTransaction(
+                                    player_id=b.player_id, 
+                                    amount=refund_amount, 
+                                    type="bet_refund", 
+                                    description=f"預測失敗本金返還({bt})：{s1}-{s2} (寵物保護 +{refund_amount} 根)"
+                                ))
             
             # 標記為已結算
             for b in type_bets: b.is_settled = 1
@@ -1246,12 +1282,19 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                 if pid:
                     p = db.query(models.Player).filter(models.Player.id == pid).first()
                     if p:
-                        p.feathers = (p.feathers or 0) + share
+                        bonus_rate = get_player_pet_effect(p, "match_win_bonus", "bonus_rate")
+                        bonus_share = int(share * bonus_rate)
+                        total_share = share + bonus_share
+                        p.feathers = (p.feathers or 0) + total_share
+                        
+                        desc = f"贏球分紅(多重獎池)：場地 {db_match.court_name or '未知'}"
+                        if bonus_share > 0:
+                            desc += f" (寵物加成 +{bonus_share} 根)"
                         db.add(models.FeatherTransaction(
                             player_id=pid, 
-                            amount=share, 
+                            amount=total_share, 
                             type="match_reward", 
-                            description=f"贏球分紅(多重獎池)：場地 {db_match.court_name or '未知'}"
+                            description=desc
                         ))
 
         db.commit()
@@ -1777,6 +1820,7 @@ def buy_egg(db: Session, email: str, egg_type: str):
         
     player.feathers = (player.feathers or 0) - cost
     player.active_egg_id = egg_type
+    player.active_pet_id = egg_type
     player.egg_progress_games = 0
     player.egg_progress_wins = 0
     
@@ -1881,6 +1925,35 @@ def get_chat_messages(db: Session, target_date: date):
     return db.query(models.ChatMessage).filter(
         models.ChatMessage.match_date == target_date
     ).order_by(models.ChatMessage.timestamp.asc()).all()
+
+
+PET_EFFECTS = {
+    "pet_chick": {"type": "feather_gain", "daily_bonus": 0.05, "bet_win_bonus": 0.03},
+    "pet_rabbit": {"type": "feather_gain", "daily_bonus": 0.10, "bet_win_bonus": 0.06},
+    "pet_dog": {"type": "feather_gain", "daily_bonus": 0.15, "bet_win_bonus": 0.10},
+    "pet_phoenix": {"type": "feather_gain", "daily_bonus": 0.20, "bet_win_bonus": 0.12},
+
+    "pet_corgi": {"type": "bet_loss_protection", "refund_rate": 0.05},
+    "pet_slime": {"type": "bet_loss_protection", "refund_rate": 0.10},
+    "pet_fox": {"type": "bet_loss_protection", "refund_rate": 0.15},
+    "pet_unicorn": {"type": "bet_loss_protection", "refund_rate": 0.20},
+
+    "pet_black_cat": {"type": "match_win_bonus", "bonus_rate": 0.10},
+    "pet_cat": {"type": "match_win_bonus", "bonus_rate": 0.20},
+    "pet_dragon": {"type": "match_win_bonus", "bonus_rate": 0.30},
+    "pet_panda": {"type": "match_win_bonus", "bonus_rate": 0.40},
+}
+
+def get_player_pet_effect(player, effect_type: str, key: str) -> float:
+    if not player or not player.active_pet_id:
+        return 0.0
+    if player.active_pet_id.startswith("egg_"):
+        return 0.0
+    cfg = PET_EFFECTS.get(player.active_pet_id)
+    if not cfg or cfg.get("type") != effect_type:
+        return 0.0
+    return cfg.get(key, 0.0)
+
 
 
 

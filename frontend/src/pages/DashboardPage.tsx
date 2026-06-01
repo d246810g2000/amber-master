@@ -3,13 +3,14 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import * as gasApi from '../lib/gasApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { getTaipeiDateString } from "../lib/utils";
+import { getTaipeiDateString, cn } from "../lib/utils";
 import * as matchEngine from "../lib/matchEngine";
 import type { DerivedPlayer } from "../lib/matchEngine";
 import { usePlayers, type PlayerStatus } from "../hooks/usePlayers";
 import { useMatches } from "../hooks/useMatches";
 import { useCourts } from "../hooks/useCourts";
 import { useCourtSync } from "../hooks/useCourtSync";
+import { useDialog } from "../context/DialogContext";
 import { MatchHistory, MatchHistorySkeleton } from "../components/MatchHistory";
 import { SettingsModal } from "../components/SettingsModal";
 import { WinnerModal } from "../components/WinnerModal";
@@ -23,11 +24,18 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { GeminiBot } from "../components/chat/GeminiBot";
 import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
-import { ShopModal } from "../components/dashboard/ShopModal";
+import { ShopModal, EGG_REQUIREMENTS, PETS_CATALOG, PET_ABILITIES } from "../components/dashboard/ShopModal";
+import { EggRenderer } from "../components/EggRenderer";
+import { PetRenderer } from "../components/PetRenderer";
+import { motion, AnimatePresence } from 'framer-motion';
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import type { Player } from '../types';
+
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { showConfirm } = useDialog();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentFilterDate, setCurrentFilterDate] = useState(getTaipeiDateString());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -93,6 +101,95 @@ export function DashboardPage() {
 
   const { currentUser } = useAuth();
   
+  const boundPlayer = useMemo(() => {
+    if (!currentUser?.email) return undefined;
+    return players.find((p: any) => p.email?.toLowerCase() === currentUser?.email?.toLowerCase()) as Player | undefined;
+  }, [players, currentUser?.email]);
+
+  const eggReadyToHatch = useMemo(() => {
+    if (!boundPlayer?.active_egg_id) return false;
+    const progress = boundPlayer.egg_progress_games || 0;
+    return progress >= 100;
+  }, [boundPlayer]);
+
+  const [hatchingPetId, setHatchingPetId] = useState<string | null>(null);
+  const [isHatchingActionLoading, setIsHatchingActionLoading] = useState(false);
+  const [hatchingOverlayOpen, setHatchingOverlayOpen] = useState(false);
+  const [hatchState, setHatchState] = useState<'shaking' | 'shuffling' | 'revealed'>('shaking');
+  const [shufflingPetId, setShufflingPetId] = useState<string | null>(null);
+  const [currentHatchEggId, setCurrentHatchEggId] = useState<string | null>(null);
+
+  const handleHatchEgg = async () => {
+    if (!currentUser?.email || !boundPlayer?.active_egg_id) return;
+    const eggId = boundPlayer.active_egg_id;
+    
+    // Set overlay open, state shaking, and eggId immediately for UI response
+    setCurrentHatchEggId(eggId);
+    setHatchingOverlayOpen(true);
+    setHatchState('shaking');
+    setIsHatchingActionLoading(true);
+    
+    // Min shaking phase timer of 1.5 seconds
+    const shakePromise = new Promise(resolve => setTimeout(resolve, 1500));
+    
+    try {
+      const result = await gasApi.hatchEgg(currentUser.email!);
+      if (result && result.hatched_pet) {
+        const finalPetId = result.hatched_pet;
+        
+        // Wait for shaking to complete
+        await shakePromise;
+        
+        // Phase 2: Shuffling
+        setHatchState('shuffling');
+        const candidates = PETS_CATALOG.filter(p => p.eggType === eggId).map(p => p.id);
+        
+        let shuffleCount = 0;
+        const totalShuffles = 12;
+        const shuffleInterval = 150;
+        
+        const shufflePromise = new Promise<void>((resolve) => {
+          const interval = setInterval(() => {
+            const nextPet = candidates[shuffleCount % candidates.length];
+            setShufflingPetId(nextPet);
+            shuffleCount++;
+            if (shuffleCount >= totalShuffles) {
+              clearInterval(interval);
+              resolve();
+            }
+          }, shuffleInterval);
+        });
+        
+        await shufflePromise;
+        
+        // Phase 3: Revealed!
+        setHatchState('revealed');
+        setHatchingPetId(finalPetId);
+        toast.success(`破蛋成功！獲得了新夥伴！`);
+        queryClient.invalidateQueries({ queryKey: ['players-base'] });
+      } else {
+        toast.error('孵化結果無效');
+        setHatchingOverlayOpen(false);
+      }
+    } catch (err: any) {
+      toast.error(err.message || '孵化失敗');
+      setHatchingOverlayOpen(false);
+    } finally {
+      setIsHatchingActionLoading(false);
+    }
+  };
+
+  const handleEquipPet = async (petId: string | null) => {
+    if (!currentUser?.email) return;
+    try {
+      await gasApi.equipPet(currentUser.email!, petId);
+      toast.success(petId ? '已邀請夥伴隨行！' : '已讓夥伴回窩休息');
+      queryClient.invalidateQueries({ queryKey: ['players-base'] });
+    } catch (err: any) {
+      toast.error(err.message || '邀請隨行失敗');
+    }
+  };
+
   const handleBet = useCallback(async (matchId: string, team: number, amount: number, betType: string, lineValue: number) => {
     if (!currentUser?.email) {
       toast.info("請先登入以進行投注預測");
@@ -229,15 +326,29 @@ export function DashboardPage() {
 
   
   const handleAllReady = () => {
-    const updates: Record<string, PlayerStatus> = {};
-    restingPlayers.forEach(p => { updates[p.id] = "ready"; });
-    syncToRemote(courts, recommendedPlayers, updates);
+    if (restingPlayers.length === 0) return;
+    showConfirm(
+      "全員備戰",
+      `確定要將所有 ${restingPlayers.length} 位休息中的球員設為備戰狀態嗎？`,
+      () => {
+        const updates: Record<string, PlayerStatus> = {};
+        restingPlayers.forEach(p => { updates[p.id] = "ready"; });
+        syncToRemote(courts, recommendedPlayers, updates);
+      }
+    );
   };
 
   const handleAllResting = () => {
-    const updates: Record<string, PlayerStatus> = {};
-    readyPlayers.forEach(p => { updates[p.id] = "resting"; });
-    syncToRemote(courts, recommendedPlayers, updates);
+    if (readyPlayers.length === 0) return;
+    showConfirm(
+      "全員休息",
+      `確定要將所有 ${readyPlayers.length} 位備戰中的球員設為休息狀態嗎？`,
+      () => {
+        const updates: Record<string, PlayerStatus> = {};
+        readyPlayers.forEach(p => { updates[p.id] = "resting"; });
+        syncToRemote(courts, recommendedPlayers, updates);
+      }
+    );
   };
   
   const handleTogglePlayerStatus = (id: string) => {
@@ -313,7 +424,13 @@ export function DashboardPage() {
                       players={court.players}
                       actionText="結束"
                       onAction={() => handleEndMatch(court.id)}
-                      onCancel={() => handleCancelMatch(court.id)}
+                      onCancel={() => {
+                        showConfirm(
+                          "取消比賽",
+                          "確定要取消此場比賽嗎？已下注的羽毛將退還給玩家。",
+                          () => handleCancelMatch(court.id)
+                        );
+                      }}
                       startTime={court.startTime}
                       isLoading={syncingCourtIds.includes(court.id) || submittingMatch && activeCourt?.id === court.id}
                       isActionDisabled={submittingMatch || isLocalSyncing || !hasControl}
@@ -490,6 +607,242 @@ export function DashboardPage() {
           }}
         />
       )}
+
+      {/* Floating Egg Hatching Widget */}
+      <AnimatePresence>
+        {eggReadyToHatch && !hatchingPetId && boundPlayer?.active_egg_id && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 50 }}
+            className="fixed bottom-20 right-6 z-[90] max-w-sm bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg rounded-3xl p-5 border border-amber-250 dark:border-amber-900/50 shadow-[0_20px_50px_rgba(245,158,11,0.25)] flex items-center gap-4 animate-egg-float"
+          >
+            <div className="shrink-0 relative">
+              <div className="absolute inset-0 bg-amber-400/20 rounded-full blur-md animate-pulse" />
+              <EggRenderer
+                eggType={boundPlayer.active_egg_id}
+                progressPercent={100}
+                className="w-16 h-20 scale-90"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-black text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-500 animate-spin-slow" />
+                孵化能量已滿！
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-bold">
+                您的【{EGG_REQUIREMENTS[boundPlayer.active_egg_id]?.name || '寵物蛋'}】已準備好破殼！
+              </p>
+              <button
+                onClick={handleHatchEgg}
+                disabled={isHatchingActionLoading}
+                className="mt-3 w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-amber-500/10 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isHatchingActionLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    正在孵化...
+                  </>
+                ) : (
+                  "✨ 立即點擊破蛋 ✨"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hatching Pet Success Overlay */}
+      <AnimatePresence>
+        {hatchingOverlayOpen && currentHatchEggId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[200] flex flex-col items-center justify-center p-4 md:p-6 text-center select-none"
+          >
+            {/* Spinning background sunburst rays */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.15),transparent_60%)] animate-pulse pointer-events-none" />
+            {hatchState === 'revealed' && (
+              <div className="absolute w-[200%] h-[200%] rounded-full bg-[conic-gradient(from_0deg,transparent_20%,rgba(253,224,71,0.05)_40%,transparent_60%,rgba(253,224,71,0.05)_80%,transparent)] animate-[spin_20s_infinite_linear] pointer-events-none" />
+            )}
+
+            {/* Sparkles */}
+            {hatchState === 'revealed' && (
+              <>
+                <div className="absolute animate-ping text-amber-400 text-4xl top-1/4 left-1/4">✦</div>
+                <div className="absolute animate-ping text-cyan-400 text-3xl bottom-1/4 right-1/4 [animation-delay:0.7s]">✦</div>
+                <div className="absolute animate-ping text-pink-400 text-2xl top-1/3 right-1/3 [animation-delay:1.3s]">✦</div>
+              </>
+            )}
+
+            <motion.div
+              initial={{ scale: 0.5, y: 100 }}
+              animate={{ scale: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 15 } }}
+              className="relative space-y-6 md:space-y-8 flex flex-col items-center w-full max-w-sm"
+            >
+              {/* Hatching Box */}
+              <div className="w-28 h-28 md:w-32 md:h-32 bg-white/5 dark:bg-white/10 rounded-full border border-white/20 flex items-center justify-center p-4 shadow-2xl relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-pink-400 to-amber-400 rounded-full blur-[8px] opacity-40 animate-pulse" />
+                
+                {hatchState === 'shaking' && (
+                  <motion.div
+                    animate={{
+                      x: [0, -6, 6, -6, 6, -3, 3, -3, 3, 0],
+                      rotate: [0, -5, 5, -5, 5, -2, 2, -2, 2, 0],
+                    }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 0.5,
+                      ease: "easeInOut"
+                    }}
+                    className="relative w-20 h-24 flex items-center justify-center"
+                  >
+                    <EggRenderer
+                      eggType={currentHatchEggId}
+                      progressPercent={100}
+                      className="w-full h-full scale-110"
+                    />
+                  </motion.div>
+                )}
+
+                {hatchState === 'shuffling' && shufflingPetId && (
+                  <motion.div
+                    animate={{
+                      scale: [1, 1.15, 1],
+                      y: [0, -8, 0]
+                    }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 0.15,
+                      ease: "easeInOut"
+                    }}
+                    className="flex items-center justify-center"
+                  >
+                    <PetRenderer petId={shufflingPetId} className="w-16 h-16 scale-125" />
+                  </motion.div>
+                )}
+
+                {hatchState === 'revealed' && hatchingPetId && (
+                  <motion.div
+                    initial={{ scale: 0.3, rotate: -45 }}
+                    animate={{ scale: [1, 1.3, 1.2], rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 10 }}
+                    className="flex items-center justify-center"
+                  >
+                    <PetRenderer petId={hatchingPetId} className="w-20 h-20 scale-150 animate-bounce" />
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Title & Info */}
+              <div className="space-y-2 px-4 w-full">
+                {hatchState === 'shaking' && (
+                  <>
+                    <div className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] animate-pulse">HATCHING...</div>
+                    <h3 className="text-xl md:text-2xl font-black text-white">
+                      蛋正在劇烈晃動...
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-2 font-bold leading-relaxed">
+                      守護的夥伴即將破殼而出，請耐心等待！
+                    </p>
+                  </>
+                )}
+
+                {hatchState === 'shuffling' && (
+                  <>
+                    <div className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.3em] animate-pulse">CHOOSING...</div>
+                    <h3 className="text-xl md:text-2xl font-black text-white">
+                      破殼而出中！
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-2 font-bold leading-relaxed">
+                      正在呼喚契合的幻獸夥伴...
+                    </p>
+                  </>
+                )}
+
+                {hatchState === 'revealed' && hatchingPetId && (
+                  <>
+                    <div className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] animate-pulse">HATCH SUCCESS!</div>
+                    <h3 className="text-xl md:text-3xl font-black bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent drop-shadow-md">
+                      ✨ 孵化成功！獲得新伴侶 ✨
+                    </h3>
+                    <p className="text-sm font-bold text-white mt-4">
+                      恭喜獲得可愛寵物：
+                      <span className="text-base font-black text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/25 ml-1 inline-block whitespace-nowrap mt-1">
+                        {PETS_CATALOG.find(p => p.id === hatchingPetId)?.name || '神祕寵物'}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed mt-2 font-bold">
+                      {PETS_CATALOG.find(p => p.id === hatchingPetId)?.desc}
+                    </p>
+                    {(() => {
+                      const ability = PET_ABILITIES[hatchingPetId];
+                      if (!ability) return null;
+                      return (
+                        <div className="mt-4 inline-flex flex-col items-center gap-1 bg-white/5 border border-white/10 rounded-2xl p-2.5 w-full max-w-[240px] mx-auto shadow-inner">
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm",
+                            ability.colorClass
+                          )}>
+                            {ability.badge}
+                          </span>
+                          <span className="text-xs text-amber-400 font-extrabold mt-1">
+                            {ability.desc}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
+
+              {/* Possible Candidates Section */}
+              <div className="w-[90%] max-w-[280px] bg-white/5 dark:bg-black/20 rounded-2xl p-4 border border-white/5 mx-auto">
+                <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-3">
+                  可能會孵化出的夥伴
+                </div>
+                <div className="flex justify-around items-center gap-2">
+                  {PETS_CATALOG.filter(p => p.eggType === currentHatchEggId).map(candidate => {
+                    const isCurrent = (hatchState === 'shuffling' && shufflingPetId === candidate.id) || (hatchState === 'revealed' && hatchingPetId === candidate.id);
+                    return (
+                      <div key={candidate.id} className="flex flex-col items-center min-w-[64px]">
+                        <div className={cn(
+                          "w-12 h-12 rounded-full border flex items-center justify-center p-2 transition-all duration-300",
+                          isCurrent 
+                            ? "bg-white/15 border-amber-400 scale-110 shadow-lg shadow-amber-500/10" 
+                            : "bg-white/5 border-white/5 opacity-30 grayscale"
+                        )}>
+                          <PetRenderer petId={candidate.id} className="w-8 h-8" />
+                        </div>
+                        <span className={cn("text-[9px] font-bold mt-1.5 whitespace-nowrap", isCurrent ? "text-amber-400" : "text-slate-500")}>
+                          {candidate.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Button */}
+              {hatchState === 'revealed' && hatchingPetId && (
+                <button
+                  onClick={() => {
+                    handleEquipPet(hatchingPetId); // Auto equip the newly hatched pet!
+                    setHatchingPetId(null);
+                    setHatchingOverlayOpen(false);
+                    setCurrentHatchEggId(null);
+                  }}
+                  className="w-[90%] max-w-[240px] py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs rounded-xl shadow-xl shadow-amber-500/10 active:scale-95 transition-all tracking-widest cursor-pointer mt-2"
+                >
+                  太棒了，帶牠去打球！
+                </button>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+

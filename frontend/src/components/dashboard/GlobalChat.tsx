@@ -18,12 +18,27 @@ export const GlobalChat: React.FC<GlobalChatProps> = ({ messages }) => {
   const [showPreview, setShowPreview] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  const prevIsOpenRef = useRef(isOpen);
+  const prevMessagesLengthRef = useRef(messages.length);
 
   // 自動捲動到底部
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const container = scrollRef.current;
+      const wasOpen = prevIsOpenRef.current;
+      const justOpened = isOpen && !wasOpen;
+      const isNewMessage = messages.length > prevMessagesLengthRef.current;
+      
+      // 當距離底部小於 80px 時視為「在底部」
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 80;
+      
+      // 只有在剛打開聊天室，或是收到新訊息且本來就在底部時，才進行自動捲動
+      if (justOpened || (isNewMessage && isNearBottom)) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
+    prevMessagesLengthRef.current = messages.length;
+    prevIsOpenRef.current = isOpen;
     
     // 當有新訊息且聊天室是縮小時，顯示預覽氣泡
     if (messages.length > 0 && !isOpen) {

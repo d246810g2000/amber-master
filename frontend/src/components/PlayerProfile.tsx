@@ -10,7 +10,7 @@ import Activity from "lucide-react/dist/esm/icons/activity";
 import Calendar from "lucide-react/dist/esm/icons/calendar";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Heart from "lucide-react/dist/esm/icons/heart";
-import { PETS_CATALOG } from "./dashboard/ShopModal";
+import { PETS_CATALOG, PET_ABILITIES } from "./dashboard/ShopModal";
 import Lock from "lucide-react/dist/esm/icons/lock";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus";
@@ -869,15 +869,27 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                         {previewFrame && <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-blue-400/20 flex items-center justify-center text-blue-600 font-black text-xs"><Square size={10} /></div><span className="text-xs font-black text-blue-800 dark:text-blue-400">{previewFrame}</span></div></div>}
                         {previewBackground && <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-5 h-5 rounded-lg bg-emerald-400/20 flex items-center justify-center text-emerald-600 font-black text-xs"><Layers size={10} /></div><span className="text-xs font-black text-emerald-800 dark:text-emerald-400">{previewBackground}</span></div></div>}
                         {previewPetId && (
-                          <div className="p-2 bg-pink-50 dark:bg-pink-900/20 rounded-xl border border-pink-100 dark:border-pink-800/50 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 rounded-lg bg-pink-400/20 flex items-center justify-center text-pink-600 font-black text-xs">
-                                <Heart size={10} />
+                          <div className="p-2 bg-pink-50 dark:bg-pink-900/20 rounded-xl border border-pink-100 dark:border-pink-800/50 flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-lg bg-pink-400/20 flex items-center justify-center text-pink-600 font-black text-xs">
+                                  <Heart size={10} />
+                                </div>
+                                <span className="text-xs font-black text-pink-800 dark:text-pink-400">
+                                  {PETS_CATALOG.find(p => p.id === previewPetId)?.name || '未知寵物'}
+                                </span>
                               </div>
-                              <span className="text-xs font-black text-pink-800 dark:text-pink-400">
-                                {PETS_CATALOG.find(p => p.id === previewPetId)?.name || '未知寵物'}
-                              </span>
+                              {PET_ABILITIES[previewPetId] && (
+                                <span className={cn("text-[7.5px] font-black px-1.5 py-0.5 rounded border leading-none shrink-0", PET_ABILITIES[previewPetId].colorClass)}>
+                                  {PET_ABILITIES[previewPetId].badge}
+                                </span>
+                              )}
                             </div>
+                            {PET_ABILITIES[previewPetId] && (
+                              <div className="text-[9px] font-bold text-slate-500 dark:text-slate-400 pl-7 leading-none">
+                                ✦ {PET_ABILITIES[previewPetId].desc}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

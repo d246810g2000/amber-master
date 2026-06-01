@@ -245,8 +245,11 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                     alt="equipped egg"
                     className="w-full h-full object-contain"
                   />
-                  {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games < 100 && (
-                    <div className="absolute -top-1.5 -right-1.5 bg-sky-500 text-[7px] text-white font-black rounded-full px-1 min-w-[12px] h-[12px] flex items-center justify-center scale-90 transform origin-top-right shadow-sm border border-white dark:border-slate-900 leading-none">
+                  {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games <= 100 && (
+                    <div className={cn(
+                      "absolute -bottom-1.5 -right-1.5 text-white font-black rounded-full px-1 min-w-[12px] h-[12px] flex items-center justify-center scale-90 transform origin-bottom-right shadow-sm border border-white dark:border-slate-900 leading-none text-[7px]",
+                      player.egg_progress_games === 100 ? "bg-amber-500 animate-pulse" : "bg-sky-500"
+                    )}>
                       {player.egg_progress_games}
                     </div>
                   )}

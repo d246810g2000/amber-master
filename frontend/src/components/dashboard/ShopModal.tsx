@@ -55,6 +55,24 @@ export const PETS_CATALOG = [
   { id: 'pet_panda', name: '功夫熊貓', tier: 'ultimate', eggType: 'egg_ultimate', desc: '啃著竹子、擅長太極跟翻滾的功夫黑白胖熊貓。', icon: '🐼' },
 ];
 
+export const PET_ABILITIES: Record<string, { desc: string; badge: string; colorClass: string }> = {
+  pet_chick: { desc: "每日領取 +5% / 預測獲勝 +3%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
+  pet_rabbit: { desc: "每日領取 +10% / 預測獲勝 +6%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
+  pet_dog: { desc: "每日領取 +15% / 預測獲勝 +10%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
+  pet_phoenix: { desc: "每日領取 +20% / 預測獲勝 +12%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
+
+  pet_corgi: { desc: "預測失敗退還 5% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
+  pet_slime: { desc: "預測失敗退還 10% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
+  pet_fox: { desc: "預測失敗退還 15% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
+  pet_unicorn: { desc: "預測失敗退還 20% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
+
+  pet_black_cat: { desc: "贏球分紅 +10%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
+  pet_cat: { desc: "贏球分紅 +20%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
+  pet_dragon: { desc: "贏球分紅 +30%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
+  pet_panda: { desc: "贏球分紅 +40%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
+};
+
+
 export const hatchConfig = {
   classic: { participation: 25, win: 15 },
   epic: { participation: 18, win: 12 },
@@ -69,10 +87,10 @@ export function calculateEggEnergyGain(rarity: string, isWin: boolean): number {
 }
 
 export const EGG_REQUIREMENTS: Record<string, { feathers: number; name: string; desc: string }> = {
-  egg_classic: { feathers: 500, name: '經典之蛋', desc: '有機會與呆萌柯基、傲嬌黑貓、元氣小雞成為夥伴' },
-  egg_epic: { feathers: 1000, name: '史詩之蛋', desc: '有機會與慵懶小貓、果凍史萊姆、蹦蹦粉兔成為夥伴' },
-  egg_legendary: { feathers: 1500, name: '傳說之蛋', desc: '有機會與元氣柴犬、傲嬌赤狐、黃金幼龍成為夥伴' },
-  egg_ultimate: { feathers: 2000, name: '終極之蛋', desc: '有機會與霓虹鳳凰、炫彩獨角獸、功夫熊貓成為夥伴' },
+  egg_classic: { feathers: 500, name: '經典之蛋', desc: '能量累積至 100% 即可孵化。有機會與呆萌柯基、傲嬌黑貓、元氣小雞成為夥伴' },
+  egg_epic: { feathers: 1000, name: '史詩之蛋', desc: '能量累積至 100% 即可孵化。有機會與慵懶小貓、果凍史萊姆、蹦蹦粉兔成為夥伴' },
+  egg_legendary: { feathers: 1500, name: '傳說之蛋', desc: '能量累積至 100% 即可孵化。有機會與元氣柴犬、傲嬌赤狐、黃金幼龍成為夥伴' },
+  egg_ultimate: { feathers: 2000, name: '終極之蛋', desc: '能量累積至 100% 即可孵化。有機會與霓虹鳳凰、炫彩獨角獸、功夫熊貓成為夥伴' },
 };
 
 const getPetTierStyle = (tier: string, isUnlocked: boolean, isEquipped: boolean) => {
@@ -594,11 +612,21 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                   </div>
 
                   {/* Pet Info */}
-                  <div className="text-center w-full min-w-0 mt-1">
+                  <div className="text-center w-full min-w-0 mt-1 space-y-1">
                     <div className="font-black text-xs text-slate-800 dark:text-slate-100 truncate">{pet.name}</div>
-                    <div className="text-[9px] text-slate-450 dark:text-slate-550 font-bold truncate mt-0.5">
+                    <div className="text-[9px] text-slate-450 dark:text-slate-550 font-bold truncate">
                       {isUnlocked ? pet.desc : `孵自 ${eggName(pet.eggType)}`}
                     </div>
+                    {PET_ABILITIES[pet.id] && (
+                      <div className="mt-1.5 flex flex-col items-center gap-1 select-none">
+                        <span className={cn("text-[7.5px] font-black px-1.5 py-0.5 rounded border leading-none", PET_ABILITIES[pet.id].colorClass)}>
+                          ✦ {PET_ABILITIES[pet.id].badge}
+                        </span>
+                        <span className="text-[7.5px] font-black text-slate-500 dark:text-slate-400 leading-tight">
+                          {PET_ABILITIES[pet.id].desc}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Button */}

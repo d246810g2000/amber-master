@@ -215,8 +215,11 @@ const PlayerSlot = React.memo(({
                           alt="equipped egg"
                           className="w-full h-full object-contain"
                         />
-                        {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games < 100 && (
-                          <div className="absolute -top-1.5 -right-1.5 bg-sky-500 text-[6px] text-white font-black rounded-full px-0.5 min-w-[10px] h-[10px] flex items-center justify-center scale-90 transform origin-top-right shadow-sm border border-white dark:border-slate-900 leading-none">
+                        {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games <= 100 && (
+                          <div className={cn(
+                            "absolute -bottom-1 -right-1.5 text-white text-[6px] font-black rounded-full px-0.5 min-w-[10px] h-[10px] flex items-center justify-center scale-90 transform origin-bottom-right shadow-sm border border-white dark:border-slate-900 leading-none",
+                            player.egg_progress_games === 100 ? "bg-amber-500 animate-pulse" : "bg-sky-500"
+                          )}>
                             {player.egg_progress_games}
                           </div>
                         )}
@@ -357,7 +360,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
   const [elapsed, setElapsed] = useState<string>("00:00");
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-  const isTimeLocked = elapsedSeconds > 60;
+  const isTimeLocked = elapsedSeconds > 180;
 
   useEffect(() => {
     if (!startTime) {
@@ -579,7 +582,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               {isTimeLocked ? (
                 <div className="flex flex-col items-center justify-center bg-red-900/40 border border-red-500/50 rounded-xl p-4 mb-4">
                   <span className="text-red-400 font-black text-sm mb-1 uppercase tracking-wider">投注時間已截止</span>
-                  <span className="text-white/60 text-[10px]">開打 1 分鐘後無法進行下注</span>
+                  <span className="text-white/60 text-[10px]">開打 3 分鐘後無法進行下注</span>
                 </div>
               ) : (
                 <>
