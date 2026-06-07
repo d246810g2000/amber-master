@@ -10,7 +10,7 @@ ts = trueskill.TrueSkill(draw_probability=0.0)
 
 ENGINE_CONFIG = {
     'WAIT_WEIGHT': 10,
-    'BONUS_THRESHOLD': 3,
+    'BONUS_THRESHOLD': 4,
     'BONUS_MULTIPLIER': 1000,
     'FATIGUE_PENALTY_PER_GAME': 2.0,  # Penalty applied to Mu for each consecutive game played
 }
@@ -114,7 +114,7 @@ def matchmake(
     player_priorities = []
     for p in target_players:
         pid = str(p['id'])
-        score = (p.get('matchCount', 0) * 10) - (wait_count_map.get(pid, 0) * 10) - (1000 if wait_count_map.get(pid, 0) >= 3 else 0)
+        score = (p.get('matchCount', 0) * 10) - (wait_count_map.get(pid, 0) * 10) - (ENGINE_CONFIG['BONUS_MULTIPLIER'] if wait_count_map.get(pid, 0) >= ENGINE_CONFIG['BONUS_THRESHOLD'] else 0)
         player_priorities.append({'player': p, 'score': score})
     player_priorities.sort(key=lambda x: (x['score'], random.random()))
     
@@ -149,7 +149,7 @@ def matchmake(
         
         eff_ratings[pid] = trueskill.Rating(mu=target_mu - mu_penalty, sigma=p['sigma'])
 
-    forced_player_ids = {pid for pid in selected_ids if wait_count_map.get(pid, 0) >= 3}
+    forced_player_ids = {pid for pid in selected_ids if wait_count_map.get(pid, 0) >= ENGINE_CONFIG['BONUS_THRESHOLD']}
     
     matches = []
     for group in itertools.combinations(finalist_pool, 4):
