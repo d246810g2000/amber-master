@@ -1,7 +1,7 @@
 import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import sys
 import os
 
@@ -172,6 +172,69 @@ class TestBettingV2(unittest.TestCase):
 
         res_ok = crud.place_bet(db, player_id="p1", match_id="match_123", team=1, amount=100, bet_type="moneyline")
         self.assertEqual(res_ok["status"], "success")
+
+    def test_place_bet_returns_locked_odds(self):
+        db = self.db
+        match_id = "test_match_odds_return"
+        self._create_standard_match(match_id)
+        today = date.today()
+        cs = models.CourtState(date=today, state={
+            "courts": [{"matchId": match_id, "players": ["p1", "p2", "p3", "p4"], "startTime": None}]
+        })
+        db.add(cs)
+        db.commit()
+
+        res = crud.place_bet(db, "b1", match_id, 1, 100, bet_type="moneyline")
+        self.assertEqual(res["status"], "success")
+        self.assertIn("lockedOdds", res)
+        self.assertGreater(res["lockedOdds"], 1.0)
+        self.assertIn("預估獲利", res["message"])
+
+    def test_bet_time_lock(self):
+        db = self.db
+        match_id = "test_match_time_lock"
+        self._create_standard_match(match_id)
+        today = date.today()
+        old_start = datetime.utcnow() - timedelta(minutes=5)
+        cs = models.CourtState(date=today, state={
+            "courts": [{
+                "matchId": match_id,
+                "players": ["p1", "p2", "p3", "p4"],
+                "startTime": old_start.isoformat() + "Z",
+            }]
+        })
+        db.add(cs)
+        db.commit()
+
+        res = crud.place_bet(db, "b1", match_id, 1, 100, bet_type="moneyline")
+        self.assertEqual(res["status"], "error")
+        self.assertIn("封盤", res["message"])
+
+    def test_handicap_push_refund(self):
+        db = self.db
+        match_id = "test_match_push"
+        self._create_standard_match(match_id)
+        # 21-15，讓分 -6 → 21+(-6)=15 剛好平線
+        self._place_test_bet(match_id, "b1", 1, 100, "handicap", -6.0)
+        db.commit()
+
+        match = db.query(models.Match).filter(models.Match.id == match_id).first()
+        match.score = "21-15"
+        match.winner = 1
+        db.commit()
+
+        results = crud.settle_bets(db, match_id, winner_team=1)
+        self.assertEqual(len(results["winners"]), 0)
+
+        b1 = db.query(models.Player).filter(models.Player.id == "b1").first()
+        self.assertEqual(b1.feathers, 1000)
+
+        refund = db.query(models.FeatherTransaction).filter(
+            models.FeatherTransaction.player_id == "b1",
+            models.FeatherTransaction.type == "bet_refund",
+        ).first()
+        self.assertIsNotNone(refund)
+        self.assertIn("走水", refund.description)
 
     def test_get_bet_status_house_and_pool_odds(self):
         db = self.db

@@ -5,6 +5,7 @@ import Maximize from "lucide-react/dist/esm/icons/maximize";
 import Minimize from "lucide-react/dist/esm/icons/minimize";
 import Users from "lucide-react/dist/esm/icons/users";
 import ShoppingBag from "lucide-react/dist/esm/icons/shopping-bag";
+import HelpCircle from "lucide-react/dist/esm/icons/help-circle";
 
 import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
@@ -62,6 +63,8 @@ interface DashboardHeaderProps {
   onRefresh: () => void;
   onSettings: () => void;
   onShop: () => void;
+  onGuide?: () => void;
+  onGuideBetting?: () => void;
 
   summary?: {
     totalMatches: number;
@@ -76,7 +79,7 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
-  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop,
+  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop, onGuide, onGuideBetting,
 
   summary, onlineCount
 }) => {
@@ -131,13 +134,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const houseNet = summary?.houseNetToday ?? 0;
 
   const statsItems = summary ? [
-    { label: '今日場次', value: summary.totalMatches, valueClass: 'text-slate-900 dark:text-white' },
-    { label: '參戰人數', value: summary.activePlayerCount, valueClass: 'text-slate-900 dark:text-white' },
-    { label: '平均 CP', value: Math.round(summary.averageInstantMu * 10), valueClass: 'text-emerald-500' },
+    { label: '今日場次', value: summary.totalMatches, valueClass: 'text-slate-900 dark:text-white', onClick: undefined as (() => void) | undefined },
+    { label: '參戰人數', value: summary.activePlayerCount, valueClass: 'text-slate-900 dark:text-white', onClick: undefined },
+    { label: '平均 CP', value: Math.round(summary.averageInstantMu * 10), valueClass: 'text-emerald-500', onClick: undefined },
     {
       label: '莊家淨收',
       value: `${houseNet >= 0 ? '+' : ''}${houseNet}`,
       valueClass: houseNet >= 0 ? 'text-amber-500' : 'text-sky-500',
+      onClick: onGuideBetting,
+      title: '正數＝系統賺，負數＝今天在補單邊押中的玩家。點擊查看說明',
     },
   ] : [];
 
@@ -172,7 +177,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               {statsItems.map((item, i) => (
                 <React.Fragment key={item.label}>
                   {i > 0 && <div className="w-px h-6 bg-slate-100 dark:bg-slate-800" />}
-                  <div className="flex flex-col items-center">
+                  <div
+                    className={cn("flex flex-col items-center", item.onClick && "cursor-pointer active:opacity-70")}
+                    onClick={item.onClick}
+                    title={item.title}
+                    role={item.onClick ? 'button' : undefined}
+                  >
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{item.label}</span>
                     <span className={cn("text-sm font-black tabular-nums", item.valueClass)}>{item.value}</span>
                   </div>
@@ -229,6 +239,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           >
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 md:w-5 md:h-5" /> : <Maximize className="w-3.5 h-3.5 md:w-5 md:h-5" />}
           </button>
+          {onGuide && (
+            <button
+              onClick={onGuide}
+              className="flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-600 dark:text-amber-400 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all border border-amber-100 dark:border-amber-800/50 active:scale-95 shrink-0"
+              title="遊戲教學"
+            >
+              <HelpCircle className="w-3.5 h-3.5 md:w-5 md:h-5" />
+            </button>
+          )}
           <button
             onClick={onSettings}
             className="flex items-center justify-center bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 p-1.5 md:p-3 rounded-[10px] md:rounded-2xl transition-all shadow-xl dark:shadow-none shadow-slate-200 active:scale-95 shrink-0"
@@ -248,7 +267,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {statsItems.map((item) => (
             <div
               key={item.label}
-              className="flex flex-col items-center justify-center min-w-[72px] px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700 shrink-0"
+              className={cn(
+                "flex flex-col items-center justify-center min-w-[72px] px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700 shrink-0",
+                item.onClick && "cursor-pointer active:scale-95 transition-transform"
+              )}
+              onClick={item.onClick}
+              title={item.title}
+              role={item.onClick ? 'button' : undefined}
             >
               <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1 whitespace-nowrap">{item.label}</span>
               <span className={cn("text-xs font-black tabular-nums", item.valueClass)}>{item.value}</span>

@@ -344,6 +344,12 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
     : bettingTeam === 2
       ? (currentStatus.effectiveOdds2 ?? currentStatus.odds2)
       : 0;
+  const totalPool = betStatus
+    ? (betStatus.moneyline.team1Total || 0) + (betStatus.moneyline.team2Total || 0)
+      + (betStatus.handicap.team1Total || 0) + (betStatus.handicap.team2Total || 0)
+      + (betStatus.overUnder.team1Total || 0) + (betStatus.overUnder.team2Total || 0)
+    : 0;
+
   const team1Score = players[0] && players[1] ? Math.round(((players[0].mu || 0) + (players[1].mu || 0)) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round(((players[2].mu || 0) + (players[3].mu || 0)) * 10) : 0;
 
@@ -370,23 +376,34 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       );
     }
     
-    // 檢查是否在任何玩法中有投注 (獨贏/讓分/大小 只限一注)
-    const hasAnyBet = !!(betStatus.moneyline.myBetTeam || betStatus.handicap.myBetTeam || betStatus.overUnder.myBetTeam);
-    const isThisTeamSelected = currentStatus.myBetTeam === team;
-    
+    const betCount = [betStatus.moneyline, betStatus.handicap, betStatus.overUnder]
+      .filter((s) => s.myBetTeam).length;
+    const allTypesBet = betCount >= 3;
+
+    const openBetting = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const types = ["moneyline", "handicap", "overUnder"] as const;
+      const firstOpen = types.find((t) => !betStatus[t].myBetTeam && !betStatus[t].locked);
+      if (firstOpen) setActiveBetType(firstOpen);
+      setBettingTeam(1);
+    };
+
     return (
       <button
-        onClick={(e) => { e.stopPropagation(); setBettingTeam(currentStatus.myBetTeam || 1); }}
-        disabled={hasAnyBet}
+        onClick={openBetting}
+        disabled={allTypesBet}
         className={cn(
           "flex items-center justify-center px-2 py-1 rounded-full border transition-all pointer-events-auto min-w-[40px] shadow-lg",
-          hasAnyBet
-            ? "bg-emerald-500 border-emerald-400 text-white"
-            : "bg-black/60 border-white/20 hover:bg-black/80 hover:scale-105 text-white/90",
-          hasAnyBet && !currentStatus.myBetTeam && "opacity-40 grayscale"
+          allTypesBet
+            ? "bg-emerald-500/80 border-emerald-400 text-white cursor-default"
+            : betCount > 0
+              ? "bg-emerald-600 border-emerald-400 text-white hover:scale-105"
+              : "bg-black/60 border-white/20 hover:bg-black/80 hover:scale-105 text-white/90"
         )}
       >
-        <span className="text-[9px] md:text-[10px] font-black drop-shadow-sm leading-none">投注</span>
+        <span className="text-[9px] md:text-[10px] font-black drop-shadow-sm leading-none">
+          {allTypesBet ? "已投" : betCount > 0 ? `${betCount}/3` : "投注"}
+        </span>
       </button>
     );
   };
@@ -565,23 +582,14 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               {matchId && !isRecommended && actionText === "結束" ? (
                 betStatus ? (
                   <>
-                    <span className="text-[5px] font-black text-sky-400 uppercase leading-none mb-0.5 tracking-tighter">
-                      {activeBetType === "moneyline" ? "獨贏" : activeBetType === "handicap" ? "讓分" : "總分"} POOL
-                    </span>
-                    <span className="text-[8px] font-black text-white leading-none">{(currentStatus.team1Total || 0) + (currentStatus.team2Total || 0)}</span>
+                    <span className="text-[5px] font-black text-sky-400/90 uppercase leading-none mb-0.5 tracking-widest">POOL</span>
+                    <span className="text-[9px] font-black text-white leading-none tabular-nums">{totalPool}</span>
                   </>
                 ) : (
                   <span className="text-[8px] font-black text-white/50 animate-pulse">載入中...</span>
                 )
               ) : (
-                <div className="flex flex-col items-center">
-                   <span className="text-[9px] md:text-[10px] font-black text-emerald-400 italic uppercase tracking-widest">VS</span>
-                   {team1Score > 0 && team2Score > 0 && (
-                     <span className="text-[6px] text-white/40 font-bold whitespace-nowrap">
-                       WIN %: {Math.round((0.5 + (Math.abs(team1Score - team2Score) / 100) * 0.4) * 100)}%
-                     </span>
-                   )}
-                </div>
+                <span className="text-[9px] md:text-[10px] font-black text-emerald-400 italic uppercase tracking-widest">VS</span>
               )}
             </div>
             {renderBetButton(1)}
@@ -617,29 +625,40 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                   <span className="text-red-400 font-black text-sm mb-1 uppercase tracking-wider">投注時間已截止</span>
                   <span className="text-white/60 text-[10px]">開打 3 分鐘後無法進行下注</span>
                 </div>
+              ) : currentStatus.myBetTeam ? (
+                <div className="flex flex-col items-center justify-center bg-emerald-900/40 border border-emerald-500/50 rounded-xl p-4 mb-4">
+                  <span className="text-emerald-400 font-black text-sm mb-1">此盤口已投注</span>
+                  <span className="text-white/60 text-[10px]">可切換其他盤口繼續下注（各限 1 注）</span>
+                </div>
               ) : (
                 <>
                   {/* Bet Type Tabs */}
                   <div className="flex bg-white/5 p-1 rounded-xl gap-1 mb-2 sm:mb-4 w-[95%] max-w-[320px]">
                     {(["moneyline", "handicap", "overUnder"] as const).map((type) => {
                       const labelMap = { moneyline: "獨贏", handicap: "讓分", overUnder: "大小" };
-                      const isLocked = betStatus?.[type]?.locked;
+                      const typeStatus = betStatus?.[type];
+                      const isLocked = typeStatus?.locked;
+                      const alreadyBet = !!typeStatus?.myBetTeam;
+                      const tabDisabled = isLocked || alreadyBet;
                       return (
                         <button
                           key={type}
-                          onClick={() => !isLocked && setActiveBetType(type)}
-                          disabled={isLocked}
+                          onClick={() => !tabDisabled && setActiveBetType(type)}
+                          disabled={tabDisabled}
                           className={cn(
                             "flex-1 py-2 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center",
                             activeBetType === type 
                               ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" 
-                              : isLocked
-                                ? "text-white/10 cursor-not-allowed bg-transparent"
+                              : tabDisabled
+                                ? alreadyBet
+                                  ? "text-emerald-400/60 bg-emerald-500/10 cursor-default"
+                                  : "text-white/10 cursor-not-allowed bg-transparent"
                                 : "text-white/40 hover:text-white/70 hover:bg-white/5"
                           )}
                         >
                           <span>{labelMap[type]}</span>
-                          {isLocked && <span className="text-[7px] opacity-50 font-normal">未開盤</span>}
+                          {alreadyBet && <span className="text-[7px] opacity-70 font-normal">已投</span>}
+                          {isLocked && !alreadyBet && <span className="text-[7px] opacity-50 font-normal">未開盤</span>}
                         </button>
                       );
                     })}

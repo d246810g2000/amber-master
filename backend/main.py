@@ -540,11 +540,15 @@ async def record_match_and_update(req: schemas.MatchRecordRequest, db: Session =
         
         if payouts:
             payout_details = " \n💰 賭神出世："
-            # 只列出前 3 名，避免訊息太長
             sorted_payouts = sorted(payouts, key=lambda x: x['payout'], reverse=True)
             for p in sorted_payouts[:3]:
-                payout_details += f" {p['name']} (+{p['payout']})"
-            announcement += f"{payout_details} (賠率 {odds})"
+                src = p.get('source', '')
+                o = p.get('odds')
+                if src and o:
+                    payout_details += f" {p['name']} (+{p['payout']}, {src}{o})"
+                else:
+                    payout_details += f" {p['name']} (+{p['payout']})"
+            announcement += payout_details
 
         # 儲存對戰勝利公告到資料庫
         match_date = safe_date(req.matchDate) or (datetime.utcnow() + timedelta(hours=8)).date()
@@ -846,8 +850,17 @@ async def place_bet(req: schemas.BetRequest, db: Session = Depends(get_db)):
     bet_status = crud.get_bet_status(db, req.matchId, None)
     
     target_team_name = t1 if req.team == 1 else t2
-    other_team_name = t2 if req.team == 1 else t1
-    announcement = f"📣 {player.name} 豪擲了 {req.amount} 根羽毛，在「{court_name}」看好「{target_team_name}」會打敗「{other_team_name}」！"
+    bt_key = crud.normalize_bet_type(req.betType or "moneyline")
+    bt_label = crud.BET_TYPE_LABELS.get(bt_key, "獨贏")
+    locked = result.get("lockedOdds", "")
+    odds_suffix = f" · 賠率 {locked}" if locked else ""
+    if bt_key == "over_under":
+        pick = "大" if req.team == 1 else "小"
+        announcement = f"📣 {player.name} 在「{court_name}」{bt_label} 押{pick} {req.amount} 根{odds_suffix}"
+    elif bt_key == "handicap":
+        announcement = f"📣 {player.name} 在「{court_name}」{bt_label} 押「{target_team_name}」{req.amount} 根{odds_suffix}"
+    else:
+        announcement = f"📣 {player.name} 在「{court_name}」{bt_label} 押「{target_team_name}」{req.amount} 根{odds_suffix}"
     
     # 儲存投注公告到資料庫
     db_match = db.query(models.Match).filter(models.Match.id == req.matchId).first()

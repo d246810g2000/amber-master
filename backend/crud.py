@@ -1075,6 +1075,13 @@ BET_OU_FLOOR = 33.5
 BET_OU_HANDICAP_FACTOR = 0.7
 SYSTEM_RAKE_RATE = 0.05
 PLAYER_BONUS_RATE = 0.10
+BET_LOCK_SECONDS = 180
+
+BET_TYPE_LABELS = {
+    "moneyline": "獨贏",
+    "handicap": "讓分",
+    "over_under": "大小",
+}
 
 def normalize_bet_type(bet_type: str) -> str:
     if bet_type == "overUnder":
@@ -1172,6 +1179,35 @@ def accumulate_house_daily_stats(db: Session, target_date: date, rake: int, subs
             house_subsidy=subsidy,
         ))
 
+def _get_match_elapsed_seconds(db: Session, match_id: str) -> Optional[float]:
+    today = _get_taipei_today()
+    cs = db.query(models.CourtState).filter(models.CourtState.date == today).first()
+    if not cs:
+        cs = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
+    if not cs or not cs.state:
+        return None
+    for c in cs.state.get("courts", []):
+        if str(c.get("matchId")) == str(match_id):
+            raw = c.get("startTime")
+            if not raw:
+                return None
+            try:
+                if isinstance(raw, str):
+                    start = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                else:
+                    start = raw
+                start_ts = start.timestamp()
+                return time.time() - start_ts
+            except Exception:
+                return None
+    return None
+
+def _is_bet_time_locked(db: Session, match_id: str) -> bool:
+    elapsed = _get_match_elapsed_seconds(db, match_id)
+    if elapsed is None:
+        return False
+    return elapsed > BET_LOCK_SECONDS
+
 def get_house_daily_stats(db: Session, target_date: date) -> Dict[str, int]:
     row = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == target_date).first()
     if not row:
@@ -1201,13 +1237,17 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
     if db_match and db_match.winner:
         return {"status": "error", "message": "比賽已結束，無法投注"}
 
+    if _is_bet_time_locked(db, match_id):
+        return {"status": "error", "message": "開打 3 分鐘後已封盤，無法投注"}
+
     existing_bet = db.query(models.Bet).filter(
         models.Bet.match_id == match_id,
         models.Bet.player_id == player_id,
         models.Bet.bet_type == bet_type
     ).first()
     if existing_bet:
-        return {"status": "error", "message": f"您已經投過「{bet_type}」了"}
+        label = BET_TYPE_LABELS.get(bet_type, bet_type)
+        return {"status": "error", "message": f"您已經投過「{label}」了"}
 
     if bet_type in ["moneyline", "handicap"]:
         today = _get_taipei_today()
@@ -1258,8 +1298,16 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
     )
     db.add(transaction)
     db.commit()
-    
-    return {"status": "success", "message": "投注成功"}
+
+    label = BET_TYPE_LABELS.get(bet_type, bet_type)
+    est_payout = int(amount * locked_odds)
+    return {
+        "status": "success",
+        "message": f"投注成功（{label}）鎖定賠率 {locked_odds}，預估獲利 +{est_payout - amount}",
+        "lockedOdds": locked_odds,
+        "estimatedPayout": est_payout,
+        "betType": bet_type,
+    }
 
 def get_bet_status(db: Session, match_id: str, player_id: Optional[str] = None):
     bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
@@ -1343,7 +1391,17 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
 
             house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, bt)
             
+            def is_bet_push(b):
+                if b.bet_type == "handicap":
+                    if b.team == 1: return (s1 + b.line_value) == s2
+                    return (s2 - b.line_value) == s1
+                if b.bet_type == "over_under":
+                    return (s1 + s2) == b.line_value
+                return False
+
             def is_bet_won(b):
+                if is_bet_push(b):
+                    return False
                 if b.bet_type == "moneyline": return b.team == winner_team
                 if b.bet_type == "handicap":
                     if b.team == 1: return (s1 + b.line_value) > s2
@@ -1353,8 +1411,20 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                     return (total > b.line_value) if b.team == 1 else (total < b.line_value)
                 return False
 
+            push_bets = [b for b in type_bets if is_bet_push(b)]
+            for b in push_bets:
+                p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
+                if p:
+                    p.feathers = (p.feathers or 0) + b.amount
+                    db.add(models.FeatherTransaction(
+                        player_id=b.player_id,
+                        amount=b.amount,
+                        type="bet_refund",
+                        description=f"走水退款({bt})：{s1}-{s2} 盤口 {b.line_value}",
+                    ))
+
             win_bets = [b for b in type_bets if is_bet_won(b)]
-            lose_stake = sum(b.amount for b in type_bets if not is_bet_won(b))
+            lose_stake = sum(b.amount for b in type_bets if not is_bet_won(b) and not is_bet_push(b))
             win_stake = sum(b.amount for b in win_bets)
             
             rake = int(lose_stake * SYSTEM_RAKE_RATE)
@@ -1392,7 +1462,13 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                             type="bet_won", 
                             description=desc
                         ))
-                        winners_report.append({"name": p.name, "payout": total_payout, "type": bt})
+                        winners_report.append({
+                            "name": p.name,
+                            "payout": total_payout,
+                            "type": bt,
+                            "source": source,
+                            "odds": round(used_odds, 2),
+                        })
 
             for b in type_bets: b.is_settled = 1
 

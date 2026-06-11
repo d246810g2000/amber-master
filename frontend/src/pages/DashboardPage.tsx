@@ -25,6 +25,8 @@ import { GeminiBot } from "../components/chat/GeminiBot";
 import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
 import { ShopModal, EGG_REQUIREMENTS, PETS_CATALOG, PET_ABILITIES } from "../components/dashboard/ShopModal";
+import { GameGuideModal } from "../components/dashboard/GameGuideModal";
+import { hasSeenGameGuide, markGameGuideSeen } from "../lib/gameGuide";
 import { EggRenderer } from "../components/EggRenderer";
 import { PetRenderer } from "../components/PetRenderer";
 import { getPetTier } from "../lib/petCatalog";
@@ -44,6 +46,25 @@ export function DashboardPage() {
   const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [dailySummaryOpen, setDailySummaryOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [guideInitialSection, setGuideInitialSection] = useState<string | undefined>();
+
+  React.useEffect(() => {
+    if (!hasSeenGameGuide()) {
+      setIsGuideOpen(true);
+    }
+  }, []);
+
+  const openGuide = useCallback((section?: string) => {
+    setGuideInitialSection(section);
+    setIsGuideOpen(true);
+  }, []);
+
+  const closeGuide = useCallback(() => {
+    markGameGuideSeen();
+    setIsGuideOpen(false);
+    setGuideInitialSection(undefined);
+  }, []);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -206,7 +227,9 @@ export function DashboardPage() {
         playerEmail: currentUser.email
       });
       if (res.status === 'success') {
-        toast.success(res.message);
+        const msg = res.message || '投注成功';
+        const odds = (res as { lockedOdds?: number }).lockedOdds;
+        toast.success(odds ? `${msg}` : msg, { duration: 4000 });
         // 手動更新本地狀態，直到 WS 廣播到來
         const status = await gasApi.getBetStatus(matchId, currentUser.email);
         setBetStatuses(prev => ({ ...prev, [matchId]: status.data || status }));
@@ -386,6 +409,8 @@ export function DashboardPage() {
         onRefresh={() => { refetchPlayers(); refetchMatches(); fetchState(); }}
         onSettings={() => setIsSettingsOpen(true)}
         onShop={() => setIsShopOpen(true)}
+        onGuide={() => openGuide()}
+        onGuideBetting={() => openGuide('betting')}
 
         summary={summary}
         onlineCount={onlineCount}
@@ -606,6 +631,25 @@ export function DashboardPage() {
             refetchPlayers();
             queryClient.invalidateQueries({ queryKey: ['players-base'] });
           }}
+        />
+      )}
+
+      {isGuideOpen && (
+        <GameGuideModal
+          onClose={closeGuide}
+          initialSection={guideInitialSection}
+          onOpenShop={() => {
+            closeGuide();
+            setIsShopOpen(true);
+          }}
+          onOpenProfileLoans={
+            boundPlayer?.id
+              ? () => {
+                  closeGuide();
+                  navigate(`/players/${boundPlayer.id}?tab=loans`);
+                }
+              : undefined
+          }
         />
       )}
 
