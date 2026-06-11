@@ -1,3 +1,12 @@
+export type PetTier = "classic" | "epic" | "legendary" | "ultimate";
+
+export type PetAbilityType =
+  | "feather_gain"
+  | "match_win_bonus"
+  | "shop_discount"
+  | "attack_drain"
+  | "defense_shield";
+
 export interface Player {
   id: string;
   name: string;
@@ -20,6 +29,7 @@ export interface Player {
   active_background?: { id: number; name: string; item_type: string; image_url?: string };
   isGoogleLinked?: boolean;
   active_pet_id?: string;
+  ability_pet_id?: string;
   active_egg_id?: string;
   egg_progress_games?: number;
   egg_progress_wins?: number;

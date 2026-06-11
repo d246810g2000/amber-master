@@ -383,7 +383,7 @@ export async function recalibrateRatings(): Promise<string> {
   return apiPost('/admin/recalibrate-ratings', {}, z.string());
 }
 
-/** 領取每日羽毛 */
+/** 領取週三羽毛 */
 export async function claimDailyFeathers(email: string): Promise<{ status: string, amount: number, message: string }> {
   return apiPost('/feathers/claim', { email }, z.any());
 }
@@ -480,9 +480,21 @@ export async function hatchEgg(userEmail: string) {
   return apiPost('/players/hatch', { userEmail }, z.any());
 }
 
-/** 裝備/更換寵物 */
-export async function equipPet(userEmail: string, petId: string | null) {
-  return apiPost('/players/equip-pet', { userEmail, petId }, z.any());
+/** 裝備/更換寵物（外觀與能力可分開） */
+export async function equipPet(
+  userEmail: string,
+  petId: string | null,
+  options?: {
+    abilityPetId?: string | null;
+    target?: 'display' | 'ability' | 'both';
+  }
+) {
+  return apiPost('/players/equip-pet', {
+    userEmail,
+    petId,
+    abilityPetId: options?.abilityPetId,
+    target: options?.target ?? 'both',
+  }, z.any());
 }
 
 /** 取得指定日期的聊天與廣播訊息 */

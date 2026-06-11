@@ -12,8 +12,9 @@ import Heart from "lucide-react/dist/esm/icons/heart";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { PlayerPill } from '../PlayerPill';
-import { PETS_CATALOG } from '../dashboard/ShopModal';
+import { PETS_CATALOG, PET_ABILITIES } from '../dashboard/ShopModal';
 import { PetRenderer } from '../PetRenderer';
+import { getPetTier } from '../../lib/petCatalog';
 
 interface InventoryTableProps {
   playerId: string;
@@ -54,9 +55,13 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   });
 
   const equipMutation = useMutation({
-    mutationFn: ({ itemId, isPet }: { itemId: number | string; isPet?: boolean }) => {
+    mutationFn: ({ itemId, isPet, isEgg }: { itemId: number | string; isPet?: boolean; isEgg?: boolean }) => {
       if (isPet) {
-        return gasApi.equipPet(playerData.email, itemId as string);
+        return gasApi.equipPet(
+          playerData.email,
+          itemId as string | null,
+          isEgg || itemId === null ? { target: 'display' } : { target: 'both' }
+        );
       } else {
         return gasApi.equipItem(playerId, itemId as number);
       }
@@ -102,7 +107,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
             id: pet.id,
             name: pet.name,
             item_type: 'pet',
-            description: pet.desc,
+            description: PET_ABILITIES[pet.id]?.badge || pet.name,
             tier: pet.tier
           },
           expires_at: null
@@ -241,7 +246,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                       className="w-10 h-10 object-contain hover:rotate-3 transition-transform" 
                     />
                   ) : (
-                    <PetRenderer petId={item.id} className="w-8 h-8 scale-110" />
+                    <PetRenderer petId={item.id} tier={getPetTier(item.id)} className="w-8 h-8 scale-110" />
                   )}
                 </div>
               )}
@@ -271,10 +276,10 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                   e.stopPropagation();
                   if (isEquipped) {
                     if (isPet) {
-                      equipMutation.mutate({ itemId: null, isPet: true });
+                      equipMutation.mutate({ itemId: null, isPet: true, isEgg: inv.isEgg });
                     }
                   } else {
-                    equipMutation.mutate({ itemId: item.id, isPet: isPet });
+                    equipMutation.mutate({ itemId: item.id, isPet: isPet, isEgg: inv.isEgg });
                   }
                 }}
                 disabled={(!isPet && isEquipped) || equipMutation.isPending}
@@ -290,9 +295,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 {equipMutation.isPending ? (
                   <Loader2 size={10} className="animate-spin md:w-4 md:h-4" />
                 ) : isEquipped ? (
-                  isPet ? <>隨行中 (點擊取消)</> : <>使用中</>
+                  isPet ? <>{inv.isEgg ? '外觀中 (點擊取消)' : '隨行中 (點擊取消)'}</> : <>使用中</>
                 ) : (
-                  isPet ? <>邀請隨行</> : <>立即套用</>
+                  isPet ? <>{inv.isEgg ? '顯示在球員卡' : '邀請隨行'}</> : <>立即套用</>
                 )}
               </button>
             </div>

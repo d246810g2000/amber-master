@@ -27,6 +27,7 @@ import ImageDown from "lucide-react/dist/esm/icons/image-down";
 import { ShopModal, EGG_REQUIREMENTS, PETS_CATALOG, PET_ABILITIES } from "../components/dashboard/ShopModal";
 import { EggRenderer } from "../components/EggRenderer";
 import { PetRenderer } from "../components/PetRenderer";
+import { getPetTier } from "../lib/petCatalog";
 import { motion, AnimatePresence } from 'framer-motion';
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import type { Player } from '../types';
@@ -719,7 +720,7 @@ export function DashboardPage() {
                     }}
                     className="flex items-center justify-center"
                   >
-                    <PetRenderer petId={shufflingPetId} className="w-16 h-16 scale-125" />
+                    <PetRenderer petId={shufflingPetId} tier={getPetTier(shufflingPetId)} className="w-16 h-16 scale-125" />
                   </motion.div>
                 )}
 
@@ -730,7 +731,7 @@ export function DashboardPage() {
                     transition={{ type: "spring", stiffness: 200, damping: 10 }}
                     className="flex items-center justify-center"
                   >
-                    <PetRenderer petId={hatchingPetId} className="w-20 h-20 scale-150 animate-bounce" />
+                    <PetRenderer petId={hatchingPetId} tier={getPetTier(hatchingPetId)} className="w-20 h-20 scale-150 animate-bounce" />
                   </motion.div>
                 )}
               </div>
@@ -773,9 +774,6 @@ export function DashboardPage() {
                         {PETS_CATALOG.find(p => p.id === hatchingPetId)?.name || '神祕寵物'}
                       </span>
                     </p>
-                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed mt-2 font-bold">
-                      {PETS_CATALOG.find(p => p.id === hatchingPetId)?.desc}
-                    </p>
                     {(() => {
                       const ability = PET_ABILITIES[hatchingPetId];
                       if (!ability) return null;
@@ -813,7 +811,7 @@ export function DashboardPage() {
                             ? "bg-white/15 border-amber-400 scale-110 shadow-lg shadow-amber-500/10" 
                             : "bg-white/5 border-white/5 opacity-30 grayscale"
                         )}>
-                          <PetRenderer petId={candidate.id} className="w-8 h-8" />
+                          <PetRenderer petId={candidate.id} tier={candidate.tier} className="w-8 h-8" />
                         </div>
                         <span className={cn("text-[9px] font-bold mt-1.5 whitespace-nowrap", isCurrent ? "text-amber-400" : "text-slate-500")}>
                           {candidate.name}

@@ -74,7 +74,7 @@ export const FeatherHistoryTable: React.FC<FeatherHistoryTableProps> = ({ transa
                         t.type === 'bet_won' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
                         t.type === 'bet_refund' && "bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300",
                       )}>
-                        {t.type === 'daily_claim' && '每日領取'}
+                        {t.type === 'daily_claim' && '週三領取'}
                         {t.type === 'bet_placed' && '投注扣除'}
                         {t.type === 'bet_won' && '中獎派彩'}
                         {t.type === 'bet_refund' && '取消退款'}

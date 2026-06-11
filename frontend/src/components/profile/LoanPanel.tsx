@@ -206,7 +206,7 @@ export const LoanPanel: React.FC<LoanPanelProps> = ({ playerId, lenderFeathers }
           <div>
             <h3 className="text-base font-black text-slate-900 dark:text-white">羽毛借貸交易中心</h3>
             <p className="text-[11px] text-slate-500 dark:text-zinc-500 font-bold uppercase tracking-wider">
-              當借貸人帳戶有債務時，將於週三領取每日羽毛時優先扣款清償。
+              當借貸人帳戶有債務時，將於週三領取羽毛時優先扣款清償。
             </p>
           </div>
         </div>

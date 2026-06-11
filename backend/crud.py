@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, text
 from datetime import date, datetime
 import models, schemas
+import random
 import time
 import trueskill_logic
 from typing import List, Dict, Any, Optional, Union
@@ -335,7 +336,7 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
             reward = 100 if is_winner_p else 50
             bonus_amount = 0
             if is_winner_p:
-                bonus_rate = get_player_pet_effect(db_p, "match_win_bonus", "bonus_rate")
+                bonus_rate = get_player_match_win_bonus_rate(db_p)
                 bonus_amount = int(reward * bonus_rate)
             total_reward = reward + bonus_amount
             db_p.feathers = (db_p.feathers or 0) + total_reward
@@ -356,6 +357,49 @@ def record_match_and_update(db: Session, req: schemas.MatchRecordRequest):
                 type="match_reward",
                 description=desc
             ) )
+
+    # 7. 攻擊掠奪 / 防禦減損（掠奪對手羽毛 % 數，有上限，隨機一名對手）
+    winner_ids = [req.t1p1, req.t1p2] if winner == 1 else [req.t2p1, req.t2p2]
+    loser_ids = [req.t2p1, req.t2p2] if winner == 1 else [req.t1p1, req.t1p2]
+
+    for winner_id in winner_ids:
+        db_winner = db_players.get(winner_id)
+        if not db_winner:
+            continue
+        drain_rate = get_player_pet_effect(db_winner, "attack_drain", "drain_rate")
+        if drain_rate <= 0:
+            continue
+        drain_cap = int(get_player_pet_effect(db_winner, "attack_drain", "drain_cap"))
+        drain_candidates = [
+            db_players[loser_id]
+            for loser_id in loser_ids
+            if db_players.get(loser_id) and (db_players[loser_id].feathers or 0) > 0
+        ]
+        if not drain_candidates:
+            continue
+        db_loser = random.choice(drain_candidates)
+        loser_id = db_loser.id
+        target_feathers = db_loser.feathers or 0
+        base_drain = min(int(target_feathers * drain_rate), drain_cap, target_feathers)
+        mitigate_rate = get_player_pet_effect(db_loser, "defense_shield", "mitigate_rate")
+        actual_drain = int(base_drain * (1 - mitigate_rate))
+        actual_drain = min(actual_drain, target_feathers)
+        if actual_drain <= 0:
+            continue
+        db_loser.feathers = target_feathers - actual_drain
+        db_winner.feathers = (db_winner.feathers or 0) + actual_drain
+        db.add(models.FeatherTransaction(
+            player_id=loser_id,
+            amount=-actual_drain,
+            type="pet_attack_drain",
+            description=f"寵物掠奪：被 {db_winner.name} 偷走 {actual_drain} 根羽毛"
+        ))
+        db.add(models.FeatherTransaction(
+            player_id=winner_id,
+            amount=actual_drain,
+            type="pet_attack_drain",
+            description=f"寵物掠奪：從 {db_loser.name} 偷取 {actual_drain} 根羽毛"
+        ))
 
     db.commit()
     return {
@@ -541,6 +585,7 @@ def get_player_profile(db: Session, player_id: str):
             "active_frame": { "name": db_player.active_frame.name } if db_player.active_frame else None,
             "active_background": { "name": db_player.active_background.name } if db_player.active_background else None,
             "active_pet_id": db_player.active_pet_id,
+            "ability_pet_id": db_player.ability_pet_id,
             "active_egg_id": db_player.active_egg_id,
             "egg_progress_games": db_player.egg_progress_games,
             "egg_progress_wins": db_player.egg_progress_wins,
@@ -605,13 +650,16 @@ def get_dashboard_summary(db: Session, target_date: date):
         # 這裡從場地狀態抓取 Resting 的人
         waiting_count = len([p for p in c_state.state.get('players', []) if p.get('status') == 'ready'])
 
+    house_stats = get_house_daily_stats(db, target_date)
+
     return {
         "totalMatches": total_matches,
         "activePlayerCount": active_player_count,
         "averageInstantMu": round(avg_mu, 2),
         "controller": controller_name,
         "waitingCount": waiting_count,
-        "updatedAt": str(c_state.updated_at) if c_state and c_state.updated_at else str(datetime.now())
+        "updatedAt": str(c_state.updated_at) if c_state and c_state.updated_at else str(datetime.now()),
+        **house_stats,
     }
 
 def get_active_match_dates(db: Session):
@@ -887,14 +935,14 @@ def claim_daily_feathers(db: Session, email: str):
         return {"status": "error", "message": "今天已經領取過羽毛了", "amount": 0}
     
     claim_amount = 1000
-    daily_bonus = get_player_pet_effect(db_player, "feather_gain", "daily_bonus")
+    daily_bonus = get_player_daily_bonus_rate(db_player)
     bonus_amount = int(claim_amount * daily_bonus)
     total_claim = claim_amount + bonus_amount
     db_player.feathers = (db_player.feathers or 0) + total_claim
     db_player.last_feather_claim = today
     
     # 新增交易紀錄
-    desc = f"每日登入獎勵 ({today})"
+    desc = f"週三領取獎勵 ({today})"
     if bonus_amount > 0:
         desc += f" (寵物加成 +{bonus_amount} 根)"
     transaction = models.FeatherTransaction(
@@ -1016,9 +1064,131 @@ def get_match_description(db: Session, match_id: str):
     t1, t2, court = res
     return f"[{court}] {t1} vs {t2}"
 
+# --- 莊家保底投注常數 ---
+HOUSE_VIG = 0.08
+HOUSE_MIN_ODDS = 1.10
+HOUSE_MAX_ODDS = 8.00
+HOUSE_MU_PROB_COEFF = 0.018
+BET_HANDICAP_COEFF = 0.45
+BET_OU_BASE = 41.5
+BET_OU_FLOOR = 33.5
+BET_OU_HANDICAP_FACTOR = 0.7
+SYSTEM_RAKE_RATE = 0.05
+PLAYER_BONUS_RATE = 0.10
+
+def normalize_bet_type(bet_type: str) -> str:
+    if bet_type == "overUnder":
+        return "over_under"
+    return bet_type or "moneyline"
+
+def _get_taipei_today():
+    from datetime import timedelta
+    return (datetime.utcnow() + timedelta(hours=8)).date()
+
+def _get_match_player_ids(db: Session, match_id: str, today: date) -> List[str]:
+    p_ids = []
+    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if db_match:
+        p_ids = [db_match.t1p1_id, db_match.t1p2_id, db_match.t2p1_id, db_match.t2p2_id]
+    else:
+        cs = db.query(models.CourtState).filter(models.CourtState.date == today).first()
+        if not cs:
+            cs = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
+        if cs and cs.state:
+            for c in cs.state.get("courts", []):
+                if str(c.get("matchId")) == str(match_id):
+                    for rp in c.get("players", []):
+                        if not rp:
+                            continue
+                        if isinstance(rp, dict):
+                            p_ids.append(str(rp.get("id")))
+                        else:
+                            p_ids.append(str(rp))
+                    break
+    return [pid for pid in p_ids if pid]
+
+def _get_match_mus(db: Session, match_id: str, today: date) -> tuple:
+    t1_mu, t2_mu = 0.0, 0.0
+    p_ids = _get_match_player_ids(db, match_id, today)
+    if not p_ids:
+        return t1_mu, t2_mu
+
+    stats = db.query(models.PlayerStat).filter(
+        models.PlayerStat.player_id.in_(p_ids),
+        models.PlayerStat.date == today
+    ).all()
+    s_dict = {s.player_id: s.mu for s in stats}
+
+    def get_current_mu(pid):
+        return s_dict.get(pid, 25.0)
+
+    if len(p_ids) >= 4:
+        t1_mu = get_current_mu(p_ids[0]) + get_current_mu(p_ids[1])
+        t2_mu = get_current_mu(p_ids[2]) + get_current_mu(p_ids[3])
+    elif len(p_ids) == 2:
+        t1_mu = get_current_mu(p_ids[0])
+        t2_mu = get_current_mu(p_ids[1])
+    return t1_mu, t2_mu
+
+def compute_bet_lines(t1_mu: float, t2_mu: float) -> tuple:
+    raw_h = round((t1_mu - t2_mu) * BET_HANDICAP_COEFF * 2) / 2
+    handicap_line = max(-12.5, min(12.5, raw_h))
+    base_ou = BET_OU_BASE - (abs(handicap_line) * BET_OU_HANDICAP_FACTOR)
+    ou_line = float(int(max(BET_OU_FLOOR, base_ou))) + 0.5
+    return handicap_line, ou_line
+
+def compute_house_odds(t1_mu: float, t2_mu: float, bet_type: str) -> tuple:
+    bt = normalize_bet_type(bet_type)
+    if bt == "moneyline":
+        diff = t1_mu - t2_mu
+        p_t1 = max(0.08, min(0.92, 0.5 + diff * HOUSE_MU_PROB_COEFF))
+        p_t2 = 1.0 - p_t1
+    else:
+        p_t1 = p_t2 = 0.5
+
+    def side_odds(p):
+        return round(max(HOUSE_MIN_ODDS, min(HOUSE_MAX_ODDS, (1 - HOUSE_VIG / 2) / p)), 2)
+
+    return side_odds(p_t1), side_odds(p_t2)
+
+def compute_pool_odds(t1_total: int, t2_total: int) -> tuple:
+    total = t1_total + t2_total
+    pool1 = round(max(1.05, total / t1_total * 0.85), 2) if t1_total > 0 else 2.0
+    pool2 = round(max(1.05, total / t2_total * 0.85), 2) if t2_total > 0 else 2.0
+    return pool1, pool2
+
+def accumulate_house_daily_stats(db: Session, target_date: date, rake: int, subsidy: int):
+    if rake == 0 and subsidy == 0:
+        return
+    row = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == target_date).first()
+    if row:
+        row.rake_collected = (row.rake_collected or 0) + rake
+        row.house_subsidy = (row.house_subsidy or 0) + subsidy
+        row.updated_at = datetime.utcnow()
+    else:
+        db.add(models.HouseDailyStats(
+            date=target_date,
+            rake_collected=rake,
+            house_subsidy=subsidy,
+        ))
+
+def get_house_daily_stats(db: Session, target_date: date) -> Dict[str, int]:
+    row = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == target_date).first()
+    if not row:
+        return {"houseRakeToday": 0, "houseSubsidyToday": 0, "houseNetToday": 0}
+    rake = row.rake_collected or 0
+    subsidy = row.house_subsidy or 0
+    return {
+        "houseRakeToday": rake,
+        "houseSubsidyToday": subsidy,
+        "houseNetToday": rake - subsidy,
+    }
+
 def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int, bet_type: str = "moneyline", line_value: float = 0.0):
     if amount < 50:
         return {"status": "error", "message": "最低投注金額為 50 根羽毛"}
+
+    bet_type = normalize_bet_type(bet_type)
 
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
@@ -1027,12 +1197,10 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
     if (db_player.feathers or 0) < amount:
         return {"status": "error", "message": "羽毛不足"}
     
-    # 2. 檢查比賽是否已結束
     db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
     if db_match and db_match.winner:
         return {"status": "error", "message": "比賽已結束，無法投注"}
 
-    # 3. 檢查重複投注 (同類型只能投一次)
     existing_bet = db.query(models.Bet).filter(
         models.Bet.match_id == match_id,
         models.Bet.player_id == player_id,
@@ -1041,10 +1209,8 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
     if existing_bet:
         return {"status": "error", "message": f"您已經投過「{bet_type}」了"}
 
-    # 4. 防放水機制 (獨贏與讓分)
     if bet_type in ["moneyline", "handicap"]:
-        from datetime import timedelta
-        today = (datetime.utcnow() + timedelta(hours=8)).date()
+        today = _get_taipei_today()
         court_state = db.query(models.CourtState).filter(models.CourtState.date == today).first()
         if not court_state:
             court_state = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
@@ -1060,7 +1226,17 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
                         if team != player_team:
                             return {"status": "error", "message": "身為參賽球員，你只能看好自己贏！"}
 
-    # 5. 執行投注
+    today = _get_taipei_today()
+    t1_mu, t2_mu = _get_match_mus(db, match_id, today)
+    handicap_line, ou_line = compute_bet_lines(t1_mu, t2_mu)
+    if bet_type == "handicap":
+        line_value = handicap_line
+    elif bet_type == "over_under":
+        line_value = ou_line
+
+    house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, bet_type)
+    locked_odds = house_o1 if team == 1 else house_o2
+
     db_player.feathers -= amount
     db_bet = models.Bet(
         player_id=player_id,
@@ -1068,17 +1244,17 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
         team=team,
         amount=amount,
         bet_type=bet_type,
-        line_value=line_value
+        line_value=line_value,
+        locked_odds=locked_odds,
     )
     db.add(db_bet)
     
-    # 新增交易紀錄
     match_desc = get_match_description(db, match_id)
     transaction = models.FeatherTransaction(
         player_id=player_id,
         amount=-amount,
         type="bet_placed",
-        description=f"預測投注({bet_type})：{match_desc} (選項 {team}, 盤口 {line_value})"
+        description=f"預測投注({bet_type})：{match_desc} (選項 {team}, 盤口 {line_value}, 賠率 {locked_odds})"
     )
     db.add(transaction)
     db.commit()
@@ -1087,90 +1263,41 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
 
 def get_bet_status(db: Session, match_id: str, player_id: Optional[str] = None):
     bets = db.query(models.Bet).filter(models.Bet.match_id == match_id).all()
+    today = _get_taipei_today()
+    t1_mu, t2_mu = _get_match_mus(db, match_id, today)
+    handicap_line, ou_line = compute_bet_lines(t1_mu, t2_mu)
     
-    # 盤口計算 (對齊今日即時戰力)
-    from datetime import datetime, timedelta
-    today = (datetime.utcnow() + timedelta(hours=8)).date()
-    
-    t1_mu, t2_mu = 0.0, 0.0
-    p_ids = []
-    
-    db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
-    if db_match:
-        p_ids = [db_match.t1p1_id, db_match.t1p2_id, db_match.t2p1_id, db_match.t2p2_id]
-    else:
-        # 如果 matches 表找不到，去 court_state 找
-        cs = db.query(models.CourtState).filter(models.CourtState.date == today).first()
-        if not cs:
-            cs = db.query(models.CourtState).order_by(models.CourtState.date.desc()).first()
-        if cs and cs.state:
-            courts = cs.state.get("courts", [])
-            for c in courts:
-                if str(c.get("matchId")) == str(match_id):
-                    raw_players = c.get("players", [])
-                    p_ids = []
-                    for rp in raw_players:
-                        if not rp: continue
-                        if isinstance(rp, dict):
-                            p_ids.append(str(rp.get("id")))
-                        else:
-                            p_ids.append(str(rp))
-                    break
-    
-    if p_ids:
-        # 抓取今日即時戰力 (PlayerStat)
-        stats = db.query(models.PlayerStat).filter(
-            models.PlayerStat.player_id.in_(p_ids),
-            models.PlayerStat.date == today
-        ).all()
-        s_dict = {s.player_id: s.mu for s in stats}
-        
-        def get_current_mu(pid):
-            return s_dict.get(pid, 25.0)
-
-        if len(p_ids) >= 4:
-            t1_mu = get_current_mu(p_ids[0]) + get_current_mu(p_ids[1])
-            t2_mu = get_current_mu(p_ids[2]) + get_current_mu(p_ids[3])
-        elif len(p_ids) == 2:
-            t1_mu = get_current_mu(p_ids[0])
-            t2_mu = get_current_mu(p_ids[1])
-    
-    # 1. 計算原始讓分並設定上限 (h_coeff=0.45，經 176 場回測證明此換算率最接近 50/50 平衡)
-    raw_h = round((t1_mu - t2_mu) * 0.45 * 2) / 2
-    handicap_line = max(-12.5, min(12.5, raw_h))
-    
-    # 2. 大小分計算：ou_base=41.5, ou_floor=33.5 (經回測證明此組合能達成 50% vs 50% 的大/小分分布)
-    # 公式：基準 41.5 - (讓分絕對值 * 0.7)，最低不低於 33.5
-    base_ou = 41.5 - (abs(handicap_line) * 0.7)
-    ou_line = float(int(max(33.5, base_ou))) + 0.5
-    
-    # 3. 定義統一的資訊獲取函數 (包含開盤鎖定邏輯)
     def get_type_info(b_type: str, line: float):
-        internal_type = "over_under" if b_type == "overUnder" else b_type
+        internal_type = normalize_bet_type(b_type)
         type_bets = [b for b in bets if b.bet_type == internal_type]
         
-        # 動態開盤邏輯
         is_locked = False
         abs_h = abs(handicap_line)
         if b_type == "moneyline" and abs_h > 6.0:
-            is_locked = True # 實力差距超過 6 分，獨贏盤無懸念
+            is_locked = True
         elif b_type == "handicap" and abs_h <= 1.0:
             is_locked = True
             
         t1_total = sum(b.amount for b in type_bets if b.team == 1)
         t2_total = sum(b.amount for b in type_bets if b.team == 2)
-        total = t1_total + t2_total
         
-        # 賠率計算 (簡單抽水)
-        odds1 = round(max(1.05, total / t1_total * 0.85), 2) if t1_total > 0 else 2.0
-        odds2 = round(max(1.05, total / t2_total * 0.85), 2) if t2_total > 0 else 2.0
+        house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, internal_type)
+        pool_o1, pool_o2 = compute_pool_odds(t1_total, t2_total)
+        eff_o1 = round(max(house_o1, pool_o1), 2)
+        eff_o2 = round(max(house_o2, pool_o2), 2)
         
         my_bet = next((b for b in type_bets if b.player_id == player_id), None)
         return {
             "team1Total": t1_total,
             "team2Total": t2_total,
-            "odds1": odds1,
-            "odds2": odds2,
+            "odds1": eff_o1,
+            "odds2": eff_o2,
+            "houseOdds1": house_o1,
+            "houseOdds2": house_o2,
+            "poolOdds1": pool_o1,
+            "poolOdds2": pool_o2,
+            "effectiveOdds1": eff_o1,
+            "effectiveOdds2": eff_o2,
             "line": line,
             "myBetAmount": my_bet.amount if my_bet else 0,
             "myBetTeam": my_bet.team if my_bet else None,
@@ -1186,7 +1313,6 @@ def get_bet_status(db: Session, match_id: str, player_id: Optional[str] = None):
 
 def settle_bets(db: Session, match_id: str, winner_team: int):
     try:
-        # 相容性處理：將前端可能傳入的 camelCase 轉為 snake_case
         db.execute(text("UPDATE bets SET bet_type = 'over_under' WHERE match_id = :mid AND bet_type = 'overUnder'"), {"mid": match_id})
         db.commit()
         
@@ -1196,25 +1322,30 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
         db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
         if not db_match: return {"winners": []}
         
-        # 處理分數格式
         try:
             score_str = db_match.score or "21-0"
             s1, s2 = map(int, score_str.split("-"))
         except:
             s1, s2 = (21, 0) if winner_team == 1 else (0, 21)
 
+        match_date = db_match.match_date or _get_taipei_today()
+        t1_mu, t2_mu = _get_match_mus(db, match_id, match_date)
+
         bet_types = ["moneyline", "handicap", "over_under"]
         total_player_bonus = 0
+        total_rake = 0
+        total_subsidy = 0
         winners_report = []
 
         for bt in bet_types:
             type_bets = [b for b in bets if b.bet_type == bt]
             if not type_bets: continue
+
+            house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, bt)
             
             def is_bet_won(b):
                 if b.bet_type == "moneyline": return b.team == winner_team
                 if b.bet_type == "handicap":
-                    # 讓分邏輯：Team 1 總分 + 讓分值 vs Team 2 總分
                     if b.team == 1: return (s1 + b.line_value) > s2
                     else: return (s2 - b.line_value) > s1
                 if b.bet_type == "over_under":
@@ -1226,24 +1357,33 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
             lose_stake = sum(b.amount for b in type_bets if not is_bet_won(b))
             win_stake = sum(b.amount for b in win_bets)
             
+            rake = int(lose_stake * SYSTEM_RAKE_RATE)
+            bonus = int(lose_stake * PLAYER_BONUS_RATE)
+            total_player_bonus += bonus
+            total_rake += rake
+            net_profit = lose_stake - rake - bonus
+            pool_odds = (win_stake + net_profit) / win_stake if win_stake > 0 else 1.0
+            
             if win_stake > 0:
-                # 抽水與分紅
-                rake = int(lose_stake * 0.05)
-                bonus = int(lose_stake * 0.10)
-                total_player_bonus += bonus
-                net_profit = lose_stake - rake - bonus
-                odds = (win_stake + net_profit) / win_stake
-                
                 for b in win_bets:
-                    payout = int(b.amount * odds)
+                    locked = b.locked_odds
+                    if not locked:
+                        locked = house_o1 if b.team == 1 else house_o2
+                    house_payout = int(b.amount * locked)
+                    pool_payout = int(b.amount * pool_odds)
+                    payout = max(house_payout, pool_payout)
+                    total_subsidy += max(0, house_payout - pool_payout)
+
                     p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
                     if p:
                         bet_win_bonus = get_player_pet_effect(p, "feather_gain", "bet_win_bonus")
                         bonus_payout = int(payout * bet_win_bonus)
                         total_payout = payout + bonus_payout
                         p.feathers = (p.feathers or 0) + total_payout
-                        
-                        desc = f"預測成功({bt})：{s1}-{s2} (賠率 {round(odds, 2)})"
+
+                        source = "池子" if pool_payout > house_payout else "莊家"
+                        used_odds = pool_odds if pool_payout > house_payout else locked
+                        desc = f"預測成功({bt})：{s1}-{s2} ({source} {round(used_odds, 2)})"
                         if bonus_payout > 0:
                             desc += f" (寵物加成 +{bonus_payout} 根)"
                         db.add(models.FeatherTransaction(
@@ -1254,27 +1394,10 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                         ))
                         winners_report.append({"name": p.name, "payout": total_payout, "type": bt})
 
-                # 處理預測失敗退還 (Loss Protection)
-                lose_bets = [b for b in type_bets if not is_bet_won(b)]
-                for b in lose_bets:
-                    p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
-                    if p:
-                        refund_rate = get_player_pet_effect(p, "bet_loss_protection", "refund_rate")
-                        if refund_rate > 0.0:
-                            refund_amount = int(b.amount * refund_rate)
-                            if refund_amount > 0:
-                                p.feathers = (p.feathers or 0) + refund_amount
-                                db.add(models.FeatherTransaction(
-                                    player_id=b.player_id, 
-                                    amount=refund_amount, 
-                                    type="bet_refund", 
-                                    description=f"預測失敗本金返還({bt})：{s1}-{s2} (寵物保護 +{refund_amount} 根)"
-                                ))
-            
-            # 標記為已結算
             for b in type_bets: b.is_settled = 1
 
-        # 6. 分紅給勝場球員 (贏球分紅)
+        accumulate_house_daily_stats(db, match_date, total_rake, total_subsidy)
+
         if total_player_bonus > 0:
             winner_p_ids = [db_match.t1p1_id, db_match.t1p2_id] if winner_team == 1 else [db_match.t2p1_id, db_match.t2p2_id]
             share = total_player_bonus // 2
@@ -1282,7 +1405,7 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                 if pid:
                     p = db.query(models.Player).filter(models.Player.id == pid).first()
                     if p:
-                        bonus_rate = get_player_pet_effect(p, "match_win_bonus", "bonus_rate")
+                        bonus_rate = get_player_match_win_bonus_rate(p)
                         bonus_share = int(share * bonus_rate)
                         total_share = share + bonus_share
                         p.feathers = (p.feathers or 0) + total_share
@@ -1498,6 +1621,11 @@ def buy_item(db: Session, player_id: str, item_id: int, is_permanent: bool = Fal
     if existing_inv and existing_inv.expires_at is not None and is_permanent:
         # Upgrade price = permanent price - 7-day price (already paid)
         price = max(0, db_item.price_permanent - db_item.price)
+
+    original_price = price
+    discount = get_player_pet_effect(db_player, "shop_discount", "discount_rate")
+    if discount > 0:
+        price = int(price * (1 - discount))
         
     if db_player.feathers < price:
         return {"status": "error", "code": "INSUFFICIENT_FEATHERS", "message": "羽毛不足"}
@@ -1524,12 +1652,16 @@ def buy_item(db: Session, player_id: str, item_id: int, is_permanent: bool = Fal
         db.add(db_inv)
     
     db_player.feathers -= price
+
+    purchase_desc = f"購買商品：{db_item.name} ({'永久' if is_permanent else '7天'})"
+    if discount > 0 and price < original_price:
+        purchase_desc += f" (寵物折扣 -{original_price - price} 根)"
     
     db.add(models.FeatherTransaction(
         player_id=player_id,
         amount=-price,
         type="shop_purchase",
-        description=f"購買商品：{db_item.name} ({'永久' if is_permanent else '7天'})"
+        description=purchase_desc
     ))
     
     # 自動裝備
@@ -1815,20 +1947,30 @@ def buy_egg(db: Session, email: str, egg_type: str):
         raise ValueError("無效的蛋種類")
         
     cost = egg_costs[egg_type]
+    original_cost = cost
+    discount = get_player_pet_effect(player, "shop_discount", "discount_rate")
+    if discount > 0:
+        cost = int(cost * (1 - discount))
     if (player.feathers or 0) < cost:
         raise ValueError("羽毛不足")
         
+    prev_display = player.active_pet_id
     player.feathers = (player.feathers or 0) - cost
     player.active_egg_id = egg_type
     player.active_pet_id = egg_type
+    if prev_display and prev_display.startswith("pet_"):
+        player.ability_pet_id = prev_display
     player.egg_progress_games = 0
     player.egg_progress_wins = 0
     
+    egg_desc = f"購買寵物蛋：{egg_type}"
+    if discount > 0 and cost < original_cost:
+        egg_desc += f" (寵物折扣 -{original_cost - cost} 根)"
     db.add(models.FeatherTransaction(
         player_id=player.id,
         amount=-cost,
         type="buy_egg",
-        description=f"購買寵物蛋：{egg_type}"
+        description=egg_desc
     ))
     db.commit()
     return {"status": "success", "player": player}
@@ -1843,12 +1985,7 @@ def hatch_egg(db: Session, email: str):
     if not player.active_egg_id:
         raise ValueError("你目前沒有正在孵化的蛋")
         
-    egg_requirements = {
-        "egg_classic": {"pets": ["pet_corgi", "pet_black_cat", "pet_chick"]},
-        "egg_epic": {"pets": ["pet_cat", "pet_slime", "pet_rabbit"]},
-        "egg_legendary": {"pets": ["pet_dog", "pet_fox", "pet_dragon"]},
-        "egg_ultimate": {"pets": ["pet_phoenix", "pet_unicorn", "pet_panda"]}
-    }
+    egg_requirements = EGG_PET_POOL
     
     egg_id = player.active_egg_id
     if egg_id not in egg_requirements:
@@ -1865,15 +2002,16 @@ def hatch_egg(db: Session, email: str):
     unowned_pets = [p for p in tier_pets if p not in unlocked_list]
     
     if unowned_pets:
-        new_pet = random.choice(unowned_pets)
+        new_pet = _weighted_pet_choice(unowned_pets)
     else:
-        new_pet = random.choice(tier_pets)
+        new_pet = _weighted_pet_choice(tier_pets)
         
     if new_pet not in unlocked_list:
         unlocked_list.append(new_pet)
         player.unlocked_pets = ",".join(unlocked_list)
         
     player.active_pet_id = new_pet
+    player.ability_pet_id = new_pet
     player.active_egg_id = None
     player.egg_progress_games = 0
     player.egg_progress_wins = 0
@@ -1884,26 +2022,74 @@ def hatch_egg(db: Session, email: str):
         "pet_id": new_pet,
         "hatched_pet": new_pet,
         "active_pet_id": player.active_pet_id,
+        "ability_pet_id": player.ability_pet_id,
         "unlocked_pets": player.unlocked_pets,
         "active_egg_id": None
     }
 
 
-def equip_pet(db: Session, email: str, pet_id: str | None):
+def _get_unlocked_pets_list(player) -> list[str]:
+    if not player.unlocked_pets:
+        return []
+    return [p.strip() for p in player.unlocked_pets.split(",") if p.strip()]
+
+
+def _validate_pet_equip(player, pet_id: str, allow_egg: bool = True):
+    if pet_id.startswith("egg_"):
+        if not allow_egg:
+            raise ValueError("寵物蛋無法提供能力加成")
+        if player.active_egg_id != pet_id:
+            raise ValueError("未擁有或未在孵化該寵物蛋")
+    else:
+        if pet_id not in _get_unlocked_pets_list(player):
+            raise ValueError("未解鎖該寵物")
+
+
+def equip_pet(
+    db: Session,
+    email: str,
+    pet_id: str | None,
+    ability_pet_id: str | None = None,
+    target: str = "both",
+):
     player = get_player_by_email(db, email)
     if not player:
         raise ValueError("USER_NOT_BOUND")
-        
-    if pet_id:
-        if pet_id.startswith("egg_"):
-            if player.active_egg_id != pet_id:
-                raise ValueError("未擁有或未在孵化該寵物蛋")
+
+    if target not in ("display", "ability", "both"):
+        raise ValueError("無效的裝備目標")
+
+    if target == "display":
+        if pet_id:
+            _validate_pet_equip(player, pet_id, allow_egg=True)
+            prev_display = player.active_pet_id
+            player.active_pet_id = pet_id
+            if pet_id.startswith("egg_") and prev_display and prev_display.startswith("pet_"):
+                player.ability_pet_id = prev_display
         else:
-            unlocked_list = [p.strip() for p in player.unlocked_pets.split(",") if p.strip()] if player.unlocked_pets else []
-            if pet_id not in unlocked_list:
-                raise ValueError("未解鎖該寵物")
-            
-    player.active_pet_id = pet_id
+            player.active_pet_id = None
+
+    elif target == "ability":
+        ability_id = ability_pet_id or pet_id
+        if ability_id:
+            _validate_pet_equip(player, ability_id, allow_egg=False)
+            player.ability_pet_id = ability_id
+        else:
+            player.ability_pet_id = None
+
+    elif target == "both":
+        if pet_id:
+            _validate_pet_equip(player, pet_id, allow_egg=True)
+            prev_display = player.active_pet_id
+            player.active_pet_id = pet_id
+            if pet_id.startswith("egg_"):
+                if prev_display and prev_display.startswith("pet_"):
+                    player.ability_pet_id = prev_display
+            else:
+                player.ability_pet_id = pet_id
+        else:
+            player.active_pet_id = None
+
     db.commit()
     return {"status": "success", "player": player}
 
@@ -1927,29 +2113,99 @@ def get_chat_messages(db: Session, target_date: date):
     ).order_by(models.ChatMessage.timestamp.asc()).all()
 
 
-PET_EFFECTS = {
-    "pet_chick": {"type": "feather_gain", "daily_bonus": 0.05, "bet_win_bonus": 0.03},
-    "pet_rabbit": {"type": "feather_gain", "daily_bonus": 0.10, "bet_win_bonus": 0.06},
-    "pet_dog": {"type": "feather_gain", "daily_bonus": 0.15, "bet_win_bonus": 0.10},
-    "pet_phoenix": {"type": "feather_gain", "daily_bonus": 0.20, "bet_win_bonus": 0.12},
-
-    "pet_corgi": {"type": "bet_loss_protection", "refund_rate": 0.05},
-    "pet_slime": {"type": "bet_loss_protection", "refund_rate": 0.10},
-    "pet_fox": {"type": "bet_loss_protection", "refund_rate": 0.15},
-    "pet_unicorn": {"type": "bet_loss_protection", "refund_rate": 0.20},
-
-    "pet_black_cat": {"type": "match_win_bonus", "bonus_rate": 0.10},
-    "pet_cat": {"type": "match_win_bonus", "bonus_rate": 0.20},
-    "pet_dragon": {"type": "match_win_bonus", "bonus_rate": 0.30},
-    "pet_panda": {"type": "match_win_bonus", "bonus_rate": 0.40},
+EGG_PET_POOL = {
+    "egg_classic": {"pets": [
+        "pet_green_slime", "pet_black_cat", "pet_mushroom",
+        "pet_rabbit_warrior", "pet_pikachu",
+    ]},
+    "egg_epic": {"pets": [
+        "pet_finalfantasy_moogle", "pet_slime_king", "pet_sonic_rings",
+        "pet_metroid_metroid", "pet_scarab",
+    ]},
+    "egg_legendary": {"pets": [
+        "pet_ribbon_pig", "pet_shiba_king", "pet_chick",
+        "pet_fox_fire", "pet_dragon_thunder",
+    ]},
+    "egg_ultimate": {"pets": [
+        "pet_ice_fire_siblings", "pet_panda_master", "pet_kingdomehearts_shadow",
+        "pet_unicorn", "pet_yugioh_kuriboh",
+    ]},
 }
 
+PET_HATCH_WEIGHTS = {
+    # Classic: 好=黑貓/綠水靈, 普通=電光鼠, 爛=蘑菇/打鬼兔
+    "pet_black_cat": 1.35,
+    "pet_green_slime": 1.35,
+    "pet_pikachu": 1.0,
+    "pet_mushroom": 0.70,
+    "pet_rabbit_warrior": 0.70,
+    # Epic: 好=利姆路/莫古利, 普通=聖甲蟲, 爛=消極鬼魂/銀河戰士
+    "pet_slime_king": 1.35,
+    "pet_finalfantasy_moogle": 1.35,
+    "pet_scarab": 1.0,
+    "pet_sonic_rings": 0.70,
+    "pet_metroid_metroid": 0.70,
+    # Legendary: 好=櫻星卡比/緞帶肥肥, 普通=永眠卡比獸, 爛=小可/守護龍貓
+    "pet_shiba_king": 1.35,
+    "pet_ribbon_pig": 1.35,
+    "pet_dragon_thunder": 1.0,
+    "pet_chick": 0.70,
+    "pet_fox_fire": 0.70,
+    # Ultimate: 好=太極武神/冰火姊弟, 普通=栗子球, 爛=無心者/帕克
+    "pet_panda_master": 1.35,
+    "pet_ice_fire_siblings": 1.35,
+    "pet_yugioh_kuriboh": 1.0,
+    "pet_kingdomehearts_shadow": 0.70,
+    "pet_unicorn": 0.70,
+}
+
+PET_EFFECTS = {
+    # Classic
+    "pet_green_slime": {"type": "feather_gain", "daily_bonus": 0.05, "bet_win_bonus": 0.03},
+    "pet_black_cat": {"type": "match_win_bonus", "bonus_rate": 0.10},
+    "pet_mushroom": {"type": "shop_discount", "discount_rate": 0.05, "daily_bonus": 0.02},
+    "pet_rabbit_warrior": {"type": "attack_drain", "drain_rate": 0.04, "drain_cap": 50},
+    "pet_pikachu": {"type": "defense_shield", "mitigate_rate": 0.45, "bonus_rate": 0.08},
+    # Epic
+    "pet_finalfantasy_moogle": {"type": "feather_gain", "daily_bonus": 0.10, "bet_win_bonus": 0.05},
+    "pet_slime_king": {"type": "match_win_bonus", "bonus_rate": 0.18},
+    "pet_sonic_rings": {"type": "shop_discount", "discount_rate": 0.10, "daily_bonus": 0.03},
+    "pet_metroid_metroid": {"type": "attack_drain", "drain_rate": 0.05, "drain_cap": 70},
+    "pet_scarab": {"type": "defense_shield", "mitigate_rate": 0.50, "bonus_rate": 0.12},
+    # Legendary
+    "pet_ribbon_pig": {"type": "feather_gain", "daily_bonus": 0.15, "bet_win_bonus": 0.08},
+    "pet_shiba_king": {"type": "match_win_bonus", "bonus_rate": 0.26},
+    "pet_chick": {"type": "shop_discount", "discount_rate": 0.15, "daily_bonus": 0.04},
+    "pet_fox_fire": {"type": "attack_drain", "drain_rate": 0.06, "drain_cap": 90},
+    "pet_dragon_thunder": {"type": "defense_shield", "mitigate_rate": 0.55, "bonus_rate": 0.16},
+    # Ultimate
+    "pet_ice_fire_siblings": {"type": "feather_gain", "daily_bonus": 0.20, "bet_win_bonus": 0.10},
+    "pet_panda_master": {"type": "match_win_bonus", "bonus_rate": 0.32},
+    "pet_kingdomehearts_shadow": {"type": "shop_discount", "discount_rate": 0.20, "daily_bonus": 0.05},
+    "pet_unicorn": {"type": "attack_drain", "drain_rate": 0.07, "drain_cap": 110},
+    "pet_yugioh_kuriboh": {"type": "defense_shield", "mitigate_rate": 0.60, "bonus_rate": 0.20},
+}
+
+def _weighted_pet_choice(candidates: list[str]) -> str:
+    weights = [PET_HATCH_WEIGHTS.get(p, 1.0) for p in candidates]
+    return random.choices(candidates, weights=weights, k=1)[0]
+
+def get_player_daily_bonus_rate(player) -> float:
+    rate = get_player_pet_effect(player, "feather_gain", "daily_bonus")
+    if rate > 0:
+        return rate
+    return get_player_pet_effect(player, "shop_discount", "daily_bonus")
+
+def get_player_match_win_bonus_rate(player) -> float:
+    rate = get_player_pet_effect(player, "match_win_bonus", "bonus_rate")
+    if rate > 0:
+        return rate
+    return get_player_pet_effect(player, "defense_shield", "bonus_rate")
+
 def get_player_pet_effect(player, effect_type: str, key: str) -> float:
-    if not player or not player.active_pet_id:
+    if not player or not player.ability_pet_id:
         return 0.0
-    if player.active_pet_id.startswith("egg_"):
-        return 0.0
-    cfg = PET_EFFECTS.get(player.active_pet_id)
+    cfg = PET_EFFECTS.get(player.ability_pet_id)
     if not cfg or cfg.get("type") != effect_type:
         return 0.0
     return cfg.get(key, 0.0)

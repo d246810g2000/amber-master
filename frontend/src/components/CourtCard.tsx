@@ -10,6 +10,7 @@ import { Player } from "../types";
 import { calculateWeightedMu } from "../lib/matchEngine";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 import { PetRenderer } from "./PetRenderer";
+import { getPetTier } from "../lib/petCatalog";
 import {
   isFlowingFrame,
   getFlowingGradient,
@@ -45,14 +46,31 @@ interface CourtCardProps {
   matchId?: string | null;
   betStatus?: {
     matchId: string;
-    moneyline: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
-    handicap: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
-    overUnder: { team1Total: number; team2Total: number; odds1: number; odds2: number; line: number; myBetAmount: number; myBetTeam: number | null; locked?: boolean };
+    moneyline: BetTypeInfo;
+    handicap: BetTypeInfo;
+    overUnder: BetTypeInfo;
   } | null;
   onBet?: (matchId: string, team: number, amount: number, betType: string, lineValue: number) => void;
 }
 
 const BET_AMOUNTS = [100, 200, 500, "自訂"];
+
+interface BetTypeInfo {
+  team1Total: number;
+  team2Total: number;
+  odds1: number;
+  odds2: number;
+  houseOdds1?: number;
+  houseOdds2?: number;
+  poolOdds1?: number;
+  poolOdds2?: number;
+  effectiveOdds1?: number;
+  effectiveOdds2?: number;
+  line: number;
+  myBetAmount: number;
+  myBetTeam: number | null;
+  locked?: boolean;
+}
 
 const PlayerSlot = React.memo(({ 
   player, 
@@ -225,7 +243,7 @@ const PlayerSlot = React.memo(({
                         )}
                       </div>
                     ) : (
-                      <PetRenderer petId={player.active_pet_id} className="w-5 h-5" />
+                      <PetRenderer petId={player.active_pet_id} tier={getPetTier(player.active_pet_id)} className="w-5 h-5" />
                     )}
                   </div>
                 )}
@@ -310,7 +328,22 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
   const readOnly = hasControl === false;
   
   // 獲取目前選定類型的數據
-  const currentStatus = betStatus?.[activeBetType] || { odds1: 1, odds2: 1, team1Total: 0, team2Total: 0, myBetTeam: null, myBetAmount: 0, line: 0 };
+  const currentStatus: BetTypeInfo = betStatus?.[activeBetType] || { odds1: 1, odds2: 1, team1Total: 0, team2Total: 0, myBetTeam: null, myBetAmount: 0, line: 0 };
+  const selectedHouseOdds = bettingTeam === 1
+    ? (currentStatus.houseOdds1 ?? currentStatus.odds1)
+    : bettingTeam === 2
+      ? (currentStatus.houseOdds2 ?? currentStatus.odds2)
+      : 0;
+  const selectedPoolOdds = bettingTeam === 1
+    ? (currentStatus.poolOdds1 ?? currentStatus.odds1)
+    : bettingTeam === 2
+      ? (currentStatus.poolOdds2 ?? currentStatus.odds2)
+      : 0;
+  const selectedEffectiveOdds = bettingTeam === 1
+    ? (currentStatus.effectiveOdds1 ?? currentStatus.odds1)
+    : bettingTeam === 2
+      ? (currentStatus.effectiveOdds2 ?? currentStatus.odds2)
+      : 0;
   const team1Score = players[0] && players[1] ? Math.round(((players[0].mu || 0) + (players[1].mu || 0)) * 10) : 0;
   const team2Score = players[2] && players[3] ? Math.round(((players[2].mu || 0) + (players[3].mu || 0)) * 10) : 0;
 
@@ -660,12 +693,27 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                        ) :
                        `總分 ${bettingTeam === 1 ? "大於" : "小於"} ${currentStatus.line}`}
                     </h4>
+                    {bettingTeam && (
+                      <div className="text-[9px] font-bold text-white/50 space-y-0.5 mb-2">
+                        <div>
+                          保底賠率 <span className="text-amber-400 font-black">{selectedEffectiveOdds.toFixed(2)}</span>
+                          <span className="text-white/30 mx-1">·</span>
+                          莊家 {selectedHouseOdds.toFixed(2)}
+                          <span className="text-white/30 mx-1">·</span>
+                          池子 {selectedPoolOdds.toFixed(2)}
+                        </div>
+                        <div className="text-white/40">
+                          對面池 {(bettingTeam === 1 ? currentStatus.team2Total : currentStatus.team1Total) || 0} 根
+                          {selectedPoolOdds > selectedHouseOdds && " · 池子滿可加成"}
+                        </div>
+                      </div>
+                    )}
                     <div className="text-emerald-400 font-black text-[9px] uppercase tracking-tighter opacity-80">
                       投注金額
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 w-[95%] max-w-[320px] mb-4">
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 w-[95%] max-w-[320px] mb-2">
                     {showCustomInput ? (
                       <div className="col-span-2 flex gap-2">
                         <input
@@ -728,12 +776,22 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                                   : "bg-white/10 hover:bg-emerald-500 hover:text-white"
                             )}
                           >
-                            {amount}
+                            <span>{amount}</span>
+                            {typeof amount === "number" && bettingTeam && selectedEffectiveOdds > 1 && (
+                              <span className="block text-[8px] text-emerald-300/80 font-bold mt-0.5">
+                                +{Math.round(amount * selectedEffectiveOdds) - amount}
+                              </span>
+                            )}
                           </button>
                         );
                       })
                     )}
                   </div>
+                  {bettingTeam && !showCustomInput && (
+                    <p className="text-[8px] text-white/40 font-bold mb-2 text-center">
+                      預估獲利至少 +{Math.round(100 * selectedHouseOdds) - 100}（莊家保底）
+                    </p>
+                  )}
                 </>
               )}
               

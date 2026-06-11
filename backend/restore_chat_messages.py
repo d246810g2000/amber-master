@@ -122,11 +122,15 @@ def restore():
                     rake = int(lose_stake * 0.05)
                     bonus = int(lose_stake * 0.10)
                     net_profit = lose_stake - rake - bonus
-                    odds = (win_stake + net_profit) / win_stake
-                    calculated_odds = odds # Keep latest odds
+                    pool_odds = (win_stake + net_profit) / win_stake
                     
                     for b in win_bets:
-                        payout = int(b.amount * odds)
+                        locked = b.locked_odds or 1.92
+                        house_payout = int(b.amount * locked)
+                        pool_payout = int(b.amount * pool_odds)
+                        payout = max(house_payout, pool_payout)
+                        used_odds = pool_odds if pool_payout > house_payout else locked
+                        calculated_odds = used_odds
                         p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
                         if p:
                             winners_report.append({"name": p.name, "payout": payout, "type": bt})

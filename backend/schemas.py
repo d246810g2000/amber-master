@@ -65,6 +65,7 @@ class Player(PlayerBase):
     active_frame: Optional[ShopItem] = None
     active_background: Optional[ShopItem] = None
     active_pet_id: Optional[str] = None
+    ability_pet_id: Optional[str] = None
     active_egg_id: Optional[str] = None
     egg_progress_games: int = 0
     egg_progress_wins: int = 0
@@ -218,9 +219,16 @@ class BetTypeStatus(BaseModel):
     team2Total: int = 0
     odds1: float = 1.0
     odds2: float = 1.0
+    houseOdds1: float = 1.0
+    houseOdds2: float = 1.0
+    poolOdds1: float = 1.0
+    poolOdds2: float = 1.0
+    effectiveOdds1: float = 1.0
+    effectiveOdds2: float = 1.0
     line: float = 0.0
     myBetAmount: int = 0
     myBetTeam: Optional[int] = None
+    locked: Optional[bool] = False
 
 class BetStatus(BaseModel):
     matchId: str
@@ -281,6 +289,8 @@ class HatchRequest(BaseModel):
 class EquipPetRequest(BaseModel):
     userEmail: str
     petId: Optional[str] = None
+    abilityPetId: Optional[str] = None
+    target: str = "both"  # display | ability | both
 
 
 class ChatMessageBase(BaseModel):

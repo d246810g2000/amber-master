@@ -69,6 +69,7 @@ interface DashboardHeaderProps {
     averageInstantMu: number;
     controller: string;
     waitingCount: number;
+    houseNetToday?: number;
   };
   onlineCount?: number;
 }
@@ -127,10 +128,23 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     }
   };
 
+  const houseNet = summary?.houseNetToday ?? 0;
+
+  const statsItems = summary ? [
+    { label: '今日場次', value: summary.totalMatches, valueClass: 'text-slate-900 dark:text-white' },
+    { label: '參戰人數', value: summary.activePlayerCount, valueClass: 'text-slate-900 dark:text-white' },
+    { label: '平均 CP', value: Math.round(summary.averageInstantMu * 10), valueClass: 'text-emerald-500' },
+    {
+      label: '莊家淨收',
+      value: `${houseNet >= 0 ? '+' : ''}${houseNet}`,
+      valueClass: houseNet >= 0 ? 'text-amber-500' : 'text-sky-500',
+    },
+  ] : [];
+
   return (
     <header className="flex flex-col mb-4 md:mb-6 bg-white dark:bg-slate-900 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 shrink-0 overflow-hidden">
       <div className="flex flex-nowrap justify-between items-center p-3 md:p-5 gap-2 md:gap-0 overflow-x-auto scrollbar-hide">
-        
+
         {/* Logo & Titles */}
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
           <div
@@ -152,23 +166,18 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           </div>
 
-          {/* Stats Summary (Desktop Only) */}
+          {/* Stats Summary (Desktop) */}
           {summary && (
             <div className="hidden xl:flex items-center gap-3 ml-6 pr-6 border-r border-slate-100 dark:border-slate-800">
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">今日場次</span>
-                <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{summary.totalMatches}</span>
-              </div>
-              <div className="w-px h-6 bg-slate-100 dark:bg-slate-800" />
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">參戰人數</span>
-                <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{summary.activePlayerCount}</span>
-              </div>
-              <div className="w-px h-6 bg-slate-100 dark:bg-slate-800" />
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">平均 CP</span>
-                <span className="text-sm font-black text-emerald-500 tabular-nums">{Math.round(summary.averageInstantMu * 10)}</span>
-              </div>
+              {statsItems.map((item, i) => (
+                <React.Fragment key={item.label}>
+                  {i > 0 && <div className="w-px h-6 bg-slate-100 dark:bg-slate-800" />}
+                  <div className="flex flex-col items-center">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{item.label}</span>
+                    <span className={cn("text-sm font-black tabular-nums", item.valueClass)}>{item.value}</span>
+                  </div>
+                </React.Fragment>
+              ))}
             </div>
           )}
 
@@ -203,7 +212,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   onClick={handleClaimFeathers}
                   disabled={claiming}
                   className="ml-1 px-1.5 py-0.5 bg-sky-500 hover:bg-sky-600 text-white text-[8px] md:text-[10px] font-black rounded-lg transition-all active:scale-90 animate-bounce"
-                  title="領取每日羽毛"
+                  title="領取週三羽毛"
                 >
                   {claiming ? '...' : '領取'}
                 </button>
@@ -232,6 +241,22 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
       </div>
+
+      {/* Stats Summary (Mobile / Tablet) */}
+      {summary && (
+        <div className="xl:hidden flex gap-2 px-3 pb-3 md:px-5 md:pb-4 overflow-x-auto scrollbar-hide">
+          {statsItems.map((item) => (
+            <div
+              key={item.label}
+              className="flex flex-col items-center justify-center min-w-[72px] px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700 shrink-0"
+            >
+              <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1 whitespace-nowrap">{item.label}</span>
+              <span className={cn("text-xs font-black tabular-nums", item.valueClass)}>{item.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showBannerEgg && <BannerAnimation />}
     </header>
   );

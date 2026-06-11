@@ -885,11 +885,6 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                                 </span>
                               )}
                             </div>
-                            {PET_ABILITIES[previewPetId] && (
-                              <div className="text-[9px] font-bold text-slate-500 dark:text-slate-400 pl-7 leading-none">
-                                ✦ {PET_ABILITIES[previewPetId].desc}
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>

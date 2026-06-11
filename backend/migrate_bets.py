@@ -32,6 +32,27 @@ def migrate():
             conn.execute(text("ALTER TABLE bets ADD COLUMN line_value FLOAT DEFAULT 0.0"))
         else:
             print("Column 'line_value' already exists.")
+
+        res = conn.execute(text("SHOW COLUMNS FROM bets LIKE 'locked_odds'"))
+        if not res.fetchone():
+            print("Adding column 'locked_odds'...")
+            conn.execute(text("ALTER TABLE bets ADD COLUMN locked_odds FLOAT DEFAULT NULL"))
+        else:
+            print("Column 'locked_odds' already exists.")
+
+        res = conn.execute(text("SHOW TABLES LIKE 'house_daily_stats'"))
+        if not res.fetchone():
+            print("Creating table 'house_daily_stats'...")
+            conn.execute(text("""
+                CREATE TABLE house_daily_stats (
+                    date DATE PRIMARY KEY,
+                    rake_collected INT DEFAULT 0,
+                    house_subsidy INT DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+            """))
+        else:
+            print("Table 'house_daily_stats' already exists.")
             
         conn.commit()
         print("Migration completed.")

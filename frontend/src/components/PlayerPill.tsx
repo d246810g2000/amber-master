@@ -19,6 +19,7 @@ import {
 } from "../lib/itemEffects";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 import { PetRenderer } from "./PetRenderer";
+import { getPetTier } from "../lib/petCatalog";
 
 interface PlayerPillProps {
   player: Player;
@@ -255,7 +256,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                   )}
                 </div>
               ) : (
-                <PetRenderer petId={player.active_pet_id} className="w-5.5 h-5.5 md:w-6.5 md:h-6.5" />
+                <PetRenderer petId={player.active_pet_id} tier={getPetTier(player.active_pet_id)} className="w-5.5 h-5.5 md:w-6.5 md:h-6.5" />
               )}
             </div>
           )}

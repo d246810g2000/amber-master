@@ -27,6 +27,16 @@ import { Player } from '../../types';
 import { renderBackgroundEffects } from '../../lib/itemEffects';
 import { EggRenderer } from '../EggRenderer';
 import { PetRenderer } from '../PetRenderer';
+import {
+  PETS_CATALOG,
+  PET_ABILITIES,
+  EGG_REQUIREMENTS,
+  HATCH_TIER_META,
+  getPetTier,
+  computeShopPrice,
+} from '../../lib/petCatalog';
+
+export { PETS_CATALOG, PET_ABILITIES, EGG_REQUIREMENTS };
 
 interface ShopModalProps {
   onClose: () => void;
@@ -39,39 +49,6 @@ const CATEGORIES = [
   { id: 'frame', label: '酷炫邊框', icon: <Star size={18} /> },
   { id: 'pet', label: '寵物工坊', icon: <Heart size={18} /> },
 ];
-
-export const PETS_CATALOG = [
-  { id: 'pet_corgi', name: '呆萌柯基', tier: 'classic', eggType: 'egg_classic', desc: '腿短屁股大、走起路來一搖一擺的呆萌柯基。', icon: '🐶' },
-  { id: 'pet_black_cat', name: '傲嬌黑貓', tier: 'classic', eggType: 'egg_classic', desc: '瞳孔亮亮、極具靈氣的神秘傲嬌黑貓。', icon: '🐈' },
-  { id: 'pet_chick', name: '元氣小雞', tier: 'classic', eggType: 'egg_classic', desc: '毛茸茸的嫩黃色小雛雞，特別親近人。', icon: '🐤' },
-  { id: 'pet_cat', name: '慵懶小貓', tier: 'epic', eggType: 'egg_epic', desc: '整天喵喵叫的軟萌白色小貓。', icon: '🐱' },
-  { id: 'pet_slime', name: '果凍史萊姆', tier: 'epic', eggType: 'egg_epic', desc: '跳來跳去、充滿彈性的粉紅史萊姆。', icon: '🧪' },
-  { id: 'pet_rabbit', name: '蹦蹦粉兔', tier: 'epic', eggType: 'egg_epic', desc: '耳朵搖擺不定、喜歡吃蘿蔔的軟糯粉兔。', icon: '🐰' },
-  { id: 'pet_dog', name: '元氣柴犬', tier: 'legendary', eggType: 'egg_legendary', desc: '元氣滿滿、尾巴狂搖的忠實秋田柴犬。', icon: '🐶' },
-  { id: 'pet_fox', name: '傲嬌赤狐', tier: 'legendary', eggType: 'egg_legendary', desc: '眼神犀利又帶點俏皮的高貴赤狐。', icon: '🦊' },
-  { id: 'pet_dragon', name: '黃金幼龍', tier: 'legendary', eggType: 'egg_legendary', desc: '背部長著小翅膀、口吐金黃微光的小飛龍。', icon: '🐲' },
-  { id: 'pet_phoenix', name: '霓虹鳳凰', tier: 'ultimate', eggType: 'egg_ultimate', desc: '帶著火翼尾羽、在空中盤旋的烈焰鳳凰。', icon: '🦅' },
-  { id: 'pet_unicorn', name: '炫彩獨角獸', tier: 'ultimate', eggType: 'egg_ultimate', desc: '擁有彩虹鬃毛與閃耀星光號角的幻想獨角仙獸。', icon: '🦄' },
-  { id: 'pet_panda', name: '功夫熊貓', tier: 'ultimate', eggType: 'egg_ultimate', desc: '啃著竹子、擅長太極跟翻滾的功夫黑白胖熊貓。', icon: '🐼' },
-];
-
-export const PET_ABILITIES: Record<string, { desc: string; badge: string; colorClass: string }> = {
-  pet_chick: { desc: "每日領取 +5% / 預測獲勝 +3%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
-  pet_rabbit: { desc: "每日領取 +10% / 預測獲勝 +6%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
-  pet_dog: { desc: "每日領取 +15% / 預測獲勝 +10%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
-  pet_phoenix: { desc: "每日領取 +20% / 預測獲勝 +12%", badge: "預測加成", colorClass: "bg-sky-50 dark:bg-sky-950/40 text-sky-650 dark:text-sky-400 border-sky-100 dark:border-sky-900/40" },
-
-  pet_corgi: { desc: "預測失敗退還 5% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
-  pet_slime: { desc: "預測失敗退還 10% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
-  pet_fox: { desc: "預測失敗退還 15% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
-  pet_unicorn: { desc: "預測失敗退還 20% 本金", badge: "預測保護", colorClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-450 border-rose-100 dark:border-rose-900/40" },
-
-  pet_black_cat: { desc: "贏球分紅 +10%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
-  pet_cat: { desc: "贏球分紅 +20%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
-  pet_dragon: { desc: "贏球分紅 +30%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
-  pet_panda: { desc: "贏球分紅 +40%", badge: "勝場分紅", colorClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 border-emerald-100 dark:border-emerald-900/40" },
-};
-
 
 export const hatchConfig = {
   classic: { participation: 25, win: 15 },
@@ -86,11 +63,41 @@ export function calculateEggEnergyGain(rarity: string, isWin: boolean): number {
   return config.participation + (isWin ? config.win : 0);
 }
 
-export const EGG_REQUIREMENTS: Record<string, { feathers: number; name: string; desc: string }> = {
-  egg_classic: { feathers: 500, name: '經典之蛋', desc: '能量累積至 100% 即可孵化。有機會與呆萌柯基、傲嬌黑貓、元氣小雞成為夥伴' },
-  egg_epic: { feathers: 1000, name: '史詩之蛋', desc: '能量累積至 100% 即可孵化。有機會與慵懶小貓、果凍史萊姆、蹦蹦粉兔成為夥伴' },
-  egg_legendary: { feathers: 1500, name: '傳說之蛋', desc: '能量累積至 100% 即可孵化。有機會與元氣柴犬、傲嬌赤狐、黃金幼龍成為夥伴' },
-  egg_ultimate: { feathers: 2000, name: '終極之蛋', desc: '能量累積至 100% 即可孵化。有機會與霓虹鳳凰、炫彩獨角獸、功夫熊貓成為夥伴' },
+const ShopPriceLabel: React.FC<{
+  originalPrice: number;
+  abilityPetId?: string | null;
+  size?: 'sm' | 'md';
+}> = ({ originalPrice, abilityPetId, size = 'md' }) => {
+  const { finalPrice, hasDiscount, discountRate, originalPrice: base } = computeShopPrice(originalPrice, abilityPetId);
+  const percentLabel = `${Math.round(discountRate * 100)}%`;
+  const iconSize = size === 'sm' ? 10 : 12;
+  const priceClass = size === 'sm'
+    ? 'text-base font-black text-slate-800 dark:text-slate-100 tabular-nums'
+    : 'text-xs md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none';
+
+  if (!hasDiscount) {
+    return (
+      <div className="flex items-center gap-0.5 md:gap-1">
+        <Feather size={iconSize} className="text-sky-500 md:w-3.5 md:h-3.5 shrink-0" />
+        <span className={priceClass}>{originalPrice}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 md:gap-1.5 flex-wrap">
+      <div className="flex items-center gap-0.5 md:gap-1">
+        <Feather size={iconSize} className="text-violet-500 md:w-3.5 md:h-3.5 shrink-0" />
+        <span className={cn(priceClass, 'text-violet-700 dark:text-violet-300')}>{finalPrice}</span>
+      </div>
+      <span className="text-[9px] md:text-[10px] font-bold text-slate-400 dark:text-slate-500 line-through tabular-nums">
+        {base}
+      </span>
+      <span className="text-[8px] md:text-[9px] font-black px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/40 tabular-nums">
+        -{percentLabel}
+      </span>
+    </div>
+  );
 };
 
 const getPetTierStyle = (tier: string, isUnlocked: boolean, isEquipped: boolean) => {
@@ -229,21 +236,34 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     activeCategory === 'all' || item.item_type === activeCategory
   );
 
+  const getShopItemBasePrice = (item: any, isPermanent: boolean) => {
+    let basePrice = isPermanent ? item.price_permanent : item.price;
+    const ownedInfo = ownedItemsMap[item.id];
+    if (ownedInfo && !ownedInfo.isPermanent && isPermanent) {
+      basePrice = Math.max(0, item.price_permanent - item.price);
+    }
+    return basePrice;
+  };
+
   const handleBuy = async (item: any, isPermanent: boolean) => {
     if (!currentUser?.email) {
       toast.error('請先登入');
       return;
     }
-    const price = isPermanent ? item.price_permanent : item.price;
-    if ((boundPlayer?.feathers || 0) < price) {
+    const basePrice = getShopItemBasePrice(item, isPermanent);
+    const { finalPrice, hasDiscount, originalPrice, discountRate } = computeShopPrice(basePrice, boundPlayer?.ability_pet_id);
+    if ((boundPlayer?.feathers || 0) < finalPrice) {
       toast.error('羽毛不足');
       return;
     }
 
     const durationText = isPermanent ? '永久版' : '7天版';
+    const discountNote = hasDiscount
+      ? `（原價 ${originalPrice} 根，寵物折扣 -${Math.round(discountRate * 100)}%）`
+      : '';
     showConfirm(
       '購買確認',
-      `確定要花費 ${price} 根羽毛購買「${item.name} (${durationText})」嗎？`,
+      `確定要花費 ${finalPrice} 根羽毛購買「${item.name} (${durationText})」嗎？${discountNote}`,
       async () => {
         setBuyingId(item.id);
         try {
@@ -271,14 +291,18 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     }
     const req = EGG_REQUIREMENTS[eggType];
     if (!req) return;
-    if ((boundPlayer?.feathers || 0) < req.feathers) {
+    const { finalPrice, hasDiscount, originalPrice, discountRate } = computeShopPrice(req.feathers, boundPlayer?.ability_pet_id);
+    if ((boundPlayer?.feathers || 0) < finalPrice) {
       toast.error('羽毛不足');
       return;
     }
 
+    const discountNote = hasDiscount
+      ? `（原價 ${originalPrice} 根，寵物折扣 -${Math.round(discountRate * 100)}%）`
+      : '';
     showConfirm(
       '購買寵物蛋',
-      `確定要花費 ${req.feathers} 根羽毛購買「${req.name}」並開始孵化嗎？ (這將會覆蓋您當前已在孵化的蛋與進度)`,
+      `確定要花費 ${finalPrice} 根羽毛購買「${req.name}」並開始孵化嗎？${discountNote} (這將會覆蓋您當前已在孵化的蛋與進度)`,
       async () => {
         setIsHatchingActionLoading(true);
         try {
@@ -353,12 +377,22 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
     }
   };
 
-  const handleEquipPet = async (petId: string | null) => {
+  const handleEquipPet = async (
+    petId: string | null,
+    options?: { abilityPetId?: string | null; target?: 'display' | 'ability' | 'both' }
+  ) => {
     if (!currentUser?.email) return;
     setIsHatchingActionLoading(true);
     try {
-      await gasApi.equipPet(currentUser.email!, petId);
-      toast.success(petId ? '已邀請夥伴隨行！' : '已讓夥伴回窩休息');
+      await gasApi.equipPet(currentUser.email!, petId, options);
+      const target = options?.target ?? 'both';
+      if (target === 'ability') {
+        toast.success(petId || options?.abilityPetId ? '已設為能力夥伴！' : '已卸下能力夥伴');
+      } else if (petId?.startsWith('egg_')) {
+        toast.success('蛋已顯示在球員卡上，能力夥伴維持不變');
+      } else {
+        toast.success(petId ? '已邀請夥伴隨行！' : '已讓外觀夥伴回窩休息');
+      }
       setPreviewPetId(null);
       onUpdate();
       refetchPlayers();
@@ -459,6 +493,25 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 </div>
               </div>
 
+              {/* Equip egg as display */}
+              {activeEggId && (
+                <div className="pt-1">
+                  {boundPlayer.active_pet_id === activeEggId ? (
+                    <p className="text-[10px] font-bold text-pink-600 dark:text-pink-400 text-center">
+                      ✓ 此蛋已顯示在球員卡上（能力夥伴不受影響）
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => handleEquipPet(activeEggId, { target: 'display' })}
+                      disabled={isHatchingActionLoading}
+                      className="w-full py-2 rounded-xl text-[10px] font-black bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/30 dark:hover:bg-pink-950/50 text-pink-700 dark:text-pink-300 border border-pink-200/50 dark:border-pink-900/40 transition-all cursor-pointer"
+                    >
+                      將蛋顯示在球員卡上
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Action Button: Hatch or locked progress */}
               <div className="pt-2">
                 <button
@@ -492,13 +545,14 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                 選購新的寵物蛋
               </h3>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                購買後會將蛋放置在孵蛋區，每當打完一場積分對戰即會累計孵化進度。
+                購買後會將蛋放置在孵蛋區，每當打完一場積分對戰即會累計孵化進度。★★★ 稀有度越高，孵化機率越低。
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
               {Object.entries(EGG_REQUIREMENTS).map(([eggType, req]) => {
-                const isAffordable = (boundPlayer?.feathers || 0) >= req.feathers;
+                const eggPrice = computeShopPrice(req.feathers, boundPlayer?.ability_pet_id);
+                const isAffordable = (boundPlayer?.feathers || 0) >= eggPrice.finalPrice;
                 const eggColorClass =
                   eggType === 'egg_classic' ? 'border-slate-200/55 dark:border-slate-800/40 bg-slate-50/10 dark:bg-slate-900/5' :
                     eggType === 'egg_epic' ? 'border-purple-200/55 dark:border-purple-900/40 bg-purple-50/10 dark:bg-purple-950/5' :
@@ -551,16 +605,30 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                             <span className="text-emerald-650 dark:text-emerald-400">+{hatchConfig[eggType.replace('egg_', '') as keyof typeof hatchConfig]?.win || 0}</span>
                           </div>
                         </div>
+
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {PETS_CATALOG.filter(p => p.eggType === eggType).map(p => (
+                            <span
+                              key={p.id}
+                              className={cn(
+                                "text-[7px] font-black px-1 py-0.5 rounded border",
+                                HATCH_TIER_META[p.hatchTier].colorClass
+                              )}
+                              title={p.name}
+                            >
+                              {HATCH_TIER_META[p.hatchTier].stars}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 gap-2">
-                      <div className="flex items-center gap-1">
-                        <Feather size={12} className="text-sky-500" />
-                        <span className="text-base font-black text-slate-800 dark:text-slate-100 tabular-nums">
-                          {req.feathers}
-                        </span>
-                      </div>
+                      <ShopPriceLabel
+                        originalPrice={req.feathers}
+                        abilityPetId={boundPlayer?.ability_pet_id}
+                        size="sm"
+                      />
 
                       <button
                         onClick={() => handleBuyEgg(eggType)}
@@ -589,16 +657,30 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
               寵物跟隨衣櫥
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              您所孵化解鎖的所有寵物夥伴都收納在此。您可以隨時邀請牠們隨行，或讓牠們回窩休息。
+              外觀決定球員卡顯示（可秀孵化中的蛋），能力決定技能加成（可與外觀分開裝備）。
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold">
+              <span className="px-2 py-1 rounded-lg bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-300 border border-pink-100 dark:border-pink-900/40">
+                外觀：{boundPlayer.active_pet_id?.startsWith('egg_')
+                  ? eggName(boundPlayer.active_pet_id)
+                  : PETS_CATALOG.find(p => p.id === boundPlayer.active_pet_id)?.name || '無'}
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border border-violet-100 dark:border-violet-900/40">
+                能力：{PETS_CATALOG.find(p => p.id === boundPlayer.ability_pet_id)?.name || '無'}
+                {boundPlayer.ability_pet_id && PET_ABILITIES[boundPlayer.ability_pet_id] && (
+                  <span className="ml-1 opacity-80">({PET_ABILITIES[boundPlayer.ability_pet_id].badge})</span>
+                )}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {PETS_CATALOG.map((pet) => {
               const isUnlocked = unlockedList.includes(pet.id);
-              const isEquipped = boundPlayer.active_pet_id === pet.id;
+              const isDisplayEquipped = boundPlayer.active_pet_id === pet.id;
+              const isAbilityEquipped = boundPlayer.ability_pet_id === pet.id;
               const isPreviewing = previewPetId === pet.id;
-              const tierStyle = getPetTierStyle(pet.tier, isUnlocked || isPreviewing, isEquipped);
+              const tierStyle = getPetTierStyle(pet.tier, isUnlocked || isPreviewing, isDisplayEquipped || isAbilityEquipped);
 
               return (
                 <div
@@ -613,8 +695,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                   {/* Background Ambient Glow */}
                   <div className={tierStyle.bgDecor} />
 
-                  {/* Top tier badge */}
-                  <div className="absolute top-1.5 left-1.5 z-10">
+                  {/* Top tier badge + hatch rarity */}
+                  <div className="absolute top-1.5 left-1.5 z-10 flex flex-col gap-0.5 items-start">
                     <span
                       className={cn(
                         "text-[7px] md:text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
@@ -630,6 +712,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                               ? '傳說'
                               : '終極'
                       }
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[6px] md:text-[7px] font-black px-1 py-0.5 rounded border leading-none",
+                        HATCH_TIER_META[pet.hatchTier].colorClass
+                      )}
+                      title={HATCH_TIER_META[pet.hatchTier].label}
+                    >
+                      {HATCH_TIER_META[pet.hatchTier].stars}
                     </span>
                   </div>
 
@@ -647,49 +738,74 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     isUnlocked || isPreviewing ? "group-hover:scale-110" : "group-hover:scale-105"
                   )}>
                     <div className={tierStyle.glowClass}>
-                      <PetRenderer petId={pet.id} className="w-10 h-10 scale-125" />
+                      <PetRenderer petId={pet.id} tier={pet.tier} className="w-10 h-10 scale-125" />
                     </div>
                   </div>
 
                   {/* Pet Info */}
                   <div className="text-center w-full min-w-0 mt-1 space-y-1">
                     <div className="font-black text-xs text-slate-800 dark:text-slate-100 truncate">{pet.name}</div>
-                    <div className="text-[9px] text-slate-450 dark:text-slate-550 font-bold truncate">
-                      {isUnlocked ? pet.desc : `孵自 ${eggName(pet.eggType)}`}
-                    </div>
                     {PET_ABILITIES[pet.id] && (
                       <div className="mt-1.5 flex flex-col items-center gap-1 select-none">
                         <span className={cn("text-[7.5px] font-black px-1.5 py-0.5 rounded border leading-none", PET_ABILITIES[pet.id].colorClass)}>
                           ✦ {PET_ABILITIES[pet.id].badge}
                         </span>
-                        <span className="text-[7.5px] font-black text-slate-500 dark:text-slate-400 leading-tight">
-                          {PET_ABILITIES[pet.id].desc}
-                        </span>
                       </div>
                     )}
                   </div>
 
+                  {/* Equipped badges */}
+                  {isUnlocked && (isDisplayEquipped || isAbilityEquipped) && (
+                    <div className="flex gap-1 justify-center w-full">
+                      {isDisplayEquipped && (
+                        <span className="text-[7px] font-black px-1 py-0.5 rounded bg-pink-100 dark:bg-pink-950/50 text-pink-600 dark:text-pink-300">外觀</span>
+                      )}
+                      {isAbilityEquipped && (
+                        <span className="text-[7px] font-black px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300">能力</span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Action Button */}
-                  <div className="w-full mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="w-full mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1">
                     {isUnlocked ? (
-                      isEquipped ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleEquipPet(null); }}
-                          disabled={isHatchingActionLoading}
-                          className="w-full py-1 rounded-lg text-[9px] font-black bg-emerald-50 text-emerald-600 hover:bg-rose-50 hover:text-rose-600 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-rose-950/20 dark:hover:text-rose-450 border border-emerald-200/50 dark:border-emerald-900/50 transition-all text-center flex items-center justify-center gap-1 group/btn cursor-pointer"
-                        >
-                          <span className="group-hover/btn:hidden flex items-center gap-0.5"><Check size={8} />隨行中</span>
-                          <span className="hidden group-hover/btn:inline">回窩休息</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleEquipPet(pet.id); }}
-                          disabled={isHatchingActionLoading}
-                          className="w-full py-1 rounded-lg text-[9px] font-black bg-slate-900 hover:bg-slate-850 dark:bg-slate-800 dark:hover:bg-slate-700 text-white transition-all text-center cursor-pointer"
-                        >
-                          邀請隨行
-                        </button>
-                      )
+                      <>
+                        {isDisplayEquipped ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEquipPet(null, { target: 'display' }); }}
+                            disabled={isHatchingActionLoading}
+                            className="w-full py-1 rounded-lg text-[9px] font-black bg-emerald-50 text-emerald-600 hover:bg-rose-50 hover:text-rose-600 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-rose-950/20 dark:hover:text-rose-450 border border-emerald-200/50 dark:border-emerald-900/50 transition-all text-center flex items-center justify-center gap-1 group/btn cursor-pointer"
+                          >
+                            <span className="group-hover/btn:hidden flex items-center gap-0.5"><Check size={8} />外觀中</span>
+                            <span className="hidden group-hover/btn:inline">卸下外觀</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEquipPet(pet.id, { target: 'both' }); }}
+                            disabled={isHatchingActionLoading}
+                            className="w-full py-1 rounded-lg text-[9px] font-black bg-slate-900 hover:bg-slate-850 dark:bg-slate-800 dark:hover:bg-slate-700 text-white transition-all text-center cursor-pointer"
+                          >
+                            邀請隨行
+                          </button>
+                        )}
+                        {isAbilityEquipped ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEquipPet(null, { abilityPetId: null, target: 'ability' }); }}
+                            disabled={isHatchingActionLoading}
+                            className="w-full py-0.5 rounded-lg text-[8px] font-black text-violet-600 dark:text-violet-400 hover:text-rose-500 transition-all cursor-pointer"
+                          >
+                            能力中 · 點擊卸下
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEquipPet(null, { abilityPetId: pet.id, target: 'ability' }); }}
+                            disabled={isHatchingActionLoading}
+                            className="w-full py-0.5 rounded-lg text-[8px] font-black text-violet-500 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-all cursor-pointer"
+                          >
+                            僅設為能力夥伴
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <button
                         onClick={(e) => {
@@ -878,6 +994,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                         item={item}
                         ownedItemsMap={ownedItemsMap}
                         boundPlayer={boundPlayer}
+                        abilityPetId={boundPlayer?.ability_pet_id}
                         buyingId={buyingId}
                         onBuy={handleBuy}
                         onPreview={(type, name) => {
@@ -960,7 +1077,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                         }}
                         className="flex items-center justify-center"
                       >
-                        <PetRenderer petId={shufflingPetId} className="w-16 h-16 scale-125" />
+                        <PetRenderer petId={shufflingPetId} tier={getPetTier(shufflingPetId)} className="w-16 h-16 scale-125" />
                       </motion.div>
                     )}
 
@@ -971,7 +1088,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                         transition={{ type: "spring", stiffness: 200, damping: 10 }}
                         className="flex items-center justify-center"
                       >
-                        <PetRenderer petId={hatchingPetId} className="w-20 h-20 scale-150 animate-bounce" />
+                        <PetRenderer petId={hatchingPetId} tier={getPetTier(hatchingPetId)} className="w-20 h-20 scale-150 animate-bounce" />
                       </motion.div>
                     )}
                   </div>
@@ -1014,9 +1131,6 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                             {PETS_CATALOG.find(p => p.id === hatchingPetId)?.name || '神祕寵物'}
                           </span>
                         </p>
-                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed mt-2 font-bold">
-                          {PETS_CATALOG.find(p => p.id === hatchingPetId)?.desc}
-                        </p>
                         {(() => {
                           const ability = PET_ABILITIES[hatchingPetId];
                           if (!ability) return null;
@@ -1046,15 +1160,22 @@ export const ShopModal: React.FC<ShopModalProps> = ({ onClose, onUpdate }) => {
                     <div className="flex justify-around items-center gap-2">
                       {PETS_CATALOG.filter(p => p.eggType === currentHatchEggId).map(candidate => {
                         const isCurrent = (hatchState === 'shuffling' && shufflingPetId === candidate.id) || (hatchState === 'revealed' && hatchingPetId === candidate.id);
+                        const hatchMeta = HATCH_TIER_META[candidate.hatchTier];
                         return (
                           <div key={candidate.id} className="flex flex-col items-center min-w-[64px]">
                             <div className={cn(
-                              "w-12 h-12 rounded-full border flex items-center justify-center p-2 transition-all duration-300",
+                              "w-12 h-12 rounded-full border flex items-center justify-center p-2 transition-all duration-300 relative",
                               isCurrent 
                                 ? "bg-white/15 border-amber-400 scale-110 shadow-lg shadow-amber-500/10" 
                                 : "bg-white/5 border-white/5 opacity-30 grayscale"
                             )}>
-                              <PetRenderer petId={candidate.id} className="w-8 h-8" />
+                              <PetRenderer petId={candidate.id} tier={candidate.tier} className="w-8 h-8" />
+                              <span className={cn(
+                                "absolute -top-1 -right-1 text-[6px] font-black px-0.5 rounded border",
+                                hatchMeta.colorClass
+                              )}>
+                                {hatchMeta.stars}
+                              </span>
                             </div>
                             <span className={cn("text-[9px] font-bold mt-1.5 whitespace-nowrap", isCurrent ? "text-amber-400" : "text-slate-500")}>
                               {candidate.name}
@@ -1172,16 +1293,28 @@ const ShopItemCard: React.FC<{
   item: any;
   ownedItemsMap: Record<number, { isPermanent: boolean }>;
   boundPlayer: any;
+  abilityPetId?: string | null;
   buyingId: number | null;
   onBuy: (item: any, isPermanent: boolean) => void;
   onPreview: (type: 'title' | 'frame' | 'background', name: string) => void;
-}> = ({ item, ownedItemsMap, boundPlayer, buyingId, onBuy, onPreview }) => {
+}> = ({ item, ownedItemsMap, boundPlayer, abilityPetId, buyingId, onBuy, onPreview }) => {
   const [isPermanent, setIsPermanent] = useState(false);
   const ownedInfo = ownedItemsMap[item.id];
   const isOwned = !!ownedInfo;
   const isOwnedPermanent = !!ownedInfo?.isPermanent;
 
-  const currentPrice = isPermanent ? item.price_permanent : item.price;
+  const basePrice = useMemo(() => {
+    let price = isPermanent ? item.price_permanent : item.price;
+    if (ownedInfo && !ownedInfo.isPermanent && isPermanent) {
+      price = Math.max(0, item.price_permanent - item.price);
+    }
+    return price;
+  }, [isPermanent, item.price, item.price_permanent, ownedInfo]);
+
+  const priced = useMemo(
+    () => computeShopPrice(basePrice, abilityPetId),
+    [basePrice, abilityPetId]
+  );
 
   const tierStyle = useMemo(() => {
     switch (item.tier) {
@@ -1370,25 +1503,24 @@ const ShopItemCard: React.FC<{
           <span className="text-[7px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">
             {isPermanent ? "永久" : "7天"}
           </span>
-          <div className="flex items-center gap-0.5 mt-0.5 md:mt-1">
-            <Feather size={10} className="text-sky-500 md:w-3.5 md:h-3.5 shrink-0" />
-            <span className="text-xs md:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none truncate">
-              {currentPrice}
-            </span>
-          </div>
+          <ShopPriceLabel
+            originalPrice={basePrice}
+            abilityPetId={abilityPetId}
+            size="md"
+          />
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onBuy(item, isPermanent); }}
           disabled={
             buyingId === item.id ||
-            (boundPlayer?.feathers || 0) < currentPrice ||
+            (boundPlayer?.feathers || 0) < priced.finalPrice ||
             isOwnedPermanent
           }
           className={cn(
             "px-2 py-1 md:px-6 md:py-3 rounded-lg md:rounded-xl font-black text-[9px] md:text-xs transition-all active:scale-95 whitespace-nowrap shadow-sm shrink-0",
             isOwnedPermanent
               ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 cursor-default"
-              : (boundPlayer?.feathers || 0) < currentPrice
+              : (boundPlayer?.feathers || 0) < priced.finalPrice
                 ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
                 : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 dark:shadow-none"
           )}

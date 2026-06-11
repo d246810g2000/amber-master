@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS players (
     active_frame_id INT,
     active_background_id INT,
     active_pet_id VARCHAR(50) DEFAULT NULL,
+    ability_pet_id VARCHAR(50) DEFAULT NULL,
     active_egg_id VARCHAR(50) DEFAULT NULL,
     egg_progress_games INT DEFAULT 0,
     egg_progress_wins INT DEFAULT 0,
@@ -34,9 +35,17 @@ CREATE TABLE IF NOT EXISTS bets (
     amount INT NOT NULL,
     bet_type VARCHAR(20) DEFAULT 'moneyline',
     line_value FLOAT DEFAULT 0.0,
+    locked_odds FLOAT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_settled INT DEFAULT 0,
     INDEX idx_match (match_id)
+);
+
+CREATE TABLE IF NOT EXISTS house_daily_stats (
+    date DATE PRIMARY KEY,
+    rake_collected INT DEFAULT 0,
+    house_subsidy INT DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Feather Transactions Table

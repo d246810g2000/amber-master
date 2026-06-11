@@ -19,6 +19,7 @@ export const RawPlayerSchema = z.object({
   active_background: z.object({ id: z.number(), name: z.string(), item_type: z.string(), image_url: z.string().nullable().optional() }).nullable().optional(),
   email: z.string().nullable().optional(),
   active_pet_id: z.string().nullable().optional(),
+  ability_pet_id: z.string().nullable().optional(),
   active_egg_id: z.string().nullable().optional(),
   egg_progress_games: z.coerce.number().optional().default(0),
   egg_progress_wins: z.coerce.number().optional().default(0),

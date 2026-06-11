@@ -8,6 +8,9 @@ export interface DashboardSummary {
   controller: string;
   waitingCount: number;
   updatedAt: string;
+  houseNetToday?: number;
+  houseRakeToday?: number;
+  houseSubsidyToday?: number;
 }
 
 export function useDashboardSummary(date?: string) {

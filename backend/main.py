@@ -32,6 +32,17 @@ def run_db_migrations():
             print("MIGRATION: Adding tier column to shop_items...")
             conn.execute(text("ALTER TABLE shop_items ADD COLUMN tier VARCHAR(20) DEFAULT 'classic'"))
             conn.commit()
+
+        player_columns = [col['name'] for col in inspector.get_columns('players')]
+        if 'ability_pet_id' not in player_columns:
+            print("MIGRATION: Adding ability_pet_id column to players...")
+            conn.execute(text("ALTER TABLE players ADD COLUMN ability_pet_id VARCHAR(50) DEFAULT NULL"))
+            conn.commit()
+            conn.execute(text(
+                "UPDATE players SET ability_pet_id = active_pet_id "
+                "WHERE ability_pet_id IS NULL AND active_pet_id LIKE 'pet_%'"
+            ))
+            conn.commit()
             
         if 'player_loans' not in inspector.get_table_names():
             print("MIGRATION: Creating player_loans table...")
@@ -822,7 +833,11 @@ async def place_bet(req: schemas.BetRequest, db: Session = Depends(get_db)):
     if not player:
         return error("找不到球員資料，請確認是否已綁定帳號")
     
-    result = crud.place_bet(db, player.id, req.matchId, req.team, req.amount)
+    result = crud.place_bet(
+        db, player.id, req.matchId, req.team, req.amount,
+        bet_type=req.betType or "moneyline",
+        line_value=req.lineValue or 0.0,
+    )
     if result.get("status") == "error":
         return error(result.get("message"))
     
@@ -905,7 +920,11 @@ def hatch_egg(req: schemas.HatchRequest, db: Session = Depends(get_db)):
 @app.post("/players/equip-pet")
 def equip_pet(req: schemas.EquipPetRequest, db: Session = Depends(get_db)):
     try:
-        result = crud.equip_pet(db, req.userEmail, req.petId)
+        result = crud.equip_pet(
+            db, req.userEmail, req.petId,
+            ability_pet_id=req.abilityPetId,
+            target=req.target or "both",
+        )
         return success(result)
     except ValueError as e:
         return error(str(e))

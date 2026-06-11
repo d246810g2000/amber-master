@@ -20,6 +20,7 @@ class Player(Base):
     active_frame_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
     active_background_id = Column(Integer, ForeignKey("shop_items.id"), nullable=True)
     active_pet_id = Column(String(50), nullable=True)
+    ability_pet_id = Column(String(50), nullable=True)
     active_egg_id = Column(String(50), nullable=True)
     egg_progress_games = Column(Integer, default=0)
     egg_progress_wins = Column(Integer, default=0)
@@ -82,8 +83,16 @@ class Bet(Base):
     amount = Column(Integer, nullable=False)
     bet_type = Column(String(20), default="moneyline") # moneyline, handicap, over_under
     line_value = Column(Float, default=0.0) # e.g., -3.5 or 40.5
+    locked_odds = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_settled = Column(Integer, default=0) # 0: pending, 1: settled, 2: cancelled
+
+class HouseDailyStats(Base):
+    __tablename__ = "house_daily_stats"
+    date = Column(Date, primary_key=True, index=True)
+    rake_collected = Column(Integer, default=0)
+    house_subsidy = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class FeatherTransaction(Base):
     __tablename__ = "feather_transactions"
