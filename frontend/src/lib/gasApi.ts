@@ -203,6 +203,22 @@ export async function fetchHouseDetail(date?: string) {
   return apiGet('/dashboard/house-detail', { date }, z.any());
 }
 
+export async function fetchHouseRescueInfo(date?: string) {
+  return apiGet('/house/rescue-info', { date }, z.any());
+}
+
+export async function donateToHouse(playerEmail: string, amount: number) {
+  return apiPost('/house/donate', { playerEmail, amount }, z.any());
+}
+
+export async function fetchMiniGameStatus(playerEmail: string) {
+  return apiGet('/minigame/status', { playerEmail }, z.any());
+}
+
+export async function submitMiniGameScore(playerEmail: string, score: number) {
+  return apiPost('/minigame/submit', { playerEmail, score }, z.any());
+}
+
 export async function fetchActiveMatchDates() {
   return apiGet('/matches/active-dates', undefined, z.array(z.string()));
 }

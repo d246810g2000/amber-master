@@ -27,6 +27,7 @@ import { HouseDetailModal } from "../components/dashboard/HouseDetailModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
 import { ShopModal, EGG_REQUIREMENTS, PETS_CATALOG, PET_ABILITIES } from "../components/dashboard/ShopModal";
 import { GameGuideModal } from "../components/dashboard/GameGuideModal";
+import { MiniGameModal } from "../components/dashboard/MiniGameModal";
 import { hasSeenGameGuide, markGameGuideSeen } from "../lib/gameGuide";
 import { EggRenderer } from "../components/EggRenderer";
 import { PetRenderer } from "../components/PetRenderer";
@@ -49,6 +50,7 @@ export function DashboardPage() {
   const [houseDetailOpen, setHouseDetailOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isMiniGameOpen, setIsMiniGameOpen] = useState(false);
   const [guideInitialSection, setGuideInitialSection] = useState<string | undefined>();
 
   React.useEffect(() => {
@@ -411,6 +413,7 @@ export function DashboardPage() {
         onRefresh={() => { refetchPlayers(); refetchMatches(); fetchState(); }}
         onSettings={() => setIsSettingsOpen(true)}
         onShop={() => setIsShopOpen(true)}
+        onMiniGame={() => setIsMiniGameOpen(true)}
         onGuide={() => openGuide()}
         onGuideBetting={() => openGuide('betting')}
 
@@ -657,6 +660,19 @@ export function DashboardPage() {
                 }
               : undefined
           }
+        />
+      )}
+
+      {isMiniGameOpen && (
+        <MiniGameModal
+          isOpen={isMiniGameOpen}
+          onClose={() => setIsMiniGameOpen(false)}
+          playerName={boundPlayer?.name}
+          playerAvatar={boundPlayer?.avatar}
+          onSuccess={() => {
+            refetchPlayers();
+            queryClient.invalidateQueries({ queryKey: ['players-base'] });
+          }}
         />
       )}
 

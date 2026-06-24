@@ -6,6 +6,7 @@ import Minimize from "lucide-react/dist/esm/icons/minimize";
 import Users from "lucide-react/dist/esm/icons/users";
 import ShoppingBag from "lucide-react/dist/esm/icons/shopping-bag";
 import HelpCircle from "lucide-react/dist/esm/icons/help-circle";
+import Gamepad2 from "lucide-react/dist/esm/icons/gamepad-2";
 
 import { BannerAnimation } from '../BannerAnimation';
 import { LoginButton } from '../auth/LoginButton';
@@ -63,6 +64,7 @@ interface DashboardHeaderProps {
   onRefresh: () => void;
   onSettings: () => void;
   onShop: () => void;
+  onMiniGame: () => void;
   onGuide?: () => void;
   onGuideBetting?: () => void;
   onShowHouseDetail?: () => void;
@@ -80,7 +82,7 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
-  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop, onGuide, onGuideBetting, onShowHouseDetail,
+  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop, onMiniGame, onGuide, onGuideBetting, onShowHouseDetail,
 
   summary, onlineCount
 }) => {
@@ -248,6 +250,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 title="羽毛商店"
               >
                 <ShoppingBag className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
+              </button>
+              <button
+                onClick={onMiniGame}
+                className="ml-1 p-1 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group"
+                title="接羽毛挑戰小遊戲"
+              >
+                <Gamepad2 className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
               </button>
               {!hasClaimedToday && boundPlayer && isGameDay && (
                 <button

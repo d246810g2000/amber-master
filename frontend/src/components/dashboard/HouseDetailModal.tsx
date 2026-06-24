@@ -6,6 +6,7 @@ import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
 import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down';
 import ChevronUp from 'lucide-react/dist/esm/icons/chevron-up';
 import * as gasApi from '../../lib/gasApi';
+import { useAuth } from '../../context/AuthContext';
 
 interface HouseDetailModalProps {
   isOpen: boolean;
@@ -26,9 +27,21 @@ function formatDateLabel(ymd?: string): string {
 }
 
 export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({ isOpen, onClose, date }) => {
-  const { data, isLoading, error } = useQuery({
+  const { currentUser } = useAuth();
+  const [donateAmount, setDonateAmount] = useState<number>(1000);
+  const [isDonating, setIsDonating] = useState<boolean>(false);
+  const [donationError, setDonationError] = useState<string | null>(null);
+  const [donationSuccess, setDonationSuccess] = useState<string | null>(null);
+
+  const { data, isLoading, error, refetch: refetchDetail } = useQuery({
     queryKey: ['houseDetail', date],
     queryFn: () => gasApi.fetchHouseDetail(date),
+    enabled: isOpen && !!date,
+  });
+
+  const { data: rescueData, refetch: refetchRescue } = useQuery({
+    queryKey: ['houseRescueInfo', date],
+    queryFn: () => gasApi.fetchHouseRescueInfo(date),
     enabled: isOpen && !!date,
   });
 
@@ -39,6 +52,34 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({ isOpen, onCl
       ...prev,
       [matchId]: !prev[matchId]
     }));
+  };
+
+  const handleDonate = async () => {
+    if (!currentUser?.email) {
+      setDonationError('請先登入帳號');
+      return;
+    }
+    if (donateAmount <= 0) {
+      setDonationError('捐贈金額必須大於 0');
+      return;
+    }
+    setIsDonating(true);
+    setDonationError(null);
+    setDonationSuccess(null);
+    try {
+      const res = await gasApi.donateToHouse(currentUser.email, donateAmount);
+      if (res.status === 'error' || res.detail) {
+        setDonationError(res.detail || res.message || '捐贈失敗');
+      } else {
+        setDonationSuccess(`成功捐贈了 ${donateAmount} 根羽毛！`);
+        refetchDetail();
+        refetchRescue();
+      }
+    } catch (err: any) {
+      setDonationError(err.message || '連線錯誤');
+    } finally {
+      setIsDonating(false);
+    }
   };
 
   const houseNet = data?.houseNet ?? 0;
@@ -107,7 +148,9 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({ isOpen, onCl
                     </div>
                     <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl border ${
                       houseNet <= -50000
-                        ? 'bg-red-500/10 border-red-500/20 text-red-500 animate-pulse font-extrabold'
+                        ? (rescueData?.isRescued
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold'
+                            : 'bg-red-500/10 border-red-500/20 text-red-500 animate-pulse font-extrabold')
                         : (houseNet >= 0
                             ? 'bg-amber-500/5 border-amber-500/10 text-amber-500'
                             : 'bg-sky-500/5 border-sky-500/10 text-sky-500')
@@ -116,18 +159,86 @@ export const HouseDetailModal: React.FC<HouseDetailModalProps> = ({ isOpen, onCl
                         {houseNet <= -50000 ? '莊家狀態' : '莊家淨收 (Net)'}
                       </div>
                       <div className="text-sm md:text-xl font-black mt-1 tabular-nums">
-                        {houseNet <= -50000 ? '已破產跑路' : `${houseNet >= 0 ? '+' : ''}${houseNet.toLocaleString()}`}
+                        {houseNet <= -50000 
+                          ? (rescueData?.isRescued ? '已東山再起' : '已破產跑路') 
+                          : `${houseNet >= 0 ? '+' : ''}${houseNet.toLocaleString()}`}
                       </div>
                     </div>
                   </div>
 
-                  {houseNet <= -50000 && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 p-3 md:p-4 rounded-xl md:rounded-2xl flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-black text-xs md:text-sm">🚨 莊家破產警報</div>
-                        <div className="text-[10px] md:text-xs opacity-90 mt-0.5">今日莊家賠付金額已超出風控上限（已達 -50,000 以上），莊家已宣布跑路破產！</div>
+                  {/* 莊家拯救募資計畫區塊 */}
+                  {((houseNet <= -50000) || (rescueData && rescueData.totalRaised > 0)) && (
+                    <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 rounded-xl md:rounded-2xl p-4 md:p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl md:text-2xl">{rescueData?.isRescued ? '🎉' : '🆘'}</span>
+                          <div>
+                            <h4 className="text-sm md:text-base font-black text-amber-600 dark:text-amber-400">
+                              {rescueData?.isRescued ? '莊家重組成功！東山再起' : '莊家瀕臨破產！東山再起募資計畫'}
+                            </h4>
+                            <p className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                              {rescueData?.isRescued 
+                                ? '今日募資已達標！感謝球員熱心支援，所有捐贈者已獲得 1.2 倍羽毛獎勵！' 
+                                : '莊家因賠付過多宣告破產。募集達到 50,000 羽毛後莊家將東山再起，並加倍奉還所有捐贈者 1.2 倍羽毛！'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">
+                          {rescueData?.isRescued ? '已達成' : '募資中'}
+                        </span>
                       </div>
-                      <span className="text-2xl md:text-3xl">💸</span>
+
+                      {/* 進度條 */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-extrabold text-slate-600 dark:text-slate-300">
+                          <span>募集進度 ({rescueData?.donationsCount ?? 0} 次捐贈)</span>
+                          <span>
+                            {rescueData?.totalRaised?.toLocaleString()} / {rescueData?.goal?.toLocaleString()} 羽毛
+                            ({Math.min(100, Math.round(((rescueData?.totalRaised ?? 0) / (rescueData?.goal ?? 50000)) * 100))}%）
+                          </span>
+                        </div>
+                        <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700/50">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, ((rescueData?.totalRaised ?? 0) / (rescueData?.goal ?? 50000)) * 100)}%` }}
+                            transition={{ duration: 0.5, ease: 'easeOut' }}
+                            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 捐贈輸入與按鈕 */}
+                      {!rescueData?.isRescued && currentUser?.email && (
+                        <div className="flex flex-col sm:flex-row gap-3 items-end sm:items-center bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <div className="w-full sm:flex-1 space-y-1">
+                            <label className="text-[10px] md:text-xs font-bold text-slate-400">捐贈羽毛數量</label>
+                            <input
+                              type="number"
+                              value={donateAmount || ''}
+                              onChange={(e) => setDonateAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-black text-slate-800 dark:text-white focus:outline-none focus:border-amber-400"
+                              placeholder="請輸入捐贈數量"
+                              min={1}
+                              disabled={isDonating}
+                            />
+                          </div>
+                          <button
+                            onClick={handleDonate}
+                            disabled={isDonating || donateAmount <= 0}
+                            className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-95 disabled:opacity-50 disabled:pointer-events-none text-white font-extrabold text-sm px-6 py-2.5 rounded-lg shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-1.5"
+                          >
+                            {isDonating ? <Loader2 className="w-4 h-4 animate-spin" /> : '🪙'}
+                            捐贈羽毛救莊家
+                          </button>
+                        </div>
+                      )}
+
+                      {donationError && (
+                        <p className="text-xs font-extrabold text-red-500 dark:text-red-400 mt-1">❌ {donationError}</p>
+                      )}
+                      {donationSuccess && (
+                        <p className="text-xs font-extrabold text-emerald-500 mt-1">✅ {donationSuccess}</p>
+                      )}
                     </div>
                   )}
 

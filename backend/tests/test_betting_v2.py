@@ -113,7 +113,7 @@ class TestBettingV2(unittest.TestCase):
 
         house = crud.get_house_daily_stats(db, date.today())
         self.assertEqual(house["houseRakeToday"], 0)
-        self.assertEqual(house["houseSubsidyToday"], 92)
+        self.assertEqual(house["houseSubsidyToday"], 82)
 
     def test_pool_beats_house_when_imbalanced(self):
         db = self.db
@@ -248,6 +248,112 @@ class TestBettingV2(unittest.TestCase):
         self.assertEqual(ml["houseOdds1"], HOUSE_ODDS_EVEN)
         self.assertEqual(ml["effectiveOdds1"], HOUSE_ODDS_EVEN)
         self.assertIn("poolOdds1", ml)
+
+    def test_pool_odds_floor_is_1_10(self):
+        db = self.db
+        match_id = "test_match_floor_1_10"
+        self._create_standard_match(match_id)
+        # Everyone bets on the same side, so pool odds should floor at 1.10
+        self._place_test_bet(match_id, "b1", 1, 200, "moneyline")
+        db.commit()
+
+        match = db.query(models.Match).filter(models.Match.id == match_id).first()
+        match.score = "21-10"
+        match.winner = 1
+        db.commit()
+
+        # Artificially set house to bankrupt so pool odds are used
+        today = date.today()
+        crud.accumulate_house_daily_stats(db, today, 0, 100000)
+        db.commit()
+
+        results = crud.settle_bets(db, match_id, winner_team=1)
+        self.assertEqual(len(results["winners"]), 1)
+        # Winner should get paid 200 * 1.10 = 220 feathers instead of just 200
+        self.assertEqual(results["winners"][0]["payout"], 220)
+
+    def test_house_rescue_donation(self):
+        db = self.db
+        today = date.today()
+        self._create_standard_match("test_rescue_match")
+        
+        # 1. House is not bankrupt initially, donation should fail
+        res = crud.donate_to_house(db, "b1", 500)
+        self.assertEqual(res["status"], "error")
+        self.assertIn("財務健全", res["message"])
+
+        # 2. Make house bankrupt
+        crud.accumulate_house_daily_stats(db, today, 0, 60000)
+        db.commit()
+
+        # 3. Donate to house (b1 has 1000 feathers)
+        res = crud.donate_to_house(db, "b1", 500)
+        self.assertEqual(res["status"], "success")
+        
+        b1 = db.query(models.Player).filter(models.Player.id == "b1").first()
+        self.assertEqual(b1.feathers, 500) # 1000 - 500 = 500
+
+        # Check rescue progress
+        progress = crud.get_today_house_rescue_progress(db, today)
+        self.assertEqual(progress["totalRaised"], 500)
+        self.assertFalse(progress["isRescued"])
+
+        # 4. Donate the remaining goal (49500) to trigger rescue success
+        # Give b2 some feathers (he starts with 1000, let's give him 50000)
+        b2 = db.query(models.Player).filter(models.Player.id == "b2").first()
+        b2.feathers = 50000
+        db.commit()
+
+        res2 = crud.donate_to_house(db, "b2", 49500)
+        self.assertEqual(res2["status"], "success")
+
+        # Now target of 50000 is reached, b1 and b2 should receive 1.2x payout
+        db.refresh(b1)
+        db.refresh(b2)
+
+        # b1 donated 500, should get back 500 * 1.2 = 600. Remaining was 500. Total = 1100.
+        self.assertEqual(b1.feathers, 1100)
+        # b2 started with 50000, donated 49500 (remaining 500), gets back 49500 * 1.2 = 59400. Total = 59900.
+        self.assertEqual(b2.feathers, 59900)
+
+        # House should be rescued
+        progress = db_query_progress = crud.get_today_house_rescue_progress(db, today)
+        self.assertTrue(progress["isRescued"])
+
+    def test_minigame_workflow(self):
+        db = self.db
+        self._create_standard_match("test_minigame_match")
+        
+        # 1. Initially, player should be eligible to play
+        status = crud.check_minigame_eligibility(db, "b1")
+        self.assertTrue(status["canPlay"])
+        
+        # 2. Submit score
+        res = crud.submit_minigame_score(db, "b1", 150)
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["reward"], 150)
+        
+        b1 = db.query(models.Player).filter(models.Player.id == "b1").first()
+        self.assertEqual(b1.feathers, 1150) # 1000 + 150 = 1150
+        
+        # 3. Check eligibility again (should be False)
+        status2 = crud.check_minigame_eligibility(db, "b1")
+        self.assertFalse(status2["canPlay"])
+        
+        # 4. Attempting to submit again should fail
+        res2 = crud.submit_minigame_score(db, "b1", 200)
+        self.assertEqual(res2["status"], "error")
+        self.assertIn("本週已經挑戰過", res2["message"])
+        
+        # 5. Check anti-cheat cap (submit score 800 for eligible player b2)
+        status_b2 = crud.check_minigame_eligibility(db, "b2")
+        self.assertTrue(status_b2["canPlay"])
+        res_b2 = crud.submit_minigame_score(db, "b2", 800)
+        self.assertEqual(res_b2["status"], "success")
+        self.assertEqual(res_b2["reward"], 500) # Capped at 500
+        
+        b2 = db.query(models.Player).filter(models.Player.id == "b2").first()
+        self.assertEqual(b2.feathers, 1500) # 1000 + 500 = 1500
 
 if __name__ == "__main__":
     unittest.main()

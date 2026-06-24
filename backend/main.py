@@ -421,6 +421,53 @@ def get_dashboard_house_detail(date: Optional[str] = Query(None), db: Session = 
     detail = crud.get_house_detail(db, target_date)
     return success(detail)
 
+@app.get("/house/rescue-info")
+def get_house_rescue_info(date: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    target_date = safe_date(date) or datetime.now().date()
+    stats = crud.get_house_daily_stats(db, target_date)
+    net = stats.get("houseNetToday", 0)
+    is_bankrupt = net <= -50000
+    
+    progress = crud.get_today_house_rescue_progress(db, target_date)
+    return success({
+        "isBankrupt": is_bankrupt and not progress["isRescued"],
+        "houseNet": net,
+        "totalRaised": progress["totalRaised"],
+        "goal": progress["goal"],
+        "isRescued": progress["isRescued"],
+        "donationsCount": progress["donationsCount"]
+    })
+
+@app.post("/house/donate")
+async def donate_to_house(req: schemas.HouseDonateRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+        
+    res = crud.donate_to_house(db, player.id, req.amount)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+        
+    return success(res)
+
+@app.get("/minigame/status")
+def get_minigame_status(playerEmail: str = Query(...), db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    status_info = crud.check_minigame_eligibility(db, player.id)
+    return success(status_info)
+
+@app.post("/minigame/submit")
+async def submit_minigame_score(req: schemas.MiniGameSubmitRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    res = crud.submit_minigame_score(db, player.id, req.score)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
 # Matches API
 @app.get("/matches")
 @app.get("/matches/")

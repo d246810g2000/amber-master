@@ -1160,8 +1160,8 @@ def compute_house_odds(t1_mu: float, t2_mu: float, bet_type: str) -> tuple:
 
 def compute_pool_odds(t1_total: int, t2_total: int) -> tuple:
     total = t1_total + t2_total
-    pool1 = round(max(1.05, total / t1_total * 0.85), 2) if t1_total > 0 else 2.0
-    pool2 = round(max(1.05, total / t2_total * 0.85), 2) if t2_total > 0 else 2.0
+    pool1 = round(max(1.10, total / t1_total * 0.85), 2) if t1_total > 0 else 2.0
+    pool2 = round(max(1.10, total / t2_total * 0.85), 2) if t2_total > 0 else 2.0
     return pool1, pool2
 
 def accumulate_house_daily_stats(db: Session, target_date: date, rake: int, subsidy: int):
@@ -1218,6 +1218,165 @@ def get_house_daily_stats(db: Session, target_date: date) -> Dict[str, int]:
         "houseRakeToday": rake,
         "houseSubsidyToday": subsidy,
         "houseNetToday": rake - subsidy,
+    }
+
+def get_last_wednesday_start() -> datetime:
+    from datetime import timedelta, time as dt_time
+    # Taipei time offset is UTC+8
+    now_taipei = datetime.utcnow() + timedelta(hours=8)
+    days_since_wed = (now_taipei.weekday() - 2) % 7
+    last_wed = now_taipei.date() - timedelta(days=days_since_wed)
+    return datetime.combine(last_wed, dt_time.min)
+
+def check_minigame_eligibility(db: Session, player_id: str) -> dict:
+    from datetime import timedelta
+    last_wed = get_last_wednesday_start()
+    next_wed = last_wed + timedelta(days=7)
+    
+    last_wed_utc = last_wed - timedelta(hours=8)
+    
+    existing_play = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id,
+        models.FeatherTransaction.type == "minigame_reward",
+        models.FeatherTransaction.created_at >= last_wed_utc
+    ).first()
+    
+    can_play = existing_play is None
+    
+    return {
+        "canPlay": can_play,
+        "lastPlayedAt": existing_play.created_at + timedelta(hours=8) if existing_play else None,
+        "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+def submit_minigame_score(db: Session, player_id: str, score: int) -> dict:
+    if score < 0:
+        return {"status": "error", "message": "分數不能小於 0"}
+        
+    MAX_MINIGAME_SCORE = 500
+    actual_reward = min(score, MAX_MINIGAME_SCORE)
+    
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if not db_player:
+        return {"status": "error", "message": "找不到該球員"}
+        
+    eligibility = check_minigame_eligibility(db, player_id)
+    if not eligibility["canPlay"]:
+        return {"status": "error", "message": "您本週已經挑戰過小遊戲囉！"}
+        
+    db_player.feathers = (db_player.feathers or 0) + actual_reward
+    
+    db_tx = models.FeatherTransaction(
+        player_id=player_id,
+        amount=actual_reward,
+        type="minigame_reward",
+        description=f"每週接羽毛小遊戲：獲得 {actual_reward} 根羽毛 (原始分數: {score})"
+    )
+    db.add(db_tx)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"挑戰成功！獲得了 {actual_reward} 根羽毛！",
+        "reward": actual_reward,
+        "score": score
+    }
+
+def get_today_house_rescue_progress(db: Session, target_date: date) -> Dict[str, Any]:
+    from datetime import time as dt_time
+    start_dt = datetime.combine(target_date, dt_time.min)
+    end_dt = datetime.combine(target_date, dt_time.max)
+    donations = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.type == "house_donation",
+        models.FeatherTransaction.created_at >= start_dt,
+        models.FeatherTransaction.created_at <= end_dt
+    ).all()
+    total_raised = sum(abs(t.amount) for t in donations)
+    goal = 50000
+    is_rescued = total_raised >= goal
+    return {
+        "totalRaised": total_raised,
+        "goal": goal,
+        "isRescued": is_rescued,
+        "donationsCount": len(donations)
+    }
+
+def donate_to_house(db: Session, player_id: str, amount: int) -> Dict[str, Any]:
+    if amount <= 0:
+        return {"status": "error", "message": "捐贈金額必須大於 0"}
+    
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if not db_player:
+        return {"status": "error", "message": "找不到該球員"}
+        
+    if (db_player.feathers or 0) < amount:
+        return {"status": "error", "message": "您的羽毛餘額不足"}
+
+    today = _get_taipei_today()
+    
+    stats = get_house_daily_stats(db, today)
+    net = stats.get("houseNetToday", 0)
+    
+    progress_before = get_today_house_rescue_progress(db, today)
+    if progress_before["isRescued"]:
+        return {"status": "error", "message": "莊家今天已經重組成功，不需要再捐贈囉！"}
+        
+    if net > -50000:
+        return {"status": "error", "message": "莊家目前財務健全，尚不需要大家募資拯救！"}
+
+    db_player.feathers -= amount
+    
+    db_donation = models.FeatherTransaction(
+        player_id=player_id,
+        amount=-amount,
+        type="house_donation",
+        description=f"捐贈羽毛救莊家募資計畫"
+    )
+    db.add(db_donation)
+    
+    accumulate_house_daily_stats(db, today, amount, 0)
+    db.commit()
+    
+    progress_after = get_today_house_rescue_progress(db, today)
+    if progress_after["isRescued"] and not progress_before["isRescued"]:
+        from datetime import time as dt_time
+        start_dt = datetime.combine(today, dt_time.min)
+        end_dt = datetime.combine(today, dt_time.max)
+        today_donations = db.query(models.FeatherTransaction).filter(
+            models.FeatherTransaction.type == "house_donation",
+            models.FeatherTransaction.created_at >= start_dt,
+            models.FeatherTransaction.created_at <= end_dt
+        ).all()
+        
+        player_donations = {}
+        for t in today_donations:
+            player_donations[t.player_id] = player_donations.get(t.player_id, 0) + abs(t.amount)
+            
+        for pid, amt in player_donations.items():
+            p = db.query(models.Player).filter(models.Player.id == pid).first()
+            if p:
+                reward = int(amt * 1.2)
+                p.feathers = (p.feathers or 0) + reward
+                db.add(models.FeatherTransaction(
+                    player_id=pid,
+                    amount=reward,
+                    type="house_rescue_reward",
+                    description=f"莊家重組東山再起：加倍奉還 {reward} 根羽毛 (1.2x)"
+                ))
+        
+        announcement = f"🎉 莊家募資計畫大成功！感謝各位大德支援，累計募資已達 {progress_after['totalRaised']} 根羽毛！莊家宣告東山再起，下注補貼機制已全面恢復！捐贈者皆已獲得 1.2 倍加倍奉還獎勵！💰"
+        db.add(models.ChatMessage(
+            match_date=today,
+            type="announcement",
+            content=announcement,
+            timestamp=datetime.utcnow()
+        ))
+        db.commit()
+        
+    return {
+        "status": "success",
+        "message": f"成功捐贈了 {amount} 根羽毛給莊家！",
+        "progress": get_today_house_rescue_progress(db, today)
     }
 
 def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int, bet_type: str = "moneyline", line_value: float = 0.0):
@@ -1401,7 +1560,9 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
         if stats_row:
             net = (stats_row.rake_collected or 0) - (stats_row.house_subsidy or 0)
             if net <= -50000:
-                is_bankrupt = True
+                rescue_progress = get_today_house_rescue_progress(db, match_date)
+                if not rescue_progress["isRescued"]:
+                    is_bankrupt = True
         
         try:
             score_str = db_match.score or "21-0"
@@ -1470,7 +1631,8 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                 
             total_rake += rake
             net_profit = lose_stake - rake - bonus
-            pool_odds = (win_stake + net_profit) / win_stake if win_stake > 0 else 1.0
+            pool_odds = (win_stake + net_profit) / win_stake if win_stake > 0 else 1.10
+            pool_odds = max(1.10, pool_odds)
             
             if win_stake > 0:
                 for b in win_bets:
@@ -1542,19 +1704,21 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
         if row:
             net = (row.rake_collected or 0) - (row.house_subsidy or 0)
             if net <= -50000:
-                exists = db.query(models.ChatMessage).filter(
-                    models.ChatMessage.match_date == match_date,
-                    models.ChatMessage.type == 'announcement',
-                    models.ChatMessage.content.contains('正式宣告破產')
-                ).first()
-                if not exists:
-                    db_msg = models.ChatMessage(
-                        match_date=match_date,
-                        type='announcement',
-                        content='💸 莊家破產宣告：莊家今天被大家贏到脫褲子，正式宣告破產！下週請手下留情...',
-                        timestamp=datetime.utcnow()
-                    )
-                    db.add(db_msg)
+                rescue_progress = get_today_house_rescue_progress(db, match_date)
+                if not rescue_progress["isRescued"]:
+                    exists = db.query(models.ChatMessage).filter(
+                        models.ChatMessage.match_date == match_date,
+                        models.ChatMessage.type == 'announcement',
+                        models.ChatMessage.content.contains('正式宣告破產')
+                    ).first()
+                    if not exists:
+                        db_msg = models.ChatMessage(
+                            match_date=match_date,
+                            type='announcement',
+                            content='💸 莊家破產宣告：莊家今天被大家贏到脫褲子，正式宣告破產！下週請手下留情...',
+                            timestamp=datetime.utcnow()
+                        )
+                        db.add(db_msg)
             elif net <= -30000:
                 exists = db.query(models.ChatMessage).filter(
                     models.ChatMessage.match_date == match_date,

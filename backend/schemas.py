@@ -209,6 +209,14 @@ class BetRequest(BaseModel):
 class ClaimFeathersRequest(BaseModel):
     email: str
 
+class HouseDonateRequest(BaseModel):
+    playerEmail: str
+    amount: int
+
+class MiniGameSubmitRequest(BaseModel):
+    playerEmail: str
+    score: int
+
 class FeatherClaimResponse(BaseModel):
     status: str
     amount: int
