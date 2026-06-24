@@ -45,7 +45,7 @@ export type GuideIconKey =
   | 'egg'
   | 'handshake';
 
-const ICONS: Record<GuideIconKey, React.FC<{ size?: number; className?: string }>> = {
+const ICONS: Record<GuideIconKey, React.FC<{ size?: number; className?: string; strokeWidth?: number }>> = {
   feather: Feather,
   calendar: Calendar,
   trophy: Trophy,

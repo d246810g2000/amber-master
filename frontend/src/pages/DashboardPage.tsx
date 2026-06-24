@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { GeminiBot } from "../components/chat/GeminiBot";
 import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
+import { HouseDetailModal } from "../components/dashboard/HouseDetailModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
 import { ShopModal, EGG_REQUIREMENTS, PETS_CATALOG, PET_ABILITIES } from "../components/dashboard/ShopModal";
 import { GameGuideModal } from "../components/dashboard/GameGuideModal";
@@ -45,6 +46,7 @@ export function DashboardPage() {
   const [filterPlayerIds, setFilterPlayerIds] = useState<string[]>([]);
   const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [dailySummaryOpen, setDailySummaryOpen] = useState(false);
+  const [houseDetailOpen, setHouseDetailOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [guideInitialSection, setGuideInitialSection] = useState<string | undefined>();
@@ -414,8 +416,7 @@ export function DashboardPage() {
 
         summary={summary}
         onlineCount={onlineCount}
-
-
+        onShowHouseDetail={() => setHouseDetailOpen(true)}
       />
 
 
@@ -619,6 +620,12 @@ export function DashboardPage() {
         filterDate={currentFilterDate}
         matchHistory={matchHistory}
         players={players}
+      />
+      
+      <HouseDetailModal
+        isOpen={houseDetailOpen}
+        onClose={() => setHouseDetailOpen(false)}
+        date={currentFilterDate}
       />
       
       {/* 楓之谷風格尬廣聊天室 */}

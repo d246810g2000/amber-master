@@ -199,6 +199,10 @@ export async function fetchDashboardSummary(date?: string) {
   return apiGet('/dashboard/summary', { date }, z.any());
 }
 
+export async function fetchHouseDetail(date?: string) {
+  return apiGet('/dashboard/house-detail', { date }, z.any());
+}
+
 export async function fetchActiveMatchDates() {
   return apiGet('/matches/active-dates', undefined, z.array(z.string()));
 }

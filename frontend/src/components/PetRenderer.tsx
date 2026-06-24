@@ -205,7 +205,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, tier, className
         return <FireBoyPet uId={uId} animClass={animClass} className={className} />;
       case "pet_rabbit_warrior":
       case "pet_rabbit":
-        return <RabbitWarriorPet uId={uId} className={className} />;
+        return <RabbitWarriorPet uId={uId} animClass={animClass} className={className} />;
 
       // ==========================================
       // === EPIC TIER PETS ===

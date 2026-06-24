@@ -65,6 +65,7 @@ interface DashboardHeaderProps {
   onShop: () => void;
   onGuide?: () => void;
   onGuideBetting?: () => void;
+  onShowHouseDetail?: () => void;
 
   summary?: {
     totalMatches: number;
@@ -79,7 +80,7 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading, showBannerEgg, isFullscreen,
-  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop, onGuide, onGuideBetting,
+  onToggleBanner, onToggleFullscreen, onRefresh, onSettings, onShop, onGuide, onGuideBetting, onShowHouseDetail,
 
   summary, onlineCount
 }) => {
@@ -133,16 +134,47 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   const houseNet = summary?.houseNetToday ?? 0;
 
+  const getHouseStats = () => {
+    if (houseNet <= -50000) {
+      return {
+        value: '💸 莊家已破產',
+        valueClass: 'text-rose-500 font-extrabold animate-pulse',
+        title: '今日莊家已賠付到破產！點擊查看明細'
+      };
+    }
+    if (houseNet <= -30000) {
+      return {
+        value: '🚨 莊家告急',
+        valueClass: 'text-orange-500 font-bold animate-pulse',
+        title: '今日莊家面臨重大虧損，資金告急！點擊查看明細'
+      };
+    }
+    if (houseNet <= -10000) {
+      return {
+        value: '⚠️ 莊家吃緊',
+        valueClass: 'text-yellow-500 font-bold',
+        title: '今日莊家賠付金額較多，財務吃緊中！點擊查看明細'
+      };
+    }
+    return {
+      value: `${houseNet >= 0 ? '+' : ''}${houseNet}`,
+      valueClass: houseNet >= 0 ? 'text-amber-500' : 'text-sky-500',
+      title: '正數＝系統賺，負數＝今天在補單邊押中的玩家。點擊查看明細'
+    };
+  };
+
+  const houseStats = getHouseStats();
+
   const statsItems = summary ? [
     { label: '今日場次', value: summary.totalMatches, valueClass: 'text-slate-900 dark:text-white', onClick: undefined as (() => void) | undefined },
     { label: '參戰人數', value: summary.activePlayerCount, valueClass: 'text-slate-900 dark:text-white', onClick: undefined },
     { label: '平均 CP', value: Math.round(summary.averageInstantMu * 10), valueClass: 'text-emerald-500', onClick: undefined },
     {
       label: '莊家淨收',
-      value: `${houseNet >= 0 ? '+' : ''}${houseNet}`,
-      valueClass: houseNet >= 0 ? 'text-amber-500' : 'text-sky-500',
-      onClick: onGuideBetting,
-      title: '正數＝系統賺，負數＝今天在補單邊押中的玩家。點擊查看說明',
+      value: houseStats.value,
+      valueClass: houseStats.valueClass,
+      onClick: onShowHouseDetail,
+      title: houseStats.title,
     },
   ] : [];
 

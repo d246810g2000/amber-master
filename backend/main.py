@@ -415,6 +415,12 @@ def get_dashboard_summary(date: Optional[str] = Query(None), db: Session = Depen
     summary = crud.get_dashboard_summary(db, target_date)
     return success(summary)
 
+@app.get("/dashboard/house-detail")
+def get_dashboard_house_detail(date: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    target_date = safe_date(date) or datetime.now().date()
+    detail = crud.get_house_detail(db, target_date)
+    return success(detail)
+
 # Matches API
 @app.get("/matches")
 @app.get("/matches/")

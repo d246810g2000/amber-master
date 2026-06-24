@@ -1224,6 +1224,10 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
     if amount < 50:
         return {"status": "error", "message": "最低投注金額為 50 根羽毛"}
 
+    MAX_BET_AMOUNT = 10000
+    if amount > MAX_BET_AMOUNT:
+        return {"status": "error", "message": f"單筆最高投注限制為 {MAX_BET_AMOUNT} 根羽毛"}
+
     bet_type = normalize_bet_type(bet_type)
 
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
@@ -1276,6 +1280,25 @@ def place_bet(db: Session, player_id: str, match_id: str, team: int, amount: int
 
     house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, bet_type)
     locked_odds = house_o1 if team == 1 else house_o2
+
+    # 風控機制：根據單邊投注比例動態調降賠率
+    existing_bets = db.query(models.Bet).filter(
+        models.Bet.match_id == match_id,
+        models.Bet.bet_type == bet_type
+    ).all()
+    t1_total = sum(b.amount for b in existing_bets if b.team == 1)
+    t2_total = sum(b.amount for b in existing_bets if b.team == 2)
+    total_pool = t1_total + t2_total
+    
+    if total_pool > 0:
+        new_t1_total = t1_total + (amount if team == 1 else 0)
+        new_t2_total = t2_total + (amount if team == 2 else 0)
+        new_total_pool = total_pool + amount
+        
+        share = new_t1_total / new_total_pool if team == 1 else new_t2_total / new_total_pool
+        if share > 0.6:
+            scale = 1.0 - (share - 0.6) * 0.75
+            locked_odds = max(HOUSE_MIN_ODDS, round(locked_odds * scale, 2))
 
     db_player.feathers -= amount
     db_bet = models.Bet(
@@ -1370,6 +1393,16 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
         db_match = db.query(models.Match).filter(models.Match.id == match_id).first()
         if not db_match: return {"winners": []}
         
+        match_date = db_match.match_date or _get_taipei_today()
+
+        # 檢查莊家當天是否已經處於破產狀態
+        is_bankrupt = False
+        stats_row = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == match_date).first()
+        if stats_row:
+            net = (stats_row.rake_collected or 0) - (stats_row.house_subsidy or 0)
+            if net <= -50000:
+                is_bankrupt = True
+        
         try:
             score_str = db_match.score or "21-0"
             s1, s2 = map(int, score_str.split("-"))
@@ -1427,9 +1460,14 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
             lose_stake = sum(b.amount for b in type_bets if not is_bet_won(b) and not is_bet_push(b))
             win_stake = sum(b.amount for b in win_bets)
             
-            rake = int(lose_stake * SYSTEM_RAKE_RATE)
             bonus = int(lose_stake * PLAYER_BONUS_RATE)
             total_player_bonus += bonus
+            
+            if win_stake > 0:
+                rake = int(lose_stake * SYSTEM_RAKE_RATE)
+            else:
+                rake = lose_stake - bonus
+                
             total_rake += rake
             net_profit = lose_stake - rake - bonus
             pool_odds = (win_stake + net_profit) / win_stake if win_stake > 0 else 1.0
@@ -1441,8 +1479,11 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                         locked = house_o1 if b.team == 1 else house_o2
                     house_payout = int(b.amount * locked)
                     pool_payout = int(b.amount * pool_odds)
-                    payout = max(house_payout, pool_payout)
-                    total_subsidy += max(0, house_payout - pool_payout)
+                    if is_bankrupt:
+                        payout = pool_payout
+                    else:
+                        payout = max(house_payout, pool_payout)
+                        total_subsidy += max(0, house_payout - pool_payout)
 
                     p = db.query(models.Player).filter(models.Player.id == b.player_id).first()
                     if p:
@@ -1451,8 +1492,8 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                         total_payout = payout + bonus_payout
                         p.feathers = (p.feathers or 0) + total_payout
 
-                        source = "池子" if pool_payout > house_payout else "莊家"
-                        used_odds = pool_odds if pool_payout > house_payout else locked
+                        source = "池子" if pool_payout > house_payout or is_bankrupt else "莊家"
+                        used_odds = pool_odds if pool_payout > house_payout or is_bankrupt else locked
                         desc = f"預測成功({bt})：{s1}-{s2} ({source} {round(used_odds, 2)})"
                         if bonus_payout > 0:
                             desc += f" (寵物加成 +{bonus_payout} 根)"
@@ -1495,6 +1536,53 @@ def settle_bets(db: Session, match_id: str, winner_team: int):
                             type="match_reward", 
                             description=desc
                         ))
+
+        # 莊家當天破產機制與尬廣廣播
+        row = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == match_date).first()
+        if row:
+            net = (row.rake_collected or 0) - (row.house_subsidy or 0)
+            if net <= -50000:
+                exists = db.query(models.ChatMessage).filter(
+                    models.ChatMessage.match_date == match_date,
+                    models.ChatMessage.type == 'announcement',
+                    models.ChatMessage.content.contains('正式宣告破產')
+                ).first()
+                if not exists:
+                    db_msg = models.ChatMessage(
+                        match_date=match_date,
+                        type='announcement',
+                        content='💸 莊家破產宣告：莊家今天被大家贏到脫褲子，正式宣告破產！下週請手下留情...',
+                        timestamp=datetime.utcnow()
+                    )
+                    db.add(db_msg)
+            elif net <= -30000:
+                exists = db.query(models.ChatMessage).filter(
+                    models.ChatMessage.match_date == match_date,
+                    models.ChatMessage.type == 'announcement',
+                    models.ChatMessage.content.contains('資金即將見底')
+                ).first()
+                if not exists:
+                    db_msg = models.ChatMessage(
+                        match_date=match_date,
+                        type='announcement',
+                        content='📢 系統公告：莊家羽毛快被大家捏爆了（達 -30,000 以上），資金即將見底！請手下留情...',
+                        timestamp=datetime.utcnow()
+                    )
+                    db.add(db_msg)
+            elif net <= -10000:
+                exists = db.query(models.ChatMessage).filter(
+                    models.ChatMessage.match_date == match_date,
+                    models.ChatMessage.type == 'announcement',
+                    models.ChatMessage.content.contains('莊家羽毛已經有點吃緊')
+                ).first()
+                if not exists:
+                    db_msg = models.ChatMessage(
+                        match_date=match_date,
+                        type='announcement',
+                        content='📢 系統公告：今天大家手氣太好，莊家羽毛已經有點吃緊了（達 -10,000 以上）！請手下留情...',
+                        timestamp=datetime.utcnow()
+                    )
+                    db.add(db_msg)
 
         db.commit()
         return {"winners": winners_report}
@@ -2285,6 +2373,148 @@ def get_player_pet_effect(player, effect_type: str, key: str) -> float:
     if not cfg or cfg.get("type") != effect_type:
         return 0.0
     return cfg.get(key, 0.0)
+
+def get_house_detail(db: Session, target_date: date):
+    # 1. Get daily stats
+    stats = db.query(models.HouseDailyStats).filter(models.HouseDailyStats.date == target_date).first()
+    rake_collected = stats.rake_collected if stats else 0
+    house_subsidy = stats.house_subsidy if stats else 0
+    
+    # 2. Get matches
+    matches = db.query(models.Match).filter(models.Match.match_date == target_date).all()
+    
+    match_list = []
+    for m in matches:
+        p1 = db.query(models.Player).filter(models.Player.id == m.t1p1_id).first()
+        p2 = db.query(models.Player).filter(models.Player.id == m.t1p2_id).first()
+        p3 = db.query(models.Player).filter(models.Player.id == m.t2p1_id).first()
+        p4 = db.query(models.Player).filter(models.Player.id == m.t2p2_id).first()
+        
+        t1_names = f"{p1.name if p1 else ''}" + (f" & {p2.name}" if p2 else "")
+        t2_names = f"{p3.name if p3 else ''}" + (f" & {p4.name}" if p4 else "")
+        
+        try:
+            score_str = m.score or "21-0"
+            s1, s2 = map(int, score_str.split("-"))
+        except:
+            s1, s2 = (21, 0) if m.winner == 1 else (0, 21)
+            
+        t1_mu, t2_mu = _get_match_mus(db, m.id, target_date)
+        
+        # Get bets
+        bets = db.query(models.Bet).filter(models.Bet.match_id == m.id).all()
+        
+        bet_breakdowns = []
+        for bt in ["moneyline", "handicap", "over_under"]:
+            type_bets = [b for b in bets if b.bet_type == bt]
+            if not type_bets:
+                continue
+                
+            house_o1, house_o2 = compute_house_odds(t1_mu, t2_mu, bt)
+            
+            def is_bet_push(b):
+                if b.bet_type == "handicap":
+                    if b.team == 1: return (s1 + b.line_value) == s2
+                    return (s2 - b.line_value) == s1
+                if b.bet_type == "over_under":
+                    return (s1 + s2) == b.line_value
+                return False
+
+            def is_bet_won(b):
+                if is_bet_push(b):
+                    return False
+                if b.bet_type == "moneyline":
+                    return b.team == m.winner
+                elif b.bet_type == "handicap":
+                    if b.team == 1: return (s1 + b.line_value) > s2
+                    else: return (s2 - b.line_value) > s1
+                elif b.bet_type == "over_under":
+                    total = s1 + s2
+                    return (total > b.line_value) if b.team == 1 else (total < b.line_value)
+                return False
+                
+            win_bets = [b for b in type_bets if is_bet_won(b)]
+            lose_bets = [b for b in type_bets if not is_bet_won(b) and not is_bet_push(b)]
+            push_bets = [b for b in type_bets if is_bet_push(b)]
+            
+            win_stake = sum(b.amount for b in win_bets)
+            lose_stake = sum(b.amount for b in lose_bets)
+            push_stake = sum(b.amount for b in push_bets)
+            
+            bonus = int(lose_stake * PLAYER_BONUS_RATE)
+            
+            if win_stake > 0:
+                rake = int(lose_stake * SYSTEM_RAKE_RATE)
+            else:
+                rake = lose_stake - bonus
+                
+            net_profit = lose_stake - rake - bonus
+            pool_odds = (win_stake + net_profit) / win_stake if win_stake > 0 else 1.0
+            
+            subsidy = 0
+            detail_bets = []
+            
+            for b in type_bets:
+                player = db.query(models.Player).filter(models.Player.id == b.player_id).first()
+                p_name = player.name if player else "Unknown"
+                
+                locked = b.locked_odds
+                if not locked:
+                    locked = house_o1 if b.team == 1 else house_o2
+                    
+                status = "WIN" if is_bet_won(b) else ("PUSH" if is_bet_push(b) else "LOSE")
+                
+                bet_payout = 0
+                bet_subsidy = 0
+                
+                if status == "WIN":
+                    house_payout = int(b.amount * locked)
+                    pool_payout = int(b.amount * pool_odds)
+                    bet_payout = max(house_payout, pool_payout)
+                    bet_subsidy = max(0, house_payout - pool_payout)
+                    subsidy += bet_subsidy
+                elif status == "PUSH":
+                    bet_payout = b.amount
+                    
+                detail_bets.append({
+                    "playerName": p_name,
+                    "team": b.team,
+                    "amount": b.amount,
+                    "lockedOdds": locked,
+                    "poolOdds": pool_odds if status == "WIN" else None,
+                    "status": status,
+                    "payout": bet_payout,
+                    "subsidy": bet_subsidy
+                })
+                
+            bet_breakdowns.append({
+                "betType": bt,
+                "betTypeLabel": BET_TYPE_LABELS.get(bt, bt),
+                "totalT1": sum(b.amount for b in type_bets if b.team == 1),
+                "totalT2": sum(b.amount for b in type_bets if b.team == 2),
+                "rake": rake,
+                "subsidy": subsidy,
+                "net": rake - subsidy,
+                "bets": detail_bets
+            })
+            
+        match_list.append({
+            "id": m.id,
+            "courtName": m.court_name,
+            "t1Names": t1_names,
+            "t2Names": t2_names,
+            "score": m.score or f"{s1}-{s2}",
+            "winner": m.winner,
+            "betTypes": bet_breakdowns
+        })
+        
+    return {
+        "date": str(target_date),
+        "rakeCollected": rake_collected,
+        "houseSubsidy": house_subsidy,
+        "houseNet": rake_collected - house_subsidy,
+        "matches": match_list
+    }
 
 
 
