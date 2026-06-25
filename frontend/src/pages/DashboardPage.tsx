@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import * as gasApi from '../lib/gasApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { getTaipeiDateString, cn } from "../lib/utils";
+import { getTaipeiDateString, cn, isMobileDevice } from "../lib/utils";
 import * as matchEngine from "../lib/matchEngine";
 import type { DerivedPlayer } from "../lib/matchEngine";
 import { usePlayers, type PlayerStatus } from "../hooks/usePlayers";
@@ -424,7 +424,11 @@ export function DashboardPage() {
 
 
       {error && (
-        <div className="bg-red-500/90 dark:bg-red-900/90 text-white p-4 rounded-xl mb-6 shadow-lg backdrop-blur-sm flex justify-between items-center border border-red-400 dark:border-red-700 shrink-0">
+        <div className={cn(
+          "text-white p-4 rounded-xl mb-6 shadow-lg flex justify-between items-center border shrink-0",
+          "bg-red-500/90 dark:bg-red-900/90 border-red-400 dark:border-red-700",
+          !isMobileDevice() && "backdrop-blur-sm"
+        )}>
           <span className="font-medium">{error}</span>
           <button type="button" onClick={() => setError(null)} className="text-white/80 hover:text-white bg-red-600/50 dark:bg-red-800/50 px-3 py-1 rounded-lg shrink-0">關閉</button>
         </div>

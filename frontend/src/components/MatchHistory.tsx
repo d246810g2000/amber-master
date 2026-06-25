@@ -8,7 +8,7 @@ import X from "lucide-react/dist/esm/icons/x";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import { MatchPlayer, MatchRecord, Player } from "../types";
-import { cn, parseLocalDateTime, getAvatarUrl } from "../lib/utils";
+import { cn, parseLocalDateTime, getAvatarUrl, isMobileDevice } from "../lib/utils";
 import { calculateWeightedMu } from "../lib/matchEngine";
 import { CustomCalendar } from "./common/CustomCalendar";
 import { useAuth } from "../context/AuthContext";
@@ -175,7 +175,7 @@ export interface MatchHistoryProps {
   useCareerWeight?: boolean;
 }
 
-export function MatchHistory({ 
+export const MatchHistory = React.memo(function MatchHistory({ 
   history,
   loading,
   filterDate,
@@ -296,14 +296,20 @@ export function MatchHistory({
 
         {/* Expandable Player List (Glassmorphism Styled, Simplified) */}
         {isFilterOpen && (
-          <div className="bg-[#0f172a]/95 backdrop-blur-md rounded-[1.5rem] p-3 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-3 duration-500 border border-white/5">
+          <div className={cn(
+            "bg-[#0f172a]/95 rounded-[1.5rem] p-3 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-3 duration-500 border border-white/5",
+            !isMobileDevice() && "backdrop-blur-md"
+          )}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[60px] -mr-16 -mt-16 pointer-events-none" />
             
             {/* Clear Button (Absolute positioned to save space) */}
             {selectedPlayerIds.length > 0 && (
               <button 
                 onClick={onClearPlayers}
-                className="absolute top-3 right-3 z-10 text-[9px] font-black text-rose-400 hover:text-white transition-all flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-full backdrop-blur-sm border border-rose-500/20"
+                className={cn(
+                  "absolute top-3 right-3 z-10 text-[9px] font-black text-rose-400 hover:text-white transition-all flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-full border border-rose-500/20",
+                  !isMobileDevice() && "backdrop-blur-sm"
+                )}
               >
                 清除重置 <X size={10} />
               </button>
@@ -447,7 +453,10 @@ export function MatchHistory({
 
                   {/* Admin Actions Overlay */}
                   {isAdmin && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-20">
+                    <div className={cn(
+                      "absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-slate-900/90 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-20",
+                      !isMobileDevice() && "backdrop-blur-sm"
+                    )}>
                       <button 
                         onClick={() => setEditingMatch(match)}
                         className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
@@ -480,7 +489,7 @@ export function MatchHistory({
       />
     </div>
   );
-}
+});
 
 export const MatchHistorySkeleton: React.FC = () => (
   <div className="space-y-3 px-1 animate-pulse-heavy">
