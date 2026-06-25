@@ -540,7 +540,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
       {/* Top Banner Header */}
       <div className="bg-slate-50/80 dark:bg-slate-950/20 backdrop-blur-xl border-b border-slate-100 dark:border-white/5 -mx-6 -mt-6 px-4 md:px-6 py-4 md:py-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3 md:gap-6">
-          <button onClick={onBack} className="p-2 md:p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl md:rounded-2xl transition-all text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border border-transparent hover:border-slate-100 dark:hover:border-white/5">
+          <button onClick={onBack} className="p-2.5 md:p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl md:rounded-2xl transition-all text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border border-transparent hover:border-slate-100 dark:hover:border-white/5 relative active:scale-95 before:absolute before:-inset-1">
             <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" />
           </button>
           <div className="flex flex-col">
@@ -550,7 +550,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
               <div className="mt-1 flex items-center gap-2">
                 <button
                   onClick={handleLogoutSession}
-                  className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest border-r border-slate-200 dark:border-white/10 pr-2"
+                  className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest border-r border-slate-200 dark:border-white/10 pr-2 relative active:scale-95 before:absolute before:-inset-2"
                 >
                   <ShieldCheck size={10} className="text-emerald-500" />
                   已解密 (登出)
@@ -560,7 +560,7 @@ export const PlayerProfile: React.FC<PlayerProfileProps> = ({ playerId, onBack, 
                   <button
                     onClick={handleBindAndEnter}
                     disabled={bindingNow}
-                    className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors uppercase tracking-widest pr-2 border-r border-slate-200 dark:border-white/10 last:border-0"
+                    className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors uppercase tracking-widest pr-2 border-r border-slate-200 dark:border-white/10 last:border-0 relative active:scale-95 before:absolute before:-inset-2"
                     title="將此帳號正式綁定到 Google"
                   >
                     <UserPlus size={10} />

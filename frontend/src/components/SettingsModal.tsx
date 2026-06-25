@@ -289,12 +289,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {activeTab === 'players' && !showAddForm && (
                 <button 
                   onClick={() => setShowAddForm(true)}
-                  className="p-2 text-slate-900 dark:text-white"
+                  className="p-2.5 text-slate-900 dark:text-white relative active:scale-95 before:absolute before:-inset-1.5"
                 >
                   <UserPlus size={24} />
                 </button>
               )}
-              <button onClick={onClose} className="p-2 text-slate-400"><X size={24} /></button>
+              <button onClick={onClose} className="p-2.5 text-slate-400 relative active:scale-95 before:absolute before:-inset-1.5"><X size={24} /></button>
             </div>
           </div>
           <div className="flex overflow-x-auto scrollbar-hide">
@@ -473,11 +473,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
 
                             {/* Actions */}
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0">
                               <button 
                                 onClick={() => handleToggleType(p.id, p.type)}
                                 disabled={actionId === p.id}
-                                className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-lg transition-all"
+                                className="p-2.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-lg transition-all relative active:scale-95 before:absolute before:-inset-2"
                                 title={p.type === 'resident' ? "轉為臨打" : "設為常駐"}
                               >
                                 {actionId === p.id ? <Loader2 size={16} className="animate-spin" /> : p.type === 'resident' ? <User size={16} /> : <Star size={16} />}
@@ -489,7 +489,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <button
                                       onClick={() => handleUnbind(p.id, p.name)}
                                       disabled={!!bindingActionId}
-                                      className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                                      className="p-2.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all relative active:scale-95 before:absolute before:-inset-2"
                                       title="解除綁定"
                                     >
                                       {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2Off size={16} />}
@@ -498,7 +498,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <button
                                       onClick={() => handleBind(p.id, p.name)}
                                       disabled={!!bindingActionId}
-                                      className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                      className="p-2.5 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all relative active:scale-95 before:absolute before:-inset-2"
                                       title="立即綁定"
                                     >
                                       {bindingActionId === p.id ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
@@ -507,7 +507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </>
                               )}
                               
-                              <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500" title="刪除單一球員">
+                              <button onClick={() => handleDelete(p.id)} className="p-2.5 text-slate-300 dark:text-slate-700 hover:text-rose-500 relative active:scale-95 before:absolute before:-inset-2" title="刪除單一球員">
                                 {actionId === p.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
                               </button>
                             </div>

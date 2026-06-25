@@ -1,6 +1,7 @@
 import React from "react";
-import { cn } from "../lib/utils";
+import { cn, isMobileDevice } from "../lib/utils";
 import { PetTier } from "../types";
+
 
 // Import tiered pet components
 import {
@@ -49,6 +50,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, tier, className
   const uId = React.useId().replace(/:/g, "");
 
   const getAnimationClass = (tier: PetTier | undefined) => {
+    if (isMobileDevice()) return "";
     switch (tier) {
       case "classic": return "";
       case "epic": return "animate-[petBounceSlow_1.4s_infinite_ease-in-out]";
@@ -60,7 +62,7 @@ export const PetRenderer: React.FC<PetRendererProps> = ({ petId, tier, className
 
   const animClass = getAnimationClass(tier);
 
-  const styleBlock = (
+  const styleBlock = isMobileDevice() ? null : (
     <style>{`
       /* Core Float & Bounce Animations */
       @keyframes petFloat {

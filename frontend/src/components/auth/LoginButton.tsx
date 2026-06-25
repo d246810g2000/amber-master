@@ -97,7 +97,7 @@ export function LoginButton() {
 
   if (currentUser) {
     return (
-      <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-1 md:pr-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all shrink-0 h-[34px] md:h-[44px] self-center">
+      <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pl-1 md:pl-1.5 pr-1 md:pr-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm transition-all shrink-0 h-[38px] md:h-[44px] self-center">
         <button
           type="button"
           onClick={handleNameClick}
@@ -126,7 +126,7 @@ export function LoginButton() {
 
         <button
           onClick={logout}
-          className="ml-0.5 p-1 md:p-2 rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center justify-center h-[28px] w-[28px] md:h-[36px] md:w-[36px]"
+          className="ml-0.5 p-1 md:p-2 rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center justify-center h-[28px] w-[28px] md:h-[36px] md:w-[36px] relative before:absolute before:-inset-2 active:scale-90"
           title="登出"
         >
           <LogOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -140,7 +140,7 @@ export function LoginButton() {
     <div className="flex flex-col items-center gap-1.5 md:gap-2">
       <button
         onClick={() => handleCustomLogin()}
-        className="flex items-center gap-2 px-3.5 md:px-5 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 dark:shadow-none active:scale-95 shrink-0 border border-slate-800 dark:border-white h-[34px] md:h-[44px]"
+        className="flex items-center gap-2 px-3.5 md:px-5 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 rounded-[10px] md:rounded-2xl transition-all shadow-xl shadow-slate-200 dark:shadow-none active:scale-95 shrink-0 border border-slate-800 dark:border-white h-[38px] md:h-[44px]"
       >
         <div className="w-3.5 h-3.5 md:w-5 md:h-5 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0">
           <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 md:w-3.5 md:h-3.5">
@@ -155,7 +155,7 @@ export function LoginButton() {
 
       <button 
         onClick={() => setIsAdminModalOpen(true)}
-        className="text-[9px] md:text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors underline underline-offset-2"
+        className="text-[9px] md:text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors underline underline-offset-2 relative before:absolute before:-inset-2.5 active:scale-95"
       >
         管理員登入
       </button>

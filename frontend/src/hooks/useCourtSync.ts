@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import * as gasApi from '../lib/gasApi';
 import { WS_URL } from '../lib/config';
 import type { ChatMessage } from '../components/dashboard/GlobalChat';
+import { isMobileDevice } from '../lib/utils';
+
 
 export interface CourtSyncState {
   version: number;
@@ -114,8 +116,47 @@ export function useCourtSync({
 
   useEffect(() => {
     if (!enabled) return;
-    const timer = setInterval(fetchState, pollingInterval);
-    return () => clearInterval(timer);
+
+    let timer: any = null;
+    const actualInterval = isMobileDevice() ? Math.max(pollingInterval, 15000) : pollingInterval;
+
+    const startPolling = () => {
+      if (!timer) {
+        timer = setInterval(fetchState, actualInterval);
+      }
+    };
+
+    const stopPolling = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchState();
+        startPolling();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      if (!document.hidden) {
+        startPolling();
+      }
+    } else {
+      startPolling();
+    }
+
+    return () => {
+      stopPolling();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [enabled, pollingInterval, fetchState]);
 
   // 新增：WebSocket 即時同步
@@ -124,8 +165,11 @@ export function useCourtSync({
 
     let ws: WebSocket | null = null;
     let reconnectTimeout: any = null;
+    let isComponentMounted = true;
 
     const connect = () => {
+      if (!isComponentMounted) return;
+      if (typeof document !== 'undefined' && document.hidden) return; // 不在背景建立連線
       try {
         ws = new WebSocket(WS_URL);
 
@@ -179,6 +223,7 @@ export function useCourtSync({
         };
 
         ws.onclose = () => {
+          if (!isComponentMounted) return;
           console.log('[WS] Disconnected, retrying in 3s...');
           reconnectTimeout = setTimeout(connect, 3000);
         };
@@ -189,19 +234,48 @@ export function useCourtSync({
         };
       } catch (err) {
         console.error('[WS] Connection failed:', err);
-        reconnectTimeout = setTimeout(connect, 3000);
+        if (isComponentMounted) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
       }
     };
 
-    connect();
-
-    return () => {
+    const disconnect = () => {
       if (ws) {
         ws.onclose = null; // 關鍵修正：防止主動關閉觸發重連邏輯
         ws.onerror = null;
         ws.close();
+        ws = null;
       }
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        disconnect();
+      } else {
+        connect();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      if (!document.hidden) {
+        connect();
+      }
+    } else {
+      connect();
+    }
+
+    return () => {
+      isComponentMounted = false;
+      disconnect();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
     };
   }, [enabled, fetchState]);
 

@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Player } from "../types";
-import { cn, getAvatarUrl } from "../lib/utils";
+import { cn, getAvatarUrl, isMobileDevice } from "../lib/utils";
 import { 
   Moon, 
   Check, 
@@ -80,7 +80,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
           }}
           disabled={!hasControl}
           className={cn(
-            "absolute -top-1.5 -left-1.5 z-[40] p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700 transition-all shadow-sm",
+            "absolute -top-1.5 -left-1.5 z-[40] p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700 transition-all shadow-sm relative active:scale-95 before:absolute before:-inset-2.5",
             hasControl ? "opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200" : "opacity-0 pointer-events-none"
           )}
           title="回休息區"
@@ -89,24 +89,20 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         </button>
       )}
 
-      <AnimatePresence>
-        {activeTitle && (
+      {isMobileDevice() ? (
+        activeTitle && (
           <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-[50] flex flex-col items-center pointer-events-none">
-            <motion.div 
-              initial={{ y: 2, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 2, opacity: 0 }}
-              className="relative px-2 py-0.5"
-            >
+            <div className="relative px-2 py-0.5">
               {(() => {
                 const titleStyle = getTitleStyle(activeTitle);
                 return (
                   <>
                     <div className={cn(
-                      "absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500",
+                      "absolute inset-0 rounded-full border shadow-sm overflow-hidden transition-all duration-500",
+                      !isMobileDevice() && "backdrop-blur-md",
                       titleStyle.bg
                     )}>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer opacity-60" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full opacity-60" />
                     </div>
                     <span className={cn(
                       "relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1 drop-shadow-md",
@@ -117,10 +113,44 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                   </>
                 );
               })()}
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        )
+      ) : (
+        <AnimatePresence>
+          {activeTitle && (
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-[50] flex flex-col items-center pointer-events-none">
+              <motion.div 
+                initial={{ y: 2, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 2, opacity: 0 }}
+                className="relative px-2 py-0.5"
+              >
+                {(() => {
+                  const titleStyle = getTitleStyle(activeTitle);
+                  return (
+                    <>
+                      <div className={cn(
+                        "absolute inset-0 rounded-full border shadow-sm overflow-hidden transition-all duration-500",
+                        !isMobileDevice() && "backdrop-blur-md",
+                        titleStyle.bg
+                      )}>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmer opacity-60" />
+                      </div>
+                      <span className={cn(
+                        "relative text-[7.5px] md:text-[8.5px] font-black uppercase tracking-[0.1em] whitespace-nowrap leading-none flex items-center gap-1 drop-shadow-md",
+                        titleStyle.text
+                      )}>
+                        {activeTitle}
+                      </span>
+                    </>
+                  );
+                })()}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
 
       <button
         onClick={(e) => {
@@ -171,7 +201,10 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         {renderFrameOverlay(activeFrame, "pill")}
         {status === "finishing" && (
           <div className="absolute inset-0 bg-amber-400/10 dark:bg-amber-400/20 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded shadow-sm rotate-3 scale-110">
+            <div className={cn(
+              "bg-white/95 dark:bg-slate-800/95 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded shadow-sm rotate-3 scale-110",
+              !isMobileDevice() && "backdrop-blur-sm"
+            )}>
               <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-tighter flex items-center gap-1">
                 <span className="animate-spin flex"><RefreshCw size={8} /></span>
                 Updating
@@ -184,7 +217,10 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             "absolute inset-0 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)] z-[50]",
             isFallingFeathers ? "bg-transparent" : "bg-slate-900/10 dark:bg-slate-950/40"
           )}>
-            <div className="bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded shadow-sm rotate-[-12deg]">
+            <div className={cn(
+              "bg-white/90 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded shadow-sm rotate-[-12deg]",
+              !isMobileDevice() && "backdrop-blur-sm"
+            )}>
               <span className="text-[10px] font-black text-slate-700 dark:text-slate-100 uppercase tracking-tighter">
                 {courtName ? `場地${courtName}` : "On Court"}
               </span>
@@ -203,7 +239,8 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         {isGolden && isSelected && (
           <div
             className={cn(
-              "pointer-events-none absolute top-1 z-[36] rounded-full bg-amber-400 p-0.5 text-white shadow-md ring-1 ring-amber-200/80 animate-bounce-slow dark:ring-amber-600/50",
+              "pointer-events-none absolute top-1 z-[36] rounded-full bg-amber-400 p-0.5 text-white shadow-md ring-1 ring-amber-200/80 dark:ring-amber-600/50",
+              !isMobileDevice() && "animate-bounce-slow",
               (status === "ready" || status === "finishing") && showRestCornerBadge
                 ? "right-6 md:right-7"
                 : "right-1"
@@ -228,7 +265,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
               ? "absolute top-0 left-0 h-6.5 w-6.5 md:h-8 md:w-8" 
               : "w-full h-full",
             isFallingFeathers 
-              ? "bg-white/10 border-white/20 backdrop-blur-[1px] shadow-sm" 
+              ? cn("bg-white/10 border-white/20 shadow-sm", !isMobileDevice() && "backdrop-blur-[1px]")
               : "bg-slate-100 dark:bg-slate-700 border-white dark:border-slate-800 shadow-inner"
           )}>
             <img
@@ -238,7 +275,10 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
             />
           </div>
           {player.active_pet_id && (
-            <div className="absolute bottom-0 right-0 shrink-0 origin-bottom animate-bounce-slow flex items-center justify-center filter drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.55)]">
+            <div className={cn(
+              "absolute bottom-0 right-0 shrink-0 origin-bottom flex items-center justify-center filter drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.55)]",
+              !isMobileDevice() && "animate-bounce-slow"
+            )}>
               {player.active_pet_id.startsWith('egg_') ? (
                 <div className="relative w-5.5 h-5.5 md:w-6.5 md:h-6.5 flex items-center justify-center">
                   <img
@@ -249,7 +289,7 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
                   {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games <= 100 && (
                     <div className={cn(
                       "absolute -bottom-1.5 -right-1.5 text-white font-black rounded-full px-1 min-w-[12px] h-[12px] flex items-center justify-center scale-90 transform origin-bottom-right shadow-sm border border-white dark:border-slate-900 leading-none text-[7px]",
-                      player.egg_progress_games === 100 ? "bg-amber-500 animate-pulse" : "bg-sky-500"
+                      player.egg_progress_games === 100 && !isMobileDevice() ? "bg-amber-500 animate-pulse" : "bg-sky-500"
                     )}>
                       {player.egg_progress_games}
                     </div>

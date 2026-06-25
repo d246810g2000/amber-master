@@ -4,7 +4,7 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Zap from "lucide-react/dist/esm/icons/zap";
 import Scale from "lucide-react/dist/esm/icons/scale";
 import Moon from "lucide-react/dist/esm/icons/moon";
-import { cn } from "../../lib/utils";
+import { cn, isMobileDevice } from "../../lib/utils";
 import { PlayerPill } from '../PlayerPill';
 import type { Player } from '../../types';
 import type { PlayerStatus } from '../../hooks/usePlayers';
@@ -76,7 +76,10 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
       {/* Ready Zone */}
       <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col relative shrink-0 min-h-[300px] md:min-h-[400px]">
         {confirmRestPlayerId && (
-          <div className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center rounded-[2rem]">
+          <div className={cn(
+            "absolute inset-0 z-50 bg-slate-900/60 flex items-center justify-center rounded-[2rem]",
+            !isMobileDevice() && "backdrop-blur-sm"
+          )}>
             <div className="bg-white dark:bg-slate-800 p-6 mx-4 rounded-2xl shadow-xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
               <Moon size={32} className="text-indigo-400" />
               <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">確認進入休息狀態？</h3>
@@ -100,7 +103,10 @@ export const PlayerZones: React.FC<PlayerZonesProps> = ({
         )}
 
         {isMatchmaking && (
-          <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-[2rem]">
+          <div className={cn(
+            "absolute inset-0 bg-white/60 dark:bg-slate-900/60 z-10 flex items-center justify-center rounded-[2rem]",
+            !isMobileDevice() && "backdrop-blur-[2px]"
+          )}>
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin flex"><RefreshCw className="w-8 h-8 text-emerald-500" /></div>
               <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">

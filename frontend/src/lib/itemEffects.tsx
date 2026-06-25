@@ -1,5 +1,7 @@
 import React from "react";
 import { Feather, Sparkles, Star } from "lucide-react";
+import { isMobileDevice } from "./utils";
+
 
 /**
  * Returns simple border class string for tiny avatars (e.g. MatchHistory, WinnerModal, etc.)
@@ -41,6 +43,7 @@ export function getFrameBorderClass(frameName: string | undefined): string {
  * Checks if the frame is a dynamic conic flow frame
  */
 export function isFlowingFrame(frameName: string | undefined): boolean {
+  if (isMobileDevice()) return false;
   return ["頂尖菁英流光框", "萬象星空邊框"].includes(frameName || "");
 }
 
@@ -105,57 +108,73 @@ export function renderFrameOverlay(frameName: string | undefined, cardType: "pil
 
     case "璀璨鑽石邊框":
       borderClass = "border-sky-300 shadow-[0_0_22px_rgba(56,189,248,0.9),_inset_0_0_8px_rgba(255,255,255,0.5)]";
-      extraElements = (
-        <div className="absolute inset-0">
-          <Sparkles size={11} className="absolute -top-1.5 -left-1.5 text-sky-200 animate-rotate-star" />
-          <Sparkles size={9} className="absolute -bottom-1.5 -right-1.5 text-cyan-200 animate-rotate-star [animation-delay:1s]" />
-          <div className="absolute top-1/2 -right-1.5 text-sky-300 text-[6px] animate-bounce">✦</div>
-        </div>
-      );
+      if (!isMobileDevice()) {
+        extraElements = (
+          <div className="absolute inset-0">
+            <Sparkles size={11} className="absolute -top-1.5 -left-1.5 text-sky-200 animate-rotate-star" />
+            <Sparkles size={9} className="absolute -bottom-1.5 -right-1.5 text-cyan-200 animate-rotate-star [animation-delay:1s]" />
+            <div className="absolute top-1/2 -right-1.5 text-sky-300 text-[6px] animate-bounce">✦</div>
+          </div>
+        );
+      }
       break;
 
     case "大師紫羅蘭框":
       borderClass = "border-purple-500 shadow-[0_0_22px_rgba(168,85,247,0.9),_inset_0_0_8px_rgba(168,85,247,0.3)]";
-      extraElements = (
-        <div className="absolute inset-0">
-          <div className="absolute -top-1 right-2 w-1.5 h-1.5 bg-purple-400 rounded-full blur-[0.5px] animate-pulse" />
-          <div className="absolute -bottom-1 left-2 w-1.5 h-1.5 bg-fuchsia-400 rounded-full blur-[0.5px] animate-pulse [animation-delay:0.8s]" />
-        </div>
-      );
+      if (!isMobileDevice()) {
+        extraElements = (
+          <div className="absolute inset-0">
+            <div className="absolute -top-1 right-2 w-1.5 h-1.5 bg-purple-400 rounded-full blur-[0.5px] animate-pulse" />
+            <div className="absolute -bottom-1 left-2 w-1.5 h-1.5 bg-fuchsia-400 rounded-full blur-[0.5px] animate-pulse [animation-delay:0.8s]" />
+          </div>
+        );
+      }
       break;
 
     case "宗師傲紅邊框":
       borderClass = "border-rose-600 shadow-[0_0_24px_rgba(225,29,72,0.95)]";
-      extraElements = (
-        <div className="absolute inset-x-0 bottom-0 h-1/3 overflow-hidden pointer-events-none">
-          <div className="absolute bottom-0 left-[15%] w-1.5 h-3 bg-red-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '2.5s' }} />
-          <div className="absolute bottom-0 left-[50%] w-2 h-4 bg-orange-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }} />
-          <div className="absolute bottom-0 right-[20%] w-1 h-3 bg-rose-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '3s', animationDelay: '1.2s' }} />
-        </div>
-      );
+      if (!isMobileDevice()) {
+        extraElements = (
+          <div className="absolute inset-x-0 bottom-0 h-1/3 overflow-hidden pointer-events-none">
+            <div className="absolute bottom-0 left-[15%] w-1.5 h-3 bg-red-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '2.5s' }} />
+            <div className="absolute bottom-0 left-[50%] w-2 h-4 bg-orange-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }} />
+            <div className="absolute bottom-0 right-[20%] w-1 h-3 bg-rose-500 rounded-full blur-[0.5px] animate-flame-rise" style={{ animationDuration: '3s', animationDelay: '1.2s' }} />
+          </div>
+        );
+      }
       break;
 
     case "聖白羽翼邊框":
       borderClass = "border-white/95 shadow-[0_0_25px_rgba(255,255,255,0.95),_inset_0_0_8px_rgba(255,255,255,0.5)] ring-1 ring-white/30";
-      extraElements = (
-        <>
-          {/* Feather icon on top right */}
-          <Feather size={12} className="absolute -top-1.5 -right-1.5 text-white rotate-45 drop-shadow-[0_0_6px_rgba(255,255,255,1)] z-[70] animate-bounce-slow" />
-          
-          {/* Left Wing */}
-          <svg className="absolute top-1/3 -left-4 w-4 h-6 text-white/90 drop-shadow-[0_0_6px_rgba(255,255,255,0.8)] fill-current animate-wing-flap" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 3.31 1.69 6.21 4.28 8h.72c2.72-2.12 5-6.08 5-10V2z" />
-          </svg>
-          
-          {/* Right Wing */}
-          <svg className="absolute top-1/3 -right-4 w-4 h-6 text-white/90 drop-shadow-[0_0_6px_rgba(255,255,255,0.8)] fill-current animate-wing-flap [animation-delay:1.5s]" viewBox="0 0 24 24">
-            <path d="M12 2c5.52 0 10 4.48 10 10 0 3.31-1.69 6.21-4.28 8h-.72c-2.72-2.12-5-6.08-5-10V2z" />
-          </svg>
-          
-          {/* Top Halo */}
-          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-8 h-1 bg-yellow-100 rounded-full blur-[0.5px] border border-yellow-200/80 shadow-[0_0_8px_rgba(253,224,71,0.8)] opacity-85" />
-        </>
-      );
+      if (!isMobileDevice()) {
+        extraElements = (
+          <>
+            {/* Feather icon on top right */}
+            <Feather size={12} className="absolute -top-1.5 -right-1.5 text-white rotate-45 drop-shadow-[0_0_6px_rgba(255,255,255,1)] z-[70] animate-bounce-slow" />
+            
+            {/* Left Wing */}
+            <svg className="absolute top-1/3 -left-4 w-4 h-6 text-white/90 drop-shadow-[0_0_6px_rgba(255,255,255,0.8)] fill-current animate-wing-flap" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12c0 3.31 1.69 6.21 4.28 8h.72c2.72-2.12 5-6.08 5-10V2z" />
+            </svg>
+            
+            {/* Right Wing */}
+            <svg className="absolute top-1/3 -right-4 w-4 h-6 text-white/90 drop-shadow-[0_0_6px_rgba(255,255,255,0.8)] fill-current animate-wing-flap [animation-delay:1.5s]" viewBox="0 0 24 24">
+              <path d="M12 2c5.52 0 10 4.48 10 10 0 3.31-1.69 6.21-4.28 8h-.72c-2.72-2.12-5-6.08-5-10V2z" />
+            </svg>
+            
+            {/* Top Halo */}
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-8 h-1 bg-yellow-100 rounded-full blur-[0.5px] border border-yellow-200/80 shadow-[0_0_8px_rgba(253,224,71,0.8)] opacity-85" />
+          </>
+        );
+      }
+      break;
+
+    case "頂尖菁英流光框":
+      borderClass = "border-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]";
+      break;
+
+    case "萬象星空邊框":
+      borderClass = "border-fuchsia-400 shadow-[0_0_8px_rgba(168,85,247,0.5)]";
       break;
 
     default:
@@ -204,7 +223,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "黃金：金光閃耀":
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-yellow-500 via-amber-600 to-amber-950">
-          {[...Array(3)].map((_, i) => (
+          {!isMobileDevice() && [...Array(3)].map((_, i) => (
             <div 
               key={i} 
               className="absolute w-1 h-1 bg-yellow-300 rounded-full blur-[0.5px] animate-float-up opacity-70"
@@ -223,7 +242,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-600 via-teal-850 to-slate-950">
           <div className="absolute inset-0 opacity-[0.15] bg-[linear-gradient(rgba(6,182,212,0.2)_1px,_transparent_1px),_linear-gradient(90deg,_rgba(6,182,212,0.2)_1px,_transparent_1px)] bg-[size:10px_10px]" />
-          <div className="absolute inset-0 bg-cyan-400/10 animate-hex-pulse blur-[1px]" />
+          {!isMobileDevice() && <div className="absolute inset-0 bg-cyan-400/10 animate-hex-pulse blur-[1px]" />}
         </div>
       );
       break;
@@ -231,7 +250,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "翡翠：螢火之森":
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-emerald-800 to-emerald-950">
-          {[...Array(3)].map((_, i) => (
+          {!isMobileDevice() && [...Array(3)].map((_, i) => (
             <div 
               key={i} 
               className="absolute w-1 h-1 bg-emerald-400 rounded-full blur-[0.5px] animate-float-up opacity-75 shadow-[0_0_4px_rgba(52,211,153,0.8)]"
@@ -249,7 +268,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "鑽石：星辰風暴":
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-sky-400 via-sky-800 to-slate-950 shadow-[inset_0_0_12px_rgba(56,189,248,0.3)]">
-          {[...Array(3)].map((_, i) => (
+          {!isMobileDevice() && [...Array(3)].map((_, i) => (
             <Sparkles 
               key={i} 
               size={6} 
@@ -261,7 +280,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
               }} 
             />
           ))}
-          <div className="absolute inset-0 opacity-25 bg-[linear-gradient(135deg,_transparent_45%,_rgba(255,255,255,0.7)_50%,_transparent_55%)] animate-shimmer" style={{ animationDuration: '3.5s' }} />
+          {!isMobileDevice() && <div className="absolute inset-0 opacity-25 bg-[linear-gradient(135deg,_transparent_45%,_rgba(255,255,255,0.7)_50%,_transparent_55%)] animate-shimmer" style={{ animationDuration: '3.5s' }} />}
         </div>
       );
       break;
@@ -269,9 +288,15 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "大師：虛空星河":
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-purple-800 via-slate-900 to-indigo-950 overflow-hidden">
-          <div className="absolute inset-0 bg-radial-gradient from-fuchsia-500/20 via-transparent to-transparent animate-pulse-subtle" />
-          <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.25),_transparent_40%)] animate-spin-slow" style={{ animationDuration: '15s' }} />
-          <div className="absolute top-1/3 left-1/3 w-6 h-6 rounded-full border border-purple-500/35 blur-[1px] animate-pulse" />
+          {!isMobileDevice() ? (
+            <>
+              <div className="absolute inset-0 bg-radial-gradient from-fuchsia-500/20 via-transparent to-transparent animate-pulse-subtle" />
+              <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.25),_transparent_40%)] animate-spin-slow" style={{ animationDuration: '15s' }} />
+              <div className="absolute top-1/3 left-1/3 w-6 h-6 rounded-full border border-purple-500/35 blur-[1px] animate-pulse" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-radial-gradient from-fuchsia-500/10 via-transparent to-transparent" />
+          )}
         </div>
       );
       break;
@@ -279,11 +304,13 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "宗師：雷霆萬鈞":
       content = (
         <div className="absolute inset-0 bg-gradient-to-b from-red-600 via-stone-900 to-black">
-          <div className="absolute inset-0 bg-red-600/30 animate-lightning" />
-          <div className="absolute inset-0 pointer-events-none opacity-50">
-            <div className="absolute top-[-10%] left-[30%] w-[1px] h-[120%] bg-red-400/50 rotate-[25deg] blur-[1px] animate-pulse" />
-            <div className="absolute top-[-10%] left-[70%] w-[1px] h-[120%] bg-rose-400/50 rotate-[-20deg] blur-[1px] animate-pulse" style={{ animationDelay: '1s' }} />
-          </div>
+          {!isMobileDevice() && <div className="absolute inset-0 bg-red-600/30 animate-lightning" />}
+          {!isMobileDevice() && (
+            <div className="absolute inset-0 pointer-events-none opacity-50">
+              <div className="absolute top-[-10%] left-[30%] w-[1px] h-[120%] bg-red-400/50 rotate-[25deg] blur-[1px] animate-pulse" />
+              <div className="absolute top-[-10%] left-[70%] w-[1px] h-[120%] bg-rose-400/50 rotate-[-20deg] blur-[1px] animate-pulse" style={{ animationDelay: '1s' }} />
+            </div>
+          )}
         </div>
       );
       break;
@@ -292,8 +319,12 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
       content = (
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-700 via-slate-900 to-amber-700 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-t from-amber-500/20 via-transparent to-purple-600/20" />
-          <div className="absolute left-0 w-full h-1/4 bg-gradient-to-b from-transparent via-amber-400/25 to-transparent blur-md animate-sweep-light" />
-          <div className="absolute left-0 w-full h-[2px] bg-amber-300/40 blur-[0.5px] animate-sweep-light" />
+          {!isMobileDevice() && (
+            <>
+              <div className="absolute left-0 w-full h-1/4 bg-gradient-to-b from-transparent via-amber-400/25 to-transparent blur-md animate-sweep-light" />
+              <div className="absolute left-0 w-full h-[2px] bg-amber-300/40 blur-[0.5px] animate-sweep-light" />
+            </>
+          )}
         </div>
       );
       break;
@@ -301,7 +332,7 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
     case "終極：起源矩陣":
       content = (
         <div className="absolute inset-0 bg-gradient-to-b from-fuchsia-900 via-purple-950 to-black overflow-hidden flex justify-around">
-          {[...Array(5)].map((_, i) => (
+          {!isMobileDevice() && [...Array(5)].map((_, i) => (
             <div 
               key={i} 
               className="text-[5.5px] text-fuchsia-400 font-mono tracking-widest break-all select-none animate-matrix-fall"
@@ -323,11 +354,13 @@ export function renderBackgroundEffects(backgroundName: string | undefined, acti
       content = (
         <div className="absolute inset-0 bg-gradient-to-br from-sky-300 via-pink-200 to-indigo-400">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.3),_transparent)]" />
-          <div className="absolute inset-0 pointer-events-none">
-            <Feather size={10} className="absolute top-0 left-[15%] text-sky-500 animate-feather-fall" style={{ animationDuration: '6s', animationDelay: '0s' }} />
-            <Feather size={8} className="absolute top-0 left-[50%] text-pink-400 animate-feather-fall" style={{ animationDuration: '8s', animationDelay: '2s' }} />
-            <Feather size={9} className="absolute top-0 left-[80%] text-amber-500 animate-feather-fall" style={{ animationDuration: '7s', animationDelay: '1s' }} />
-          </div>
+          {!isMobileDevice() && (
+            <div className="absolute inset-0 pointer-events-none">
+              <Feather size={10} className="absolute top-0 left-[15%] text-sky-500 animate-feather-fall" style={{ animationDuration: '6s', animationDelay: '0s' }} />
+              <Feather size={8} className="absolute top-0 left-[50%] text-pink-400 animate-feather-fall" style={{ animationDuration: '8s', animationDelay: '2s' }} />
+              <Feather size={9} className="absolute top-0 left-[80%] text-amber-500 animate-feather-fall" style={{ animationDuration: '7s', animationDelay: '1s' }} />
+            </div>
+          )}
         </div>
       );
       break;

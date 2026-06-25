@@ -246,14 +246,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               </span>
               <button
                 onClick={onShop}
-                className="ml-1 p-1 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group"
+                className="ml-1 p-1.5 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group relative before:absolute before:-inset-2.5 active:scale-90"
                 title="羽毛商店"
               >
                 <ShoppingBag className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
               </button>
               <button
                 onClick={onMiniGame}
-                className="ml-1 p-1 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group"
+                className="ml-1 p-1.5 hover:bg-sky-200 dark:hover:bg-sky-800 rounded-lg transition-colors group relative before:absolute before:-inset-2.5 active:scale-90"
                 title="接羽毛挑戰小遊戲"
               >
                 <Gamepad2 className="w-3 h-3 md:w-3.5 md:h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
@@ -262,7 +262,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 <button
                   onClick={handleClaimFeathers}
                   disabled={claiming}
-                  className="ml-1 px-1.5 py-0.5 bg-sky-500 hover:bg-sky-600 text-white text-[8px] md:text-[10px] font-black rounded-lg transition-all active:scale-90 animate-bounce"
+                  className="ml-1 px-2.5 py-1.5 md:px-1.5 md:py-0.5 bg-sky-500 hover:bg-sky-600 text-white text-[8px] md:text-[10px] font-black rounded-lg transition-all active:scale-90 animate-bounce relative before:absolute before:-inset-1.5"
                   title="領取週三羽毛"
                 >
                   {claiming ? '...' : '領取'}

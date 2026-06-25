@@ -45,7 +45,7 @@ export function DashboardPage() {
   const [currentFilterDate, setCurrentFilterDate] = useState(getTaipeiDateString());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [filterPlayerIds, setFilterPlayerIds] = useState<string[]>([]);
-  const [showBannerEgg, setShowBannerEgg] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [showBannerEgg, setShowBannerEgg] = useState(false);
   const [dailySummaryOpen, setDailySummaryOpen] = useState(false);
   const [houseDetailOpen, setHouseDetailOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);

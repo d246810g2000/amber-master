@@ -96,3 +96,9 @@ export function getAvatarUrl(avatarStr: string | null | undefined, fallbackSeed:
 
   return `https://api.dicebear.com/7.x/${style}/svg?seed=${safeSeed}`;
 }
+
+export function isMobileDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+

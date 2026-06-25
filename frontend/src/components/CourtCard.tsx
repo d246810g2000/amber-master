@@ -5,7 +5,7 @@ import Users from "lucide-react/dist/esm/icons/users";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Zap from "lucide-react/dist/esm/icons/zap";
 import Feather from "lucide-react/dist/esm/icons/feather";
-import { cn, getAvatarUrl } from "../lib/utils";
+import { cn, getAvatarUrl, isMobileDevice } from "../lib/utils";
 import { Player } from "../types";
 import { calculateWeightedMu } from "../lib/matchEngine";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
@@ -110,25 +110,20 @@ const PlayerSlot = React.memo(({
       )}
     >
       {/* [頂層] 懸浮稱號 (不受裁切影響，移出 overflow-hidden 的 button 外) */}
-      <AnimatePresence mode="wait">
-        {player && activeTitle && (
+      {isMobileDevice() ? (
+        player && activeTitle && (
           <div className="absolute -top-4 left-0 w-full z-[50] flex flex-col items-center pointer-events-none">
-            <motion.div 
-              key={activeTitle}
-              initial={{ y: 2, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 2, opacity: 0 }}
-              className="relative h-3 md:h-3.5 flex items-center px-1.5"
-            >
+            <div className="relative h-3 md:h-3.5 flex items-center px-1.5">
               {(() => {
                 const titleStyle = getTitleStyle(activeTitle);
                 return (
                   <>
                     <div className={cn(
-                      "absolute inset-0 rounded-full border shadow-sm backdrop-blur-md overflow-hidden transition-all duration-500",
+                      "absolute inset-0 rounded-full border shadow-sm overflow-hidden transition-all duration-500",
+                      !isMobileDevice() && "backdrop-blur-md",
                       titleStyle.bg
                     )}>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-30" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full opacity-30" />
                     </div>
                     <span className={cn(
                       "relative text-[7px] md:text-[8.5px] font-black uppercase tracking-wider whitespace-nowrap leading-none",
@@ -139,10 +134,45 @@ const PlayerSlot = React.memo(({
                   </>
                 );
               })()}
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        )
+      ) : (
+        <AnimatePresence mode="wait">
+          {player && activeTitle && (
+            <div className="absolute -top-4 left-0 w-full z-[50] flex flex-col items-center pointer-events-none">
+              <motion.div 
+                key={activeTitle}
+                initial={{ y: 2, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 2, opacity: 0 }}
+                className="relative h-3 md:h-3.5 flex items-center px-1.5"
+              >
+                {(() => {
+                  const titleStyle = getTitleStyle(activeTitle);
+                  return (
+                    <>
+                      <div className={cn(
+                        "absolute inset-0 rounded-full border shadow-sm overflow-hidden transition-all duration-500",
+                        !isMobileDevice() && "backdrop-blur-md",
+                        titleStyle.bg
+                      )}>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer opacity-30" />
+                      </div>
+                      <span className={cn(
+                        "relative text-[7px] md:text-[8.5px] font-black uppercase tracking-wider whitespace-nowrap leading-none",
+                        titleStyle.text
+                      )}>
+                        {activeTitle}
+                      </span>
+                    </>
+                  );
+                })()}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
 
       <button 
         onClick={interactive ? onClick : undefined}
@@ -220,12 +250,15 @@ const PlayerSlot = React.memo(({
                       ? "absolute top-0 left-0 w-6 h-6" 
                       : "w-full h-full",
                     activeBackground || isFlowing
-                      ? "bg-white/10 border-white/20 backdrop-blur-[1px]" 
+                      ? cn("bg-white/10 border-white/20 shadow-sm", !isMobileDevice() && "backdrop-blur-[1px]") 
                       : "bg-white border-slate-200/50"
                   )}
                 />
                 {player.active_pet_id && (
-                  <div className="absolute bottom-0 right-0 shrink-0 origin-bottom animate-bounce-slow flex items-center justify-center filter drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.3)]">
+                  <div className={cn(
+                    "absolute bottom-0 right-0 shrink-0 origin-bottom flex items-center justify-center filter drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.3)]",
+                    !isMobileDevice() && "animate-bounce-slow"
+                  )}>
                     {player.active_pet_id.startsWith('egg_') ? (
                       <div className="relative w-5 h-5 flex items-center justify-center">
                         <img
@@ -236,7 +269,7 @@ const PlayerSlot = React.memo(({
                         {player.egg_progress_games !== undefined && player.egg_progress_games > 0 && player.egg_progress_games <= 100 && (
                           <div className={cn(
                             "absolute -bottom-1 -right-1.5 text-white text-[6px] font-black rounded-full px-0.5 min-w-[10px] h-[10px] flex items-center justify-center scale-90 transform origin-bottom-right shadow-sm border border-white dark:border-slate-900 leading-none",
-                            player.egg_progress_games === 100 ? "bg-amber-500 animate-pulse" : "bg-sky-500"
+                            player.egg_progress_games === 100 && !isMobileDevice() ? "bg-amber-500 animate-pulse" : "bg-sky-500"
                           )}>
                             {player.egg_progress_games}
                           </div>
@@ -452,7 +485,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
       {/* Court Header */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-white dark:bg-slate-900 border-b border-slate-50 dark:border-slate-800 h-[42px] shrink-0">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isRecommended ? "bg-indigo-500 animate-pulse" : "bg-emerald-500")} />
+          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isRecommended ? (isMobileDevice() ? "bg-indigo-500" : "bg-indigo-500 animate-pulse") : "bg-emerald-500")} />
           <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">
             {isRecommended ? "Target Match" : `Court ${title.replace("場地", "")}`}
           </span>
@@ -472,7 +505,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                   onToggleAuto?.();
                }}
                className={cn(
-                 "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer active:scale-95",
+                 "flex items-center gap-1 px-2.5 py-1.5 md:px-1.5 md:py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer active:scale-95",
                  isAutoMode 
                    ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 shadow-sm shadow-indigo-200/50 animate-pulse-subtle" 
                    : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
@@ -487,7 +520,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                 e.stopPropagation();
                 onReset();
               }}
-              className="p-1 transition-colors text-slate-300 hover:text-indigo-500"
+              className="p-1.5 transition-colors text-slate-300 hover:text-indigo-500 relative active:scale-95 before:absolute before:-inset-2.5"
               title="重置名單"
             >
               <RotateCcw size={12} strokeWidth={3} />
@@ -502,12 +535,12 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
         {/* Team Favorite Labels - Absolute Top/Bottom of card */}
         {team1Score > team2Score && team2Score > 0 && (
           <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[45] pointer-events-none">
-            <span className="bg-rose-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-rose-500/30 animate-pulse whitespace-nowrap">FAVORITE 強勢</span>
+            <span className={cn("bg-rose-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-rose-500/30 whitespace-nowrap", !isMobileDevice() && "animate-pulse")}>FAVORITE 強勢</span>
           </div>
         )}
         {team2Score > team1Score && team1Score > 0 && (
           <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-[45] pointer-events-none">
-            <span className="bg-blue-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-blue-500/30 animate-pulse whitespace-nowrap">FAVORITE 強勢</span>
+            <span className={cn("bg-blue-500/90 text-white text-[7px] md:text-[9px] px-2 py-0.5 rounded-full font-black shadow-lg shadow-blue-500/30 whitespace-nowrap", !isMobileDevice() && "animate-pulse")}>FAVORITE 強勢</span>
           </div>
         )}
 
@@ -578,7 +611,10 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
           
           {/* VS / POOL 核心區 */}
           <div className="relative my-1 md:my-1.5 scale-75 md:scale-90 flex items-center gap-2">
-            <div className="bg-emerald-950/90 backdrop-blur-md px-2 md:px-3 py-0.5 md:py-1 rounded-full border border-white/30 shadow-2xl flex flex-col items-center justify-center">
+            <div className={cn(
+              "bg-emerald-950/90 px-2 md:px-3 py-0.5 md:py-1 rounded-full border border-white/30 shadow-2xl flex flex-col items-center justify-center",
+              !isMobileDevice() && "backdrop-blur-md"
+            )}>
               {matchId && !isRecommended && actionText === "結束" ? (
                 betStatus ? (
                   <>
@@ -593,7 +629,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
               )}
             </div>
             {renderBetButton(1)}
-            <div className="absolute inset-0 bg-emerald-400/25 blur-xl rounded-full -z-10 animate-pulse"></div>
+            <div className={cn("absolute inset-0 bg-emerald-400/25 blur-xl rounded-full -z-10", !isMobileDevice() && "animate-pulse")}></div>
           </div>
           
           {/* Team 2 Score & Bet */}
@@ -606,7 +642,10 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
         {/* Advanced Betting Selector Overlay */}
         {bettingTeam && (
-          <div className="fixed inset-0 md:absolute z-[60] bg-black/75 md:bg-black/90 backdrop-blur-md flex items-center justify-center md:block p-4 md:p-0 animate-in fade-in duration-200">
+          <div className={cn(
+            "fixed inset-0 md:absolute z-[60] bg-black/75 md:bg-black/90 flex items-center justify-center md:block p-4 md:p-0 animate-in fade-in duration-200",
+            !isMobileDevice() && "backdrop-blur-md"
+          )}>
             <div className="w-full max-w-[340px] md:max-w-none md:w-full md:h-full bg-slate-900/95 md:bg-transparent border border-white/10 md:border-none rounded-3xl md:rounded-none p-6 md:p-3 flex flex-col items-center justify-center shadow-2xl md:shadow-none animate-in zoom-in duration-200 relative">
               <button 
                 onClick={() => {
@@ -864,7 +903,10 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
 
         {/* Simple Loading Spinner in center of court floor - Only for long calculations */}
         {isCalculating && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/5 backdrop-blur-[1px]">
+          <div className={cn(
+            "absolute inset-0 z-50 flex items-center justify-center bg-black/5",
+            !isMobileDevice() && "backdrop-blur-[1px]"
+          )}>
             <Loader2 size={32} className="animate-spin text-white drop-shadow-md" />
           </div>
         )}
@@ -886,7 +928,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
             <button
               onClick={onSelectPlayers}
               disabled={isLoading || isActionDisabled || !!bettingTeam}
-              className="px-2 py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black hover:border-black dark:hover:border-white rounded-xl transition-all active:scale-95 bg-indigo-50/30 dark:bg-indigo-950/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-3 md:py-2 font-black text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black hover:border-black dark:hover:border-white rounded-xl transition-all active:scale-95 bg-indigo-50/30 dark:bg-indigo-950/30 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               選人
             </button>
@@ -898,7 +940,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                 <button
                   onClick={onCancel}
                   disabled={isLoading || isActionDisabled || !!bettingTeam}
-                  className="px-4 py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 w-full"
+                  className="px-4 py-3 md:py-2 font-black text-[11px] uppercase tracking-[0.1em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 w-full"
                 >
                   取消
                 </button>
@@ -908,7 +950,7 @@ export const CourtCard: React.FC<CourtCardProps> = React.memo(({
                 onClick={onAction}
                 disabled={isLoading || isActionDisabled || !!isPrimaryActionLocked || !!bettingTeam}
                 className={cn(
-                  "px-4 py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center gap-2",
+                  "px-4 py-3 md:py-2 font-black text-[11px] uppercase tracking-[0.2em] rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-20 flex items-center justify-center gap-2",
                   actionText === "結束" 
                     ? "bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 hover:bg-red-600 hover:text-white w-full" 
                     : "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black dark:hover:bg-white w-full"
