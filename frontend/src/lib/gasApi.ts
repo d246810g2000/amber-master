@@ -219,6 +219,10 @@ export async function submitMiniGameScore(playerEmail: string, score: number) {
   return apiPost('/minigame/submit', { playerEmail, score }, z.any());
 }
 
+export async function fetchMiniGameLeaderboard() {
+  return apiGet('/minigame/leaderboard', undefined, z.any());
+}
+
 export async function fetchActiveMatchDates() {
   return apiGet('/matches/active-dates', undefined, z.array(z.string()));
 }

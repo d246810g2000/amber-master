@@ -1230,6 +1230,9 @@ def get_last_wednesday_start() -> datetime:
 
 def check_minigame_eligibility(db: Session, player_id: str) -> dict:
     from datetime import timedelta
+    now_taipei = datetime.utcnow() + timedelta(hours=8)
+    is_wednesday = now_taipei.weekday() == 2
+    
     last_wed = get_last_wednesday_start()
     next_wed = last_wed + timedelta(days=7)
     
@@ -1241,10 +1244,13 @@ def check_minigame_eligibility(db: Session, player_id: str) -> dict:
         models.FeatherTransaction.created_at >= last_wed_utc
     ).first()
     
-    can_play = existing_play is None
+    can_earn = is_wednesday and (existing_play is None)
     
     return {
-        "canPlay": can_play,
+        "canPlay": True,
+        "canEarnReward": can_earn,
+        "isWednesday": is_wednesday,
+        "alreadyClaimed": existing_play is not None,
         "lastPlayedAt": existing_play.created_at + timedelta(hours=8) if existing_play else None,
         "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
     }
@@ -1253,33 +1259,124 @@ def submit_minigame_score(db: Session, player_id: str, score: int) -> dict:
     if score < 0:
         return {"status": "error", "message": "分數不能小於 0"}
         
-    MAX_MINIGAME_SCORE = 500
-    actual_reward = min(score, MAX_MINIGAME_SCORE)
-    
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
         return {"status": "error", "message": "找不到該球員"}
         
-    eligibility = check_minigame_eligibility(db, player_id)
-    if not eligibility["canPlay"]:
-        return {"status": "error", "message": "您本週已經挑戰過小遊戲囉！"}
+    from datetime import timedelta
+    now_taipei = datetime.utcnow() + timedelta(hours=8)
+    is_wednesday = now_taipei.weekday() == 2
+    
+    last_wed = get_last_wednesday_start()
+    last_wed_utc = last_wed - timedelta(hours=8)
+    
+    existing_play = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id,
+        models.FeatherTransaction.type == "minigame_reward",
+        models.FeatherTransaction.created_at >= last_wed_utc
+    ).first()
+    
+    can_earn = is_wednesday and (existing_play is None)
+    
+    if can_earn:
+        actual_reward = score
+        db_player.feathers = (db_player.feathers or 0) + actual_reward
         
-    db_player.feathers = (db_player.feathers or 0) + actual_reward
+        db_tx = models.FeatherTransaction(
+            player_id=player_id,
+            amount=actual_reward,
+            type="minigame_reward",
+            description=f"每週接羽毛小遊戲：獲得 {actual_reward} 根羽毛 (分數: {score})"
+        )
+        db.add(db_tx)
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"挑戰成功！獲得了 {actual_reward} 根羽毛！",
+            "reward": actual_reward,
+            "score": score
+        }
+    else:
+        msg = "本次為練習模式，未獲得羽毛。"
+        if not is_wednesday:
+            msg = "今天不是週三，本次為練習模式，未獲得羽毛。"
+        elif existing_play is not None:
+            msg = "您本週三已領取過羽毛獎勵，本次為練習模式，未獲得羽毛。"
+            
+        return {
+            "status": "success",
+            "message": msg,
+            "reward": 0,
+            "score": score
+        }
+
+def get_minigame_leaderboard(db: Session) -> dict:
+    from datetime import timedelta
+    from sqlalchemy import func
+    last_wed = get_last_wednesday_start()
+    last_wed_utc = last_wed - timedelta(hours=8)
     
-    db_tx = models.FeatherTransaction(
-        player_id=player_id,
-        amount=actual_reward,
-        type="minigame_reward",
-        description=f"每週接羽毛小遊戲：獲得 {actual_reward} 根羽毛 (原始分數: {score})"
-    )
-    db.add(db_tx)
-    db.commit()
+    # 1. Weekly leaderboard (this Wednesday onwards)
+    weekly_results = db.query(
+        models.FeatherTransaction.amount,
+        models.FeatherTransaction.created_at,
+        models.Player.name,
+        models.Player.avatar
+    ).join(
+        models.Player,
+        models.Player.id == models.FeatherTransaction.player_id
+    ).filter(
+        models.FeatherTransaction.type == "minigame_reward",
+        models.FeatherTransaction.created_at >= last_wed_utc
+    ).order_by(
+        models.FeatherTransaction.amount.desc(),
+        models.FeatherTransaction.created_at.asc()
+    ).all()
     
+    weekly_list = []
+    for idx, row in enumerate(weekly_results):
+        weekly_list.append({
+            "rank": idx + 1,
+            "score": row.amount,
+            "name": row.name,
+            "avatar": row.avatar,
+            "playedAt": (row.created_at + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+    # 2. All-time leaderboard (highest Wednesday score per player)
+    subq = db.query(
+        models.FeatherTransaction.player_id,
+        func.max(models.FeatherTransaction.amount).label("max_amount")
+    ).filter(
+        models.FeatherTransaction.type == "minigame_reward"
+    ).group_by(
+        models.FeatherTransaction.player_id
+    ).subquery()
+    
+    all_time_results = db.query(
+        subq.c.max_amount,
+        models.Player.name,
+        models.Player.avatar
+    ).join(
+        models.Player,
+        models.Player.id == subq.c.player_id
+    ).order_by(
+        subq.c.max_amount.desc()
+    ).all()
+    
+    all_time_list = []
+    for idx, row in enumerate(all_time_results):
+        all_time_list.append({
+            "rank": idx + 1,
+            "score": row.max_amount,
+            "name": row.name,
+            "avatar": row.avatar
+        })
+        
     return {
-        "status": "success",
-        "message": f"挑戰成功！獲得了 {actual_reward} 根羽毛！",
-        "reward": actual_reward,
-        "score": score
+        "weekly": weekly_list,
+        "allTime": all_time_list
     }
 
 def get_today_house_rescue_progress(db: Session, target_date: date) -> Dict[str, Any]:

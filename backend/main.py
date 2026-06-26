@@ -468,6 +468,11 @@ async def submit_minigame_score(req: schemas.MiniGameSubmitRequest, db: Session 
         return error(res.get("message"))
     return success(res)
 
+@app.get("/minigame/leaderboard")
+def get_minigame_leaderboard(db: Session = Depends(get_db)):
+    leaderboard_info = crud.get_minigame_leaderboard(db)
+    return success(leaderboard_info)
+
 # Matches API
 @app.get("/matches")
 @app.get("/matches/")
