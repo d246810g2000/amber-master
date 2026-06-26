@@ -1,7 +1,7 @@
 import type { GuideIconKey } from './gameGuideIcons';
 
 /** 教學版本號；更新重大規則時遞增，讓舊用戶再次自動彈出 */
-export const GAME_GUIDE_VERSION = 'v3';
+export const GAME_GUIDE_VERSION = 'v4';
 export const GAME_GUIDE_STORAGE_KEY = `amber_game_guide_seen_${GAME_GUIDE_VERSION}`;
 
 export function hasSeenGameGuide(): boolean {
@@ -51,6 +51,7 @@ export const GAME_GUIDE_SECTIONS: GuideSection[] = [
     tagline: '週三領、比賽賺、商店買裝備',
     tips: [
       { icon: 'calendar', iconTone: 'sky', title: '週三領 1,000', desc: '比賽日點頂部羽毛「領取」' },
+      { icon: 'gamepad', iconTone: 'rose', title: '羽毛小遊戲', desc: '週三挑戰接羽毛拿 1:1 獎勵' },
       { icon: 'trophy', iconTone: 'emerald', title: '完賽獎勵', desc: '勝 100／敗 50' },
       { icon: 'shopping-bag', iconTone: 'violet', title: '羽毛商店', desc: '稱號、邊框、背景特效、寵物蛋' },
       { icon: 'target', iconTone: 'amber', title: '猜中投注', desc: '莊家保底，池滿更高' },

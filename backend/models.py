@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, JSON, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -150,5 +150,15 @@ class ChatMessage(Base):
     type = Column(String(20), nullable=False) # 'announcement' or 'bet'
     content = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class MiniGameRecord(Base):
+    __tablename__ = "minigame_records"
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    score = Column(Integer, nullable=False)
+    max_combo = Column(Integer, default=0)
+    is_practice = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 

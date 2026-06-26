@@ -1255,7 +1255,7 @@ def check_minigame_eligibility(db: Session, player_id: str) -> dict:
         "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-def submit_minigame_score(db: Session, player_id: str, score: int) -> dict:
+def submit_minigame_score(db: Session, player_id: str, score: int, max_combo: int = 0) -> dict:
     if score < 0:
         return {"status": "error", "message": "分數不能小於 0"}
         
@@ -1278,6 +1278,15 @@ def submit_minigame_score(db: Session, player_id: str, score: int) -> dict:
     
     can_earn = is_wednesday and (existing_play is None)
     
+    # Save the score history entry to MiniGameRecord
+    db_record = models.MiniGameRecord(
+        player_id=player_id,
+        score=score,
+        max_combo=max_combo,
+        is_practice=not can_earn
+    )
+    db.add(db_record)
+    
     if can_earn:
         actual_reward = score
         db_player.feathers = (db_player.feathers or 0) + actual_reward
@@ -1295,20 +1304,23 @@ def submit_minigame_score(db: Session, player_id: str, score: int) -> dict:
             "status": "success",
             "message": f"挑戰成功！獲得了 {actual_reward} 根羽毛！",
             "reward": actual_reward,
-            "score": score
+            "score": score,
+            "maxCombo": max_combo
         }
     else:
-        msg = "本次為練習模式，未獲得羽毛。"
+        db.commit() # Save the practice record
+        msg = "本次為練習模式，已登錄排行榜且未獲得羽毛。"
         if not is_wednesday:
-            msg = "今天不是週三，本次為練習模式，未獲得羽毛。"
+            msg = "今天不是週三，本次為練習模式，已登錄排行榜且未獲得羽毛。"
         elif existing_play is not None:
-            msg = "您本週三已領取過羽毛獎勵，本次為練習模式，未獲得羽毛。"
+            msg = "您本週三已領取過羽毛獎勵，本次為練習模式，已登錄排行榜且未獲得羽毛。"
             
         return {
             "status": "success",
             "message": msg,
             "reward": 0,
-            "score": score
+            "score": score,
+            "maxCombo": max_combo
         }
 
 def get_minigame_leaderboard(db: Session) -> dict:
@@ -1318,62 +1330,110 @@ def get_minigame_leaderboard(db: Session) -> dict:
     last_wed_utc = last_wed - timedelta(hours=8)
     
     # 1. Weekly leaderboard (this Wednesday onwards)
-    weekly_results = db.query(
-        models.FeatherTransaction.amount,
-        models.FeatherTransaction.created_at,
-        models.Player.name,
-        models.Player.avatar
-    ).join(
-        models.Player,
-        models.Player.id == models.FeatherTransaction.player_id
+    # Fetch from FeatherTransaction (historical weekly rewards)
+    weekly_txs = db.query(
+        models.FeatherTransaction.player_id,
+        func.max(models.FeatherTransaction.amount).label("max_score")
     ).filter(
         models.FeatherTransaction.type == "minigame_reward",
         models.FeatherTransaction.created_at >= last_wed_utc
-    ).order_by(
-        models.FeatherTransaction.amount.desc(),
-        models.FeatherTransaction.created_at.asc()
+    ).group_by(
+        models.FeatherTransaction.player_id
     ).all()
-    
-    weekly_list = []
-    for idx, row in enumerate(weekly_results):
-        weekly_list.append({
-            "rank": idx + 1,
-            "score": row.amount,
-            "name": row.name,
-            "avatar": row.avatar,
-            "playedAt": (row.created_at + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-        })
+
+    # Fetch from MiniGameRecord (new system: includes practice and max_combo)
+    weekly_records = db.query(
+        models.MiniGameRecord.player_id,
+        func.max(models.MiniGameRecord.score).label("max_score"),
+        func.max(models.MiniGameRecord.max_combo).label("max_combo")
+    ).filter(
+        models.MiniGameRecord.created_at >= last_wed_utc
+    ).group_by(
+        models.MiniGameRecord.player_id
+    ).all()
+
+    weekly_map = {}
+    for row in weekly_txs:
+        weekly_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
         
-    # 2. All-time leaderboard (highest Wednesday score per player)
-    subq = db.query(
+    for row in weekly_records:
+        pid = row.player_id
+        score = row.max_score
+        combo = row.max_combo or 0
+        if pid not in weekly_map or score > weekly_map[pid]["score"]:
+            weekly_map[pid] = {"score": score, "max_combo": combo}
+        elif score == weekly_map[pid]["score"]:
+            weekly_map[pid]["max_combo"] = max(weekly_map[pid]["max_combo"], combo)
+
+    player_ids = list(weekly_map.keys())
+    players = db.query(models.Player).filter(models.Player.id.in_(player_ids)).all() if player_ids else []
+    player_dict = {p.id: p for p in players}
+
+    weekly_list = []
+    for pid, data in weekly_map.items():
+        p = player_dict.get(pid)
+        if p:
+            weekly_list.append({
+                "score": data["score"],
+                "maxCombo": data["max_combo"],
+                "name": p.name,
+                "avatar": p.avatar
+            })
+            
+    weekly_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
+    for idx, item in enumerate(weekly_list):
+        item["rank"] = idx + 1
+
+    # 2. All-time leaderboard (highest Wednesday/practice score per player)
+    all_time_txs = db.query(
         models.FeatherTransaction.player_id,
-        func.max(models.FeatherTransaction.amount).label("max_amount")
+        func.max(models.FeatherTransaction.amount).label("max_score")
     ).filter(
         models.FeatherTransaction.type == "minigame_reward"
     ).group_by(
         models.FeatherTransaction.player_id
-    ).subquery()
-    
-    all_time_results = db.query(
-        subq.c.max_amount,
-        models.Player.name,
-        models.Player.avatar
-    ).join(
-        models.Player,
-        models.Player.id == subq.c.player_id
-    ).order_by(
-        subq.c.max_amount.desc()
     ).all()
-    
-    all_time_list = []
-    for idx, row in enumerate(all_time_results):
-        all_time_list.append({
-            "rank": idx + 1,
-            "score": row.max_amount,
-            "name": row.name,
-            "avatar": row.avatar
-        })
+
+    all_time_records = db.query(
+        models.MiniGameRecord.player_id,
+        func.max(models.MiniGameRecord.score).label("max_score"),
+        func.max(models.MiniGameRecord.max_combo).label("max_combo")
+    ).group_by(
+        models.MiniGameRecord.player_id
+    ).all()
+
+    all_time_map = {}
+    for row in all_time_txs:
+        all_time_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
         
+    for row in all_time_records:
+        pid = row.player_id
+        score = row.max_score
+        combo = row.max_combo or 0
+        if pid not in all_time_map or score > all_time_map[pid]["score"]:
+            all_time_map[pid] = {"score": score, "max_combo": combo}
+        elif score == all_time_map[pid]["score"]:
+            all_time_map[pid]["max_combo"] = max(all_time_map[pid]["max_combo"], combo)
+
+    all_time_pids = list(all_time_map.keys())
+    all_time_players = db.query(models.Player).filter(models.Player.id.in_(all_time_pids)).all() if all_time_pids else []
+    all_time_player_dict = {p.id: p for p in all_time_players}
+
+    all_time_list = []
+    for pid, data in all_time_map.items():
+        p = all_time_player_dict.get(pid)
+        if p:
+            all_time_list.append({
+                "score": data["score"],
+                "maxCombo": data["max_combo"],
+                "name": p.name,
+                "avatar": p.avatar
+            })
+
+    all_time_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
+    for idx, item in enumerate(all_time_list):
+        item["rank"] = idx + 1
+
     return {
         "weekly": weekly_list,
         "allTime": all_time_list

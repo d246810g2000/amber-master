@@ -215,8 +215,8 @@ export async function fetchMiniGameStatus(playerEmail: string) {
   return apiGet('/minigame/status', { playerEmail }, z.any());
 }
 
-export async function submitMiniGameScore(playerEmail: string, score: number) {
-  return apiPost('/minigame/submit', { playerEmail, score }, z.any());
+export async function submitMiniGameScore(playerEmail: string, score: number, maxCombo?: number) {
+  return apiPost('/minigame/submit', { playerEmail, score, maxCombo }, z.any());
 }
 
 export async function fetchMiniGameLeaderboard() {

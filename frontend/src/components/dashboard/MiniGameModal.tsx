@@ -238,6 +238,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
   const itemsRef = useRef<FallingItem[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const comboRef = useRef<number>(0);
+  const maxComboRef = useRef<number>(0);
   
   const nextItemIdRef = useRef<number>(0);
   const nextParticleIdRef = useRef<number>(0);
@@ -251,6 +252,43 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
 
   // Input states
   const cartDirectionRef = useRef<'left' | 'right' | null>(null);
+
+  // Stale state & performance refs
+  const timeLeftRef = useRef<number>(30);
+  const canvasWidthRef = useRef<number>(600);
+  const canvasHeightRef = useRef<number>(400);
+
+  // Dynamically observe container dimensions to avoid layout thrashing in game loop
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const w = container.clientWidth || 600;
+      const h = container.clientHeight || 400;
+      canvasWidthRef.current = w;
+      canvasHeightRef.current = h;
+      
+      const canvas = canvasRef.current;
+      if (canvas && (canvas.width !== w || canvas.height !== h)) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        updateSize();
+      });
+      observer.observe(container);
+      return () => observer.disconnect();
+    } else {
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+  }, [gameState, isOpen]);
 
   // Handle keyboard inputs
   useEffect(() => {
@@ -450,8 +488,10 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
 
     setScore(0);
     setTimeLeft(30);
+    timeLeftRef.current = 30;
     setCombo(0);
     comboRef.current = 0;
+    maxComboRef.current = 0;
     cartXRef.current = 50;
     setGameState('playing');
     setSubmitResult(null);
@@ -497,14 +537,9 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 1. Sync canvas size with container size
-      if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-      }
-
-      const width = canvas.width;
-      const height = canvas.height;
+      // 1. Get cached container size from refs (prevents layout thrashing / frame stutter on mobile)
+      const width = canvasWidthRef.current;
+      const height = canvasHeightRef.current;
 
       // 2. Update Dizzy stun
       if (dizzyTimeRef.current > 0) {
@@ -542,13 +577,11 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       secondsTimer += delta;
       if (secondsTimer >= 1000) {
         secondsTimer -= 1000;
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            setGameState('ended');
-            return 0;
-          }
-          return prev - 1;
-        });
+        timeLeftRef.current = Math.max(0, timeLeftRef.current - 1);
+        setTimeLeft(timeLeftRef.current);
+        if (timeLeftRef.current <= 0) {
+          setGameState('ended');
+        }
       }
 
       // 10s intervals (30s game)
@@ -559,11 +592,12 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       let spawnInterval = 600;
       let speedMultiplier = 1.0;
       
-      if (timeLeft <= 10) {
+      const currentSeconds = timeLeftRef.current;
+      if (currentSeconds <= 10) {
         level = 3;
         spawnInterval = 380;
         speedMultiplier = 1.7;
-      } else if (timeLeft <= 20) {
+      } else if (currentSeconds <= 20) {
         level = 2;
         spawnInterval = 450;
         speedMultiplier = 1.35;
@@ -676,10 +710,12 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
           let typeSpeedMultiplier = 1.0;
           if (type === 'rock') typeSpeedMultiplier = 1.4;       // Plummets down quickly
           else if (type === 'super') typeSpeedMultiplier = 1.35;  // Falls very fast
-          else if (type === 'gold') typeSpeedMultiplier = 1.2;   // Falls fast
+          else if (type === 'gold') typeSpeedMultiplier = 0.8;   // Falls slower due to swaying flutter
           else if (type === 'bomb') typeSpeedMultiplier = 1.15;  // Falls moderately fast
 
-          const variedSpeed = (Math.random() * 2.5 + 3.5) * speedMultiplier * typeSpeedMultiplier;
+          // Random variation factor between 0.85 and 1.15 (+/- 15% random speed variation)
+          const speedVariance = Math.random() * 0.3 + 0.85;
+          const variedSpeed = (Math.random() * 2.5 + 3.5) * speedMultiplier * typeSpeedMultiplier * speedVariance;
 
           itemsRef.current.push({
             id: nextItemIdRef.current++,
@@ -729,6 +765,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
           if (item.type === 'normal' || item.type === 'gold' || item.type === 'super') {
             comboRef.current += 1;
             setCombo(comboRef.current);
+            maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
 
             let multiplier = 1.0;
             if (comboRef.current >= 15) multiplier = 2.0;
@@ -901,7 +938,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     if (!currentUser?.email) return;
     setIsSubmitting(true);
     try {
-      const res = await gasApi.submitMiniGameScore(currentUser.email, score);
+      const res = await gasApi.submitMiniGameScore(currentUser.email, score, maxComboRef.current);
       setSubmitResult(res);
       refetchEligibility();
       refetchLeaderboard();
@@ -948,6 +985,15 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
               }
               .animate-game-shake {
                 animation: game-shake 0.15s infinite !important;
+              }
+              @keyframes combo-pop {
+                0% { transform: scale(0.9); }
+                50% { transform: scale(1.08); }
+                100% { transform: scale(1.0); }
+              }
+              .animate-combo-pop {
+                animation: combo-pop 0.22s ease-out forwards;
+                display: inline-block;
               }
             `}</style>
 
@@ -1012,7 +1058,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                           <div>
                             <h4 className="text-base font-extrabold mb-1">接羽毛！拿獎勵！</h4>
                             <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-                              點擊畫面左/右側或按 A/D 鍵，推車會朝該方向等速前進（再度點擊或按鍵可切換方向）。每 10 秒難度與速度將會升級！小心避開黑色炸彈（扣 30 根並眩暈 0.8 秒）與落下的灰色落石（扣 10 根，無眩暈）。
+                              點擊畫面左右側或按 A/D 鍵移動推車。接住羽毛累積得分，避開炸彈與落石！難度每 10 秒將會升級。
                             </p>
                           </div>
                         </div>
@@ -1077,7 +1123,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                           {(!leaderboard || (leaderboardTab === 'weekly' ? !leaderboard.weekly || leaderboard.weekly.length === 0 : !leaderboard.allTime || leaderboard.allTime.length === 0)) ? (
                             <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-[10px] font-bold">
                               <span>🪶 暫無排行數據</span>
-                              <span className="mt-1 text-[9px] text-slate-600">(僅週三獎勵關卡計入)</span>
+                              <span className="mt-1 text-[9px] text-slate-600">(登錄練習模式與挑戰模式的最佳成績)</span>
                             </div>
                           ) : (
                             (leaderboardTab === 'weekly' ? leaderboard.weekly : leaderboard.allTime).map((item: any, i: number) => (
@@ -1107,11 +1153,18 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                                     {item.name}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-xs font-black text-amber-400 tabular-nums">
-                                    {item.score}
-                                  </span>
-                                  <span className="text-[9px] text-slate-500 font-semibold">分</span>
+                                <div className="flex items-center gap-2">
+                                  {item.maxCombo > 0 && (
+                                    <span className="text-[8px] bg-indigo-950/60 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded font-black whitespace-nowrap">
+                                      🔥 {item.maxCombo} Combo
+                                    </span>
+                                  )}
+                                  <div className="flex items-center gap-0.5">
+                                    <span className="text-xs font-black text-amber-400 tabular-nums">
+                                      {item.score}
+                                    </span>
+                                    <span className="text-[9px] text-slate-500 font-semibold">分</span>
+                                  </div>
                                 </div>
                               </div>
                             ))
@@ -1163,39 +1216,35 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                   onClick={handleContainerClick}
                   className="relative w-full h-[400px] bg-gradient-to-b from-slate-950 to-slate-900 select-none touch-none overscroll-contain overflow-hidden"
                 >
-                  {/* Stats overlay */}
-                  <div className="absolute top-4 left-4 right-4 z-20 flex justify-between items-center bg-slate-900/60 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800/40">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-400">目前分數</span>
-                        <span className="text-lg font-black text-amber-400 tracking-wider tabular-nums">{score}</span>
-                      </div>
-                      {combo > 0 && (
-                        <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg">
-                          <span className="text-[10px] font-black text-amber-400 animate-pulse">🔥 {combo} COMBO</span>
-                          {combo >= 5 && (
-                            <span className="text-[9px] font-black text-emerald-400">
-                              ({combo >= 15 ? '2.0' : combo >= 10 ? '1.5' : '1.2'}x)
-                            </span>
-                          )}
-                        </div>
-                      )}
+                  {/* Stats overlay (Mobile optimized layout using icons to prevent squishing) */}
+                  <div className="absolute top-4 inset-x-4 z-20 flex justify-between items-center bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-800/60 shadow-lg text-sm select-none">
+                    {/* Left: Score */}
+                    <div className="flex items-center gap-1.5 font-black text-amber-400">
+                      <span className="text-base">🏆</span>
+                      <span className="text-base tracking-wider tabular-nums">{score}</span>
                     </div>
+
+                    {/* Center: Level Badge */}
                     <div className="flex items-center">
                       <span className={cn(
-                        "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border transition-all",
+                        "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border transition-all",
                         timeLeft > 20 
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
                           : timeLeft > 10 
-                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse" 
-                            : "bg-red-500/20 text-red-400 border-red-500/30 animate-bounce"
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
+                            : "bg-red-500/25 text-red-400 border-red-500/40 animate-pulse"
                       )}>
-                        {timeLeft > 20 ? 'Level 1: 輕鬆' : timeLeft > 10 ? 'Level 2: 加速 ⚡' : 'Level 3: 狂暴 🔥'}
+                        {timeLeft > 20 ? 'Lv.1 輕鬆' : timeLeft > 10 ? 'Lv.2 加速 ⚡' : 'Lv.3 狂暴 🔥'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-400">剩餘時間</span>
-                      <span className={`text-base font-black tracking-wider tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse animate-none' : 'text-white'}`}>
+
+                    {/* Right: Time */}
+                    <div className="flex items-center gap-1.5 font-black text-white">
+                      <span className="text-base">⏱️</span>
+                      <span className={cn(
+                        "text-sm tracking-wider tabular-nums",
+                        timeLeft <= 5 ? "text-red-500 animate-pulse" : "text-white"
+                      )}>
                         {timeLeft}s
                       </span>
                     </div>
@@ -1203,6 +1252,23 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
 
                   {/* High performance Canvas */}
                   <canvas ref={canvasRef} className="absolute inset-0 z-10 w-full h-full block" />
+
+                  {/* Center Background Combo Watermark (Low opacity, GPU safe, no distraction) */}
+                  {combo > 0 && (
+                    <div key={combo} className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                      <span className={cn(
+                        "text-5xl md:text-6xl font-black tracking-widest uppercase animate-combo-pop select-none",
+                        combo >= 15 ? "text-fuchsia-500/15" : combo >= 10 ? "text-amber-500/15" : "text-sky-400/15"
+                      )}>
+                        {combo} Combo
+                      </span>
+                      {combo >= 5 && (
+                        <span className="text-[10px] font-black tracking-widest uppercase opacity-20 mt-1.5 text-slate-500 animate-combo-pop">
+                          MULTIPLIER: {combo >= 15 ? '2.0' : combo >= 10 ? '1.5' : '1.2'}x
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Player Cart: DOM element updated directly via Ref (Bypasses React VDOM) */}
                   <div
@@ -1217,15 +1283,6 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                     }}
                     className="absolute z-20 flex flex-col items-center select-none"
                   >
-                    {/* Floating Combo Indicator */}
-                    {combo > 0 && (
-                      <div className={cn(
-                        "text-[10px] font-black tracking-tight drop-shadow-[0_1.5px_2px_rgba(0,0,0,0.85)] -mt-16 mb-2 select-none animate-bounce whitespace-nowrap",
-                        combo >= 15 ? "text-fuchsia-400" : combo >= 10 ? "text-amber-400" : "text-sky-400"
-                      )}>
-                        🔥 {combo} Combo {combo >= 5 && `(${combo >= 15 ? '2.0' : combo >= 10 ? '1.5' : '1.2'}x)`}
-                      </div>
-                    )}
 
                     {/* Floating Player Card */}
                     <div className="bg-slate-800/95 dark:bg-slate-900/95 border border-slate-700/80 rounded-full px-2 py-0.5 flex items-center gap-1 shadow-lg backdrop-blur-sm -mt-12 mb-1.5 select-none">

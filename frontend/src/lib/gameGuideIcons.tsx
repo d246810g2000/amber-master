@@ -20,6 +20,7 @@ import Shield from 'lucide-react/dist/esm/icons/shield';
 import Swords from 'lucide-react/dist/esm/icons/swords';
 import Egg from 'lucide-react/dist/esm/icons/egg';
 import Handshake from 'lucide-react/dist/esm/icons/handshake';
+import Gamepad2 from 'lucide-react/dist/esm/icons/gamepad-2';
 import { cn } from './utils';
 
 export type GuideIconKey =
@@ -43,7 +44,8 @@ export type GuideIconKey =
   | 'shield'
   | 'swords'
   | 'egg'
-  | 'handshake';
+  | 'handshake'
+  | 'gamepad';
 
 const ICONS: Record<GuideIconKey, React.FC<{ size?: number; className?: string; strokeWidth?: number }>> = {
   feather: Feather,
@@ -67,6 +69,7 @@ const ICONS: Record<GuideIconKey, React.FC<{ size?: number; className?: string; 
   swords: Swords,
   egg: Egg,
   handshake: Handshake,
+  gamepad: Gamepad2,
 };
 
 interface GuideIconProps {

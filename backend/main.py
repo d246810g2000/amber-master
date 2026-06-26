@@ -463,7 +463,7 @@ async def submit_minigame_score(req: schemas.MiniGameSubmitRequest, db: Session 
     player = crud.get_player_by_email(db, req.playerEmail)
     if not player:
         return error("找不到球員資料，請確認是否已綁定帳號")
-    res = crud.submit_minigame_score(db, player.id, req.score)
+    res = crud.submit_minigame_score(db, player.id, req.score, req.maxCombo)
     if res.get("status") == "error":
         return error(res.get("message"))
     return success(res)

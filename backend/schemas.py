@@ -216,6 +216,7 @@ class HouseDonateRequest(BaseModel):
 class MiniGameSubmitRequest(BaseModel):
     playerEmail: str
     score: int
+    maxCombo: Optional[int] = 0
 
 class FeatherClaimResponse(BaseModel):
     status: str
