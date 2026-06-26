@@ -125,6 +125,8 @@ const GameRockIcon: React.FC<{ className?: string }> = ({ className = '' }) => {
   );
 };
 
+const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|Android/i.test(navigator.userAgent);
+
 let audioCtx: AudioContext | null = null;
 const playSynthSound = (type: 'catch' | 'gold' | 'super' | 'hit' | 'dizzy') => {
   try {
@@ -360,7 +362,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     ctx.translate(x, y);
     ctx.rotate(-Math.PI / 6); // tilted feather look
     
-    if (glow) {
+    if (glow && !isMobile) {
       ctx.shadowColor = color;
       ctx.shadowBlur = 10;
     }
@@ -390,8 +392,10 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     ctx.translate(x, y);
 
     // Glowing warning outline
-    ctx.shadowColor = '#f43f5e'; // Rose-500 warning neon glow
-    ctx.shadowBlur = 12;
+    if (!isMobile) {
+      ctx.shadowColor = '#f43f5e'; // Rose-500 warning neon glow
+      ctx.shadowBlur = 12;
+    }
 
     // Red warning outer ring
     ctx.beginPath();
@@ -413,8 +417,10 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     ctx.fillRect(-2, -9, 4, 3);
 
     // Spark
-    ctx.shadowColor = '#fbbf24';
-    ctx.shadowBlur = 8;
+    if (!isMobile) {
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 8;
+    }
     ctx.beginPath();
     ctx.arc(2, -11, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = '#fbbf24';
@@ -428,8 +434,10 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     ctx.translate(x, y);
 
     // Glowing outline for hazard visibility
-    ctx.shadowColor = '#64748b'; // Slate gray glow
-    ctx.shadowBlur = 8;
+    if (!isMobile) {
+      ctx.shadowColor = '#64748b'; // Slate gray glow
+      ctx.shadowBlur = 8;
+    }
 
     // Rock body (jagged polygon shape)
     ctx.beginPath();
@@ -518,7 +526,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     let secondsTimer = 0;
 
     const gameStep = (time: number) => {
-      const delta = time - lastTime;
+      const rawDelta = time - lastTime;
       lastTime = time;
 
       // Freeze the game loop if the browser tab is hidden (lock screen, phone call, tab switch)
@@ -526,6 +534,9 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
         requestRef.current = requestAnimationFrame(gameStep);
         return;
       }
+
+      // Clamp delta to prevent physics explosion after tab switch or GC stall
+      const delta = Math.min(rawDelta, 50);
 
       const container = containerRef.current;
       const canvas = canvasRef.current;
@@ -564,13 +575,14 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       if (cartDOMRef.current) {
         cartDOMRef.current.style.left = `${cartXRef.current}%`;
         
-        // GPU-accelerated tilt based on direction (0% CPU impact)
+        // GPU-accelerated tilt + flip based on direction (0% CPU impact)
         let rotation = 0;
+        let scaleX = 1;
         if (dizzyTimeRef.current <= 0) {
-          if (cartDirectionRef.current === 'left') rotation = -4;
-          else if (cartDirectionRef.current === 'right') rotation = 4;
+          if (cartDirectionRef.current === 'left') { rotation = -4; scaleX = -1; }
+          else if (cartDirectionRef.current === 'right') { rotation = 4; scaleX = 1; }
         }
-        cartDOMRef.current.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+        cartDOMRef.current.style.transform = `translateX(-50%) scaleX(${scaleX}) rotate(${rotation}deg)`;
       }
 
       // 4. Game Clock & Speed Level calculation
@@ -581,6 +593,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
         setTimeLeft(timeLeftRef.current);
         if (timeLeftRef.current <= 0) {
           setGameState('ended');
+          return; // Stop game loop immediately, don't schedule another frame
         }
       }
 
@@ -898,8 +911,10 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fillStyle = p.color;
-          ctx.shadowColor = p.color;
-          ctx.shadowBlur = 6;
+          if (!isMobile) {
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 6;
+          }
           ctx.fill();
         }
         ctx.restore();
@@ -1217,7 +1232,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                   className="relative w-full h-[400px] bg-gradient-to-b from-slate-950 to-slate-900 select-none touch-none overscroll-contain overflow-hidden"
                 >
                   {/* Stats overlay (Mobile optimized layout using icons to prevent squishing) */}
-                  <div className="absolute top-4 inset-x-4 z-20 flex justify-between items-center bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-800/60 shadow-lg text-sm select-none">
+                  <div className="absolute top-4 inset-x-4 z-20 flex justify-between items-center bg-slate-900/95 px-4 py-2 rounded-2xl border border-slate-800/60 shadow-lg text-sm select-none">
                     {/* Left: Score */}
                     <div className="flex items-center gap-1.5 font-black text-amber-400">
                       <span className="text-base">🏆</span>
