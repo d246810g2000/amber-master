@@ -48,6 +48,18 @@ CREATE TABLE IF NOT EXISTS house_daily_stats (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Minigame Records Table
+CREATE TABLE IF NOT EXISTS minigame_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id VARCHAR(50) NOT NULL,
+    game_type VARCHAR(20) DEFAULT 'feather',
+    score INT NOT NULL,
+    max_combo INT DEFAULT 0,
+    is_practice BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+
 -- Feather Transactions Table
 CREATE TABLE IF NOT EXISTS feather_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,

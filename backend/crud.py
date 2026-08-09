@@ -7,6 +7,23 @@ import time
 import trueskill_logic
 from typing import List, Dict, Any, Optional, Union
 
+MINIGAME_CONFIG: Dict[str, Dict[str, str]] = {
+    "feather": {"reward_type": "minigame_reward", "display_name": "接羽毛"},
+    "trivia": {"reward_type": "trivia_reward", "display_name": "知識問答"},
+    "feather_rush": {"reward_type": "feather_rush_reward", "display_name": "飛羽衝鋒"},
+}
+
+def get_minigame_display_name(game_type: str) -> str:
+    return MINIGAME_CONFIG.get(game_type, {}).get("display_name", game_type)
+
+def parse_claimed_game_type_from_description(description: str) -> Optional[str]:
+    if not description:
+        return None
+    for game_type, cfg in MINIGAME_CONFIG.items():
+        if cfg["display_name"] in description:
+            return game_type
+    return None
+
 def get_players(db: Session):
     return db.query(models.Player).options(
         joinedload(models.Player.active_title),
@@ -1228,7 +1245,7 @@ def get_last_wednesday_start() -> datetime:
     last_wed = now_taipei.date() - timedelta(days=days_since_wed)
     return datetime.combine(last_wed, dt_time.min)
 
-def check_minigame_eligibility(db: Session, player_id: str) -> dict:
+def check_minigame_eligibility(db: Session, player_id: str, game_type: str = "feather") -> dict:
     from datetime import timedelta
     now_taipei = datetime.utcnow() + timedelta(hours=8)
     is_wednesday = now_taipei.weekday() == 2
@@ -1238,9 +1255,14 @@ def check_minigame_eligibility(db: Session, player_id: str) -> dict:
     
     last_wed_utc = last_wed - timedelta(hours=8)
     
+    # Each game type gets its own weekly reward transaction, so we differentiate by note or type
+    # For feather game: type = "minigame_reward"
+    # For trivia game: type = "trivia_reward"
+    reward_type = "trivia_reward" if game_type == "trivia" else "minigame_reward"
+    
     existing_play = db.query(models.FeatherTransaction).filter(
         models.FeatherTransaction.player_id == player_id,
-        models.FeatherTransaction.type == "minigame_reward",
+        models.FeatherTransaction.type == reward_type,
         models.FeatherTransaction.created_at >= last_wed_utc
     ).first()
     
@@ -1255,7 +1277,7 @@ def check_minigame_eligibility(db: Session, player_id: str) -> dict:
         "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-def submit_minigame_score(db: Session, player_id: str, score: int, max_combo: int = 0) -> dict:
+def submit_minigame_score(db: Session, player_id: str, game_type: str, score: int, max_combo: int = 0) -> dict:
     if score < 0:
         return {"status": "error", "message": "分數不能小於 0"}
         
@@ -1263,65 +1285,24 @@ def submit_minigame_score(db: Session, player_id: str, score: int, max_combo: in
     if not db_player:
         return {"status": "error", "message": "找不到該球員"}
         
-    from datetime import timedelta
-    now_taipei = datetime.utcnow() + timedelta(hours=8)
-    is_wednesday = now_taipei.weekday() == 2
-    
-    last_wed = get_last_wednesday_start()
-    last_wed_utc = last_wed - timedelta(hours=8)
-    
-    existing_play = db.query(models.FeatherTransaction).filter(
-        models.FeatherTransaction.player_id == player_id,
-        models.FeatherTransaction.type == "minigame_reward",
-        models.FeatherTransaction.created_at >= last_wed_utc
-    ).first()
-    
-    can_earn = is_wednesday and (existing_play is None)
-    
     # Save the score history entry to MiniGameRecord
     db_record = models.MiniGameRecord(
         player_id=player_id,
+        game_type=game_type,
         score=score,
         max_combo=max_combo,
-        is_practice=not can_earn
+        is_practice=True
     )
     db.add(db_record)
+    db.commit()
     
-    if can_earn:
-        actual_reward = score
-        db_player.feathers = (db_player.feathers or 0) + actual_reward
-        
-        db_tx = models.FeatherTransaction(
-            player_id=player_id,
-            amount=actual_reward,
-            type="minigame_reward",
-            description=f"每週接羽毛小遊戲：獲得 {actual_reward} 根羽毛 (分數: {score})"
-        )
-        db.add(db_tx)
-        db.commit()
-        
-        return {
-            "status": "success",
-            "message": f"挑戰成功！獲得了 {actual_reward} 根羽毛！",
-            "reward": actual_reward,
-            "score": score,
-            "maxCombo": max_combo
-        }
-    else:
-        db.commit() # Save the practice record
-        msg = "本次為練習模式，已登錄排行榜且未獲得羽毛。"
-        if not is_wednesday:
-            msg = "今天不是週三，本次為練習模式，已登錄排行榜且未獲得羽毛。"
-        elif existing_play is not None:
-            msg = "您本週三已領取過羽毛獎勵，本次為練習模式，已登錄排行榜且未獲得羽毛。"
-            
-        return {
-            "status": "success",
-            "message": msg,
-            "reward": 0,
-            "score": score,
-            "maxCombo": max_combo
-        }
+    return {
+        "status": "success",
+        "message": "分數已成功登錄排行榜！本週最高得分可在比賽日（週三）進行羽毛兌換。",
+        "reward": 0,
+        "score": score,
+        "maxCombo": max_combo
+    }
 
 def get_minigame_leaderboard(db: Session) -> dict:
     from datetime import timedelta
@@ -1329,114 +1310,159 @@ def get_minigame_leaderboard(db: Session) -> dict:
     last_wed = get_last_wednesday_start()
     last_wed_utc = last_wed - timedelta(hours=8)
     
-    # 1. Weekly leaderboard (this Wednesday onwards)
-    # Fetch from FeatherTransaction (historical weekly rewards)
-    weekly_txs = db.query(
-        models.FeatherTransaction.player_id,
-        func.max(models.FeatherTransaction.amount).label("max_score")
-    ).filter(
-        models.FeatherTransaction.type == "minigame_reward",
-        models.FeatherTransaction.created_at >= last_wed_utc
-    ).group_by(
-        models.FeatherTransaction.player_id
-    ).all()
+    def _fetch_leaderboard(reward_type: str, game_type: str):
+        # 1. Weekly leaderboard
+        weekly_txs = db.query(
+            models.FeatherTransaction.player_id,
+            func.max(models.FeatherTransaction.amount).label("max_score")
+        ).filter(
+            models.FeatherTransaction.type == reward_type,
+            models.FeatherTransaction.created_at >= last_wed_utc
+        ).group_by(
+            models.FeatherTransaction.player_id
+        ).all()
 
-    # Fetch from MiniGameRecord (new system: includes practice and max_combo)
-    weekly_records = db.query(
-        models.MiniGameRecord.player_id,
-        func.max(models.MiniGameRecord.score).label("max_score"),
-        func.max(models.MiniGameRecord.max_combo).label("max_combo")
-    ).filter(
-        models.MiniGameRecord.created_at >= last_wed_utc
-    ).group_by(
-        models.MiniGameRecord.player_id
-    ).all()
+        weekly_max_sub = db.query(
+            models.MiniGameRecord.player_id,
+            func.max(models.MiniGameRecord.score).label("max_score")
+        ).filter(
+            models.MiniGameRecord.game_type == game_type,
+            models.MiniGameRecord.created_at >= last_wed_utc
+        ).group_by(
+            models.MiniGameRecord.player_id
+        ).subquery()
 
-    weekly_map = {}
-    for row in weekly_txs:
-        weekly_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
-        
-    for row in weekly_records:
-        pid = row.player_id
-        score = row.max_score
-        combo = row.max_combo or 0
-        if pid not in weekly_map or score > weekly_map[pid]["score"]:
-            weekly_map[pid] = {"score": score, "max_combo": combo}
-        elif score == weekly_map[pid]["score"]:
-            weekly_map[pid]["max_combo"] = max(weekly_map[pid]["max_combo"], combo)
+        weekly_records = db.query(
+            models.MiniGameRecord.player_id,
+            models.MiniGameRecord.score.label("max_score"),
+            func.max(models.MiniGameRecord.max_combo).label("max_combo")
+        ).join(
+            weekly_max_sub,
+            (models.MiniGameRecord.player_id == weekly_max_sub.c.player_id) &
+            (models.MiniGameRecord.score == weekly_max_sub.c.max_score)
+        ).filter(
+            models.MiniGameRecord.game_type == game_type,
+            models.MiniGameRecord.created_at >= last_wed_utc
+        ).group_by(
+            models.MiniGameRecord.player_id,
+            models.MiniGameRecord.score
+        ).all()
 
-    player_ids = list(weekly_map.keys())
-    players = db.query(models.Player).filter(models.Player.id.in_(player_ids)).all() if player_ids else []
-    player_dict = {p.id: p for p in players}
-
-    weekly_list = []
-    for pid, data in weekly_map.items():
-        p = player_dict.get(pid)
-        if p:
-            weekly_list.append({
-                "score": data["score"],
-                "maxCombo": data["max_combo"],
-                "name": p.name,
-                "avatar": p.avatar
-            })
+        weekly_map = {}
+        for row in weekly_txs:
+            weekly_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
             
-    weekly_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
-    for idx, item in enumerate(weekly_list):
-        item["rank"] = idx + 1
+        for row in weekly_records:
+            pid = row.player_id
+            score = row.max_score
+            combo = row.max_combo or 0
+            if pid not in weekly_map or score > weekly_map[pid]["score"]:
+                weekly_map[pid] = {"score": score, "max_combo": combo}
+            elif score == weekly_map[pid]["score"]:
+                weekly_map[pid]["max_combo"] = max(weekly_map[pid]["max_combo"], combo)
 
-    # 2. All-time leaderboard (highest Wednesday/practice score per player)
-    all_time_txs = db.query(
-        models.FeatherTransaction.player_id,
-        func.max(models.FeatherTransaction.amount).label("max_score")
-    ).filter(
-        models.FeatherTransaction.type == "minigame_reward"
-    ).group_by(
-        models.FeatherTransaction.player_id
-    ).all()
-
-    all_time_records = db.query(
-        models.MiniGameRecord.player_id,
-        func.max(models.MiniGameRecord.score).label("max_score"),
-        func.max(models.MiniGameRecord.max_combo).label("max_combo")
-    ).group_by(
-        models.MiniGameRecord.player_id
-    ).all()
-
-    all_time_map = {}
-    for row in all_time_txs:
-        all_time_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
+        player_ids = list(weekly_map.keys())
         
-    for row in all_time_records:
-        pid = row.player_id
-        score = row.max_score
-        combo = row.max_combo or 0
-        if pid not in all_time_map or score > all_time_map[pid]["score"]:
-            all_time_map[pid] = {"score": score, "max_combo": combo}
-        elif score == all_time_map[pid]["score"]:
-            all_time_map[pid]["max_combo"] = max(all_time_map[pid]["max_combo"], combo)
+        # 2. All-time leaderboard
+        all_time_txs = db.query(
+            models.FeatherTransaction.player_id,
+            func.max(models.FeatherTransaction.amount).label("max_score")
+        ).filter(
+            models.FeatherTransaction.type == reward_type
+        ).group_by(
+            models.FeatherTransaction.player_id
+        ).all()
 
-    all_time_pids = list(all_time_map.keys())
-    all_time_players = db.query(models.Player).filter(models.Player.id.in_(all_time_pids)).all() if all_time_pids else []
-    all_time_player_dict = {p.id: p for p in all_time_players}
+        all_time_max_sub = db.query(
+            models.MiniGameRecord.player_id,
+            func.max(models.MiniGameRecord.score).label("max_score")
+        ).filter(
+            models.MiniGameRecord.game_type == game_type
+        ).group_by(
+            models.MiniGameRecord.player_id
+        ).subquery()
 
-    all_time_list = []
-    for pid, data in all_time_map.items():
-        p = all_time_player_dict.get(pid)
-        if p:
-            all_time_list.append({
-                "score": data["score"],
-                "maxCombo": data["max_combo"],
-                "name": p.name,
-                "avatar": p.avatar
-            })
+        all_time_records = db.query(
+            models.MiniGameRecord.player_id,
+            models.MiniGameRecord.score.label("max_score"),
+            func.max(models.MiniGameRecord.max_combo).label("max_combo")
+        ).join(
+            all_time_max_sub,
+            (models.MiniGameRecord.player_id == all_time_max_sub.c.player_id) &
+            (models.MiniGameRecord.score == all_time_max_sub.c.max_score)
+        ).filter(
+            models.MiniGameRecord.game_type == game_type
+        ).group_by(
+            models.MiniGameRecord.player_id,
+            models.MiniGameRecord.score
+        ).all()
 
-    all_time_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
-    for idx, item in enumerate(all_time_list):
-        item["rank"] = idx + 1
+        all_time_map = {}
+        for row in all_time_txs:
+            all_time_map[row.player_id] = {"score": row.max_score, "max_combo": 0}
+            
+        for row in all_time_records:
+            pid = row.player_id
+            score = row.max_score
+            combo = row.max_combo or 0
+            if pid not in all_time_map or score > all_time_map[pid]["score"]:
+                all_time_map[pid] = {"score": score, "max_combo": combo}
+            elif score == all_time_map[pid]["score"]:
+                all_time_map[pid]["max_combo"] = max(all_time_map[pid]["max_combo"], combo)
+
+        all_time_pids = list(all_time_map.keys())
+        
+        # Merge player fetching
+        all_pids = list(set(player_ids + all_time_pids))
+        players = db.query(models.Player).filter(models.Player.id.in_(all_pids)).all() if all_pids else []
+        player_dict = {p.id: p for p in players}
+
+        weekly_list = []
+        for pid, data in weekly_map.items():
+            p = player_dict.get(pid)
+            if p:
+                weekly_list.append({
+                    "score": data["score"],
+                    "maxCombo": data["max_combo"],
+                    "name": p.name,
+                    "avatar": p.avatar
+                })
+                
+        weekly_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
+        for idx, item in enumerate(weekly_list):
+            item["rank"] = idx + 1
+
+        all_time_list = []
+        for pid, data in all_time_map.items():
+            p = player_dict.get(pid)
+            if p:
+                all_time_list.append({
+                    "score": data["score"],
+                    "maxCombo": data["max_combo"],
+                    "name": p.name,
+                    "avatar": p.avatar
+                })
+
+        all_time_list.sort(key=lambda x: (-x["score"], -x["maxCombo"]))
+        for idx, item in enumerate(all_time_list):
+            item["rank"] = idx + 1
+            
+        return {
+            "weekly": weekly_list,
+            "allTime": all_time_list
+        }
+    
+    feather_board = _fetch_leaderboard("minigame_reward", "feather")
+    trivia_board = _fetch_leaderboard("trivia_reward", "trivia")
+    feather_rush_board = _fetch_leaderboard("feather_rush_reward", "feather_rush")
 
     return {
-        "weekly": weekly_list,
-        "allTime": all_time_list
+        "feather": feather_board,
+        "trivia": trivia_board,
+        "feather_rush": feather_rush_board,
+        # Keep old flat properties for backwards compatibility during migration if any frontend still uses it
+        "weekly": feather_board["weekly"],
+        "allTime": feather_board["allTime"]
     }
 
 def get_today_house_rescue_progress(db: Session, target_date: date) -> Dict[str, Any]:
@@ -2838,5 +2864,821 @@ def get_house_detail(db: Session, target_date: date):
     }
 
 
+import string
+
+def create_game_room(db: Session, player_email: str, game_type: str, wager_amount: int) -> dict:
+    if wager_amount < 0:
+        return {"status": "error", "message": "賭注不能小於 0"}
+
+    db_player = get_player_by_email(db, player_email)
+    if not db_player:
+        return {"status": "error", "message": "找不到該玩家"}
+
+    if (db_player.feathers or 0) < wager_amount:
+        return {"status": "error", "message": "羽毛餘額不足，無法進行押注"}
+
+    # Generate a unique 6-character room code
+    attempts = 0
+    room_code = ""
+    while attempts < 10:
+        code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        existing = db.query(models.GameRoom).filter(models.GameRoom.room_code == code).first()
+        if not existing:
+            room_code = code
+            break
+        attempts += 1
+
+    if not room_code:
+        return {"status": "error", "message": "產生房間代碼失敗"}
+
+    # Lock player's feathers
+    db_player.feathers = (db_player.feathers or 0) - wager_amount
+    db_tx = models.FeatherTransaction(
+        player_id=db_player.id,
+        amount=-wager_amount,
+        type="room_wager_lock",
+        description=f"創立房間約戰 {room_code}：鎖定賭注 {wager_amount} 根羽毛"
+    )
+    db.add(db_tx)
+
+    # Create room
+    db_room = models.GameRoom(
+        room_code=room_code,
+        host_player_id=db_player.id,
+        game_type=game_type,
+        wager_amount=wager_amount,
+        status="waiting"
+    )
+
+    # 約戰 trivia 模式：伺服器預先抽好 5 題（雙方題目完全相同）
+    if game_type == "trivia":
+        trivia_ids = _pick_trivia_questions_rotating(db, count=5, exclude_player_id=None)
+        db_room.trivia_question_ids = trivia_ids
+
+    db.add(db_room)
+    db.commit()
+
+    return {
+        "status": "success",
+        "room": {
+            "id": db_room.id,
+            "room_code": db_room.room_code,
+            "host_player_id": db_room.host_player_id,
+            "guest_player_id": db_room.guest_player_id,
+            "host_player_name": db_player.name,
+            "guest_player_name": None,
+            "game_type": db_room.game_type,
+            "wager_amount": db_room.wager_amount,
+            "status": db_room.status,
+            "created_at": db_room.created_at
+        }
+    }
 
 
+def join_game_room(db: Session, room_code: str, player_email: str) -> dict:
+    db_room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not db_room:
+        return {"status": "error", "message": "找不到該房間"}
+
+    if db_room.status != "waiting":
+        return {"status": "error", "message": "該房間無法加入"}
+
+    db_guest = get_player_by_email(db, player_email)
+    if not db_guest:
+        return {"status": "error", "message": "找不到該玩家"}
+
+    if db_room.host_player_id == db_guest.id:
+        return {"status": "error", "message": "您已在房間中"}
+
+    if (db_guest.feathers or 0) < db_room.wager_amount:
+        return {"status": "error", "message": "羽毛餘額不足，無法加入房間"}
+
+    # Lock guest player's feathers
+    db_guest.feathers = (db_guest.feathers or 0) - db_room.wager_amount
+    db_tx = models.FeatherTransaction(
+        player_id=db_guest.id,
+        amount=-db_room.wager_amount,
+        type="room_wager_lock",
+        description=f"加入房間約戰 {room_code}：鎖定賭注 {db_room.wager_amount} 根羽毛"
+    )
+    db.add(db_tx)
+
+    db_room.guest_player_id = db_guest.id
+    db_room.status = "ready"
+    db.commit()
+
+    db_host = db.query(models.Player).filter(models.Player.id == db_room.host_player_id).first()
+
+    return {
+        "status": "success",
+        "room": {
+            "id": db_room.id,
+            "room_code": db_room.room_code,
+            "host_player_id": db_room.host_player_id,
+            "guest_player_id": db_room.guest_player_id,
+            "host_player_name": db_host.name if db_host else "Unknown",
+            "guest_player_name": db_guest.name,
+            "game_type": db_room.game_type,
+            "wager_amount": db_room.wager_amount,
+            "status": db_room.status,
+            "created_at": db_room.created_at
+        }
+    }
+
+
+def start_game_room(db: Session, room_code: str) -> dict:
+    db_room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not db_room:
+        return {"status": "error", "message": "找不到該房間"}
+
+    if db_room.status != "ready":
+        return {"status": "error", "message": "房間未處於準備就緒狀態"}
+
+    db_room.status = "playing"
+    db_match = models.GameMatch(
+        room_id=db_room.id,
+        started_at=datetime.utcnow()
+    )
+    db.add(db_match)
+    db.commit()
+
+    return {"status": "success", "message": "遊戲已開始"}
+
+
+def get_active_game_rooms(db: Session) -> list:
+    rooms = db.query(models.GameRoom).filter(models.GameRoom.status.in_(["waiting", "ready", "playing"])).all()
+    if not rooms:
+        return []
+
+    # Collect all unique player IDs involved in these rooms
+    player_ids = set()
+    for r in rooms:
+        player_ids.add(r.host_player_id)
+        if r.guest_player_id:
+            player_ids.add(r.guest_player_id)
+
+    # Fetch all these players in a single query (resolves N+1 query issue)
+    players = db.query(models.Player).filter(models.Player.id.in_(player_ids)).all()
+    player_name_map = {p.id: p.name for p in players}
+
+    res = []
+    for r in rooms:
+        res.append({
+            "id": r.id,
+            "room_code": r.room_code,
+            "host_player_id": r.host_player_id,
+            "guest_player_id": r.guest_player_id,
+            "host_player_name": player_name_map.get(r.host_player_id, "Unknown"),
+            "guest_player_name": player_name_map.get(r.guest_player_id) if r.guest_player_id else None,
+            "game_type": r.game_type,
+            "wager_amount": r.wager_amount,
+            "status": r.status,
+            "created_at": r.created_at
+        })
+    return res
+
+
+def submit_room_match_score(db: Session, room_code: str, player_email: str, score: int) -> dict:
+    db_room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not db_room:
+        return {"status": "error", "message": "找不到該房間"}
+
+    db_match = db.query(models.GameMatch).filter(models.GameMatch.room_id == db_room.id).first()
+    if not db_match:
+        return {"status": "error", "message": "找不到對戰記錄"}
+
+    db_player = get_player_by_email(db, player_email)
+    if not db_player:
+        return {"status": "error", "message": "找不到該球員"}
+
+    # Identify whether user is host or guest
+    is_host = db_room.host_player_id == db_player.id
+    is_guest = db_room.guest_player_id == db_player.id
+
+    if not is_host and not is_guest:
+        return {"status": "error", "message": "您不屬於此對戰房間"}
+
+    if is_host:
+        db_match.host_score = score
+        db_match.host_submitted = True
+    else:
+        db_match.guest_score = score
+        db_match.guest_submitted = True
+
+    db.commit()
+
+    # If both submitted, settle
+    if db_match.host_submitted and db_match.guest_submitted:
+        db_room.status = "finished"
+        db_match.ended_at = datetime.utcnow()
+
+        host_player = db.query(models.Player).filter(models.Player.id == db_room.host_player_id).first()
+        guest_player = db.query(models.Player).filter(models.Player.id == db_room.guest_player_id).first()
+
+        total_pot = db_room.wager_amount * 2
+
+        if db_match.host_score > db_match.guest_score:
+            db_match.winner_id = db_room.host_player_id
+            if host_player:
+                host_player.feathers = (host_player.feathers or 0) + total_pot
+                db_tx = models.FeatherTransaction(
+                    player_id=host_player.id,
+                    amount=total_pot,
+                    type="room_wager_win",
+                    description=f"房間約戰獲勝 {room_code}：贏得總獎池 {total_pot} 根羽毛 (分數: {db_match.host_score} vs {db_match.guest_score})"
+                )
+                db.add(db_tx)
+        elif db_match.guest_score > db_match.host_score:
+            db_match.winner_id = db_room.guest_player_id
+            if guest_player:
+                guest_player.feathers = (guest_player.feathers or 0) + total_pot
+                db_tx = models.FeatherTransaction(
+                    player_id=guest_player.id,
+                    amount=total_pot,
+                    type="room_wager_win",
+                    description=f"房間約戰獲勝 {room_code}：贏得總獎池 {total_pot} 根羽毛 (分數: {db_match.guest_score} vs {db_match.host_score})"
+                )
+                db.add(db_tx)
+        else:
+            # Draw - refund stakes
+            if host_player:
+                host_player.feathers = (host_player.feathers or 0) + db_room.wager_amount
+                db_tx = models.FeatherTransaction(
+                    player_id=host_player.id,
+                    amount=db_room.wager_amount,
+                    type="room_wager_refund",
+                    description=f"房間約戰平手 {room_code}：退還賭注 {db_room.wager_amount} 根羽毛 (分數: {db_match.host_score} 平手)"
+                )
+                db.add(db_tx)
+            if guest_player:
+                guest_player.feathers = (guest_player.feathers or 0) + db_room.wager_amount
+                db_tx = models.FeatherTransaction(
+                    player_id=guest_player.id,
+                    amount=db_room.wager_amount,
+                    type="room_wager_refund",
+                    description=f"房間約戰平手 {room_code}：退還賭注 {db_room.wager_amount} 根羽毛 (分數: {db_match.guest_score} 平手)"
+                )
+                db.add(db_tx)
+
+        db.commit()
+
+        winner_name = "平手"
+        if db_match.winner_id == db_room.host_player_id:
+            winner_name = host_player.name if host_player else "Host"
+        elif db_match.winner_id == db_room.guest_player_id:
+            winner_name = guest_player.name if guest_player else "Guest"
+
+        return {
+            "status": "success",
+            "message": "對戰結算完成",
+            "settled": True,
+            "winner": winner_name,
+            "host_score": db_match.host_score,
+            "guest_score": db_match.guest_score
+        }
+
+    return {"status": "success", "message": "分數已提交，等待對手完成", "settled": False}
+
+
+def leave_game_room(db: Session, room_code: str, player_email: str) -> dict:
+    db_room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not db_room:
+        return {"status": "error", "message": "找不到該房間"}
+
+    db_player = get_player_by_email(db, player_email)
+    if not db_player:
+        return {"status": "error", "message": "找不到該玩家"}
+
+    is_host = db_room.host_player_id == db_player.id
+    is_guest = db_room.guest_player_id == db_player.id
+
+    if not is_host and not is_guest:
+        return {"status": "error", "message": "您不在此房間中"}
+
+    if db_room.status not in ["waiting", "ready"]:
+        return {"status": "error", "message": "遊戲已開始或房間已關閉，無法離開"}
+
+    # If Host leaves, cancel the room and refund both (if guest is present)
+    if is_host:
+        db_room.status = "cancelled"
+        
+        # Refund host
+        host_player = db.query(models.Player).filter(models.Player.id == db_room.host_player_id).first()
+        if host_player:
+            host_player.feathers = (host_player.feathers or 0) + db_room.wager_amount
+            db_tx = models.FeatherTransaction(
+                player_id=host_player.id,
+                amount=db_room.wager_amount,
+                type="room_wager_refund",
+                description=f"解散房間 {room_code}：退還賭注 {db_room.wager_amount} 根羽毛"
+            )
+            db.add(db_tx)
+
+        # Refund guest (if joined)
+        if db_room.guest_player_id:
+            guest_player = db.query(models.Player).filter(models.Player.id == db_room.guest_player_id).first()
+            if guest_player:
+                guest_player.feathers = (guest_player.feathers or 0) + db_room.wager_amount
+                db_tx = models.FeatherTransaction(
+                    player_id=guest_player.id,
+                    amount=db_room.wager_amount,
+                    type="room_wager_refund",
+                    description=f"房主解散房間 {room_code}：退還挑戰者賭注 {db_room.wager_amount} 根羽毛"
+                )
+                db.add(db_tx)
+        
+        db.commit()
+        return {"status": "success", "message": "房間已成功解散且賭注已全額退還"}
+
+    # If Guest leaves, revert room to 'waiting' and refund guest
+    else:
+        db_room.guest_player_id = None
+        db_room.status = "waiting"
+
+        # Refund guest
+        guest_player = db.query(models.Player).filter(models.Player.id == db_player.id).first()
+        if guest_player:
+            guest_player.feathers = (guest_player.feathers or 0) + db_room.wager_amount
+            db_tx = models.FeatherTransaction(
+                player_id=guest_player.id,
+                amount=db_room.wager_amount,
+                type="room_wager_refund",
+                description=f"離開房間 {room_code}：退還賭注 {db_room.wager_amount} 根羽毛"
+            )
+            db.add(db_tx)
+
+        db.commit()
+        return {"status": "success", "message": "已退出房間且賭注已全額退還"}
+
+
+# ===== Trivia Quiz CRUD =====
+
+def _pick_trivia_questions_rotating(db: Session, count: int = 5, exclude_player_id: Optional[str] = None) -> list:
+    """
+    章節輪轉抽題邏輯：
+    1. 隨機選一個起始章節 S（1~6）
+    2. 每題從下一個章節中抽 1 題
+    3. 若 exclude_player_id 提供，排除該玩家已答對的題目，錯題優先
+    """
+    # 取得該玩家已答對的題目 ID（永久排除）
+    correct_ids = set()
+    wrong_ids = set()
+    if exclude_player_id:
+        progress = db.query(models.TriviaPlayerProgress).filter(
+            models.TriviaPlayerProgress.player_id == exclude_player_id
+        ).all()
+        for p in progress:
+            if p.is_correct:
+                correct_ids.add(p.question_id)
+            else:
+                wrong_ids.add(p.question_id)
+
+    start_chapter = random.randint(1, 6)
+    picked_ids = []
+
+    for i in range(count):
+        chapter = ((start_chapter - 1 + i) % 6) + 1
+
+        # 取得該章節所有題目
+        chapter_questions = db.query(models.TriviaQuestion).filter(
+            models.TriviaQuestion.chapter == chapter
+        ).all()
+
+        if not chapter_questions:
+            continue
+
+        # 排除已答對
+        available = [q for q in chapter_questions if q.id not in correct_ids]
+
+        if not available:
+            # 該章節已全通，嘗試下一個章節的題目
+            for fallback_offset in range(1, 6):
+                fallback_ch = ((chapter - 1 + fallback_offset) % 6) + 1
+                fallback_qs = db.query(models.TriviaQuestion).filter(
+                    models.TriviaQuestion.chapter == fallback_ch
+                ).all()
+                available = [q for q in fallback_qs if q.id not in correct_ids and q.id not in picked_ids]
+                if available:
+                    break
+
+        if not available:
+            # 所有章節都全通了，從全題庫隨機抽（不再排除）
+            all_qs = db.query(models.TriviaQuestion).all()
+            available = [q for q in all_qs if q.id not in picked_ids]
+
+        if not available:
+            continue
+
+        # 錯題優先（最多佔 30%）
+        wrong_available = [q for q in available if q.id in wrong_ids and q.id not in picked_ids]
+        normal_available = [q for q in available if q.id not in wrong_ids and q.id not in picked_ids]
+
+        if wrong_available and i < count * 0.3:
+            chosen = random.choice(wrong_available)
+        elif normal_available:
+            chosen = random.choice(normal_available)
+        elif wrong_available:
+            chosen = random.choice(wrong_available)
+        else:
+            chosen = random.choice(available)
+
+        picked_ids.append(chosen.id)
+
+    return picked_ids
+
+
+def get_trivia_questions_for_game(db: Session, player_id: Optional[str] = None, count: int = 5) -> list:
+    """練習模式：排除已答對 + 錯題優先 + 章節輪轉"""
+    question_ids = _pick_trivia_questions_rotating(db, count=count, exclude_player_id=player_id)
+
+    if not question_ids:
+        return []
+
+    questions = db.query(models.TriviaQuestion).filter(
+        models.TriviaQuestion.id.in_(question_ids)
+    ).all()
+
+    # 保持原本抽題順序
+    q_map = {q.id: q for q in questions}
+    result = []
+    for qid in question_ids:
+        q = q_map.get(qid)
+        if q:
+            result.append({
+                "id": q.id,
+                "chapter": q.chapter,
+                "chapterName": q.chapter_name,
+                "questionCode": q.question_code,
+                "question": q.question,
+                "options": [q.option_a, q.option_b, q.option_c, q.option_d],
+                "answerIndex": q.answer_index,
+                "explanation": q.explanation
+            })
+    return result
+
+
+def get_trivia_questions_by_ids(db: Session, question_ids: list) -> list:
+    """約戰模式：根據預存的題目 ID 取得題目（雙方相同）"""
+    if not question_ids:
+        return []
+
+    questions = db.query(models.TriviaQuestion).filter(
+        models.TriviaQuestion.id.in_(question_ids)
+    ).all()
+
+    q_map = {q.id: q for q in questions}
+    result = []
+    for qid in question_ids:
+        q = q_map.get(qid)
+        if q:
+            result.append({
+                "id": q.id,
+                "chapter": q.chapter,
+                "chapterName": q.chapter_name,
+                "questionCode": q.question_code,
+                "question": q.question,
+                "options": [q.option_a, q.option_b, q.option_c, q.option_d],
+                "answerIndex": q.answer_index,
+                "explanation": q.explanation
+            })
+    return result
+
+
+def record_trivia_answer(db: Session, player_id: str, question_id: int, is_correct: bool) -> dict:
+    """記錄答題結果。答對的題目下次不會再出現。"""
+    # 檢查是否已經答對過（答對過就不再記錄）
+    existing_correct = db.query(models.TriviaPlayerProgress).filter(
+        models.TriviaPlayerProgress.player_id == player_id,
+        models.TriviaPlayerProgress.question_id == question_id,
+        models.TriviaPlayerProgress.is_correct == True
+    ).first()
+
+    if existing_correct:
+        return {"status": "success", "message": "already_correct"}
+
+    progress = models.TriviaPlayerProgress(
+        player_id=player_id,
+        question_id=question_id,
+        is_correct=is_correct
+    )
+    db.add(progress)
+    db.commit()
+
+    # 檢查章節是否全通
+    reward_info = None
+    if is_correct:
+        question = db.query(models.TriviaQuestion).filter(models.TriviaQuestion.id == question_id).first()
+        if question:
+            reward_info = check_chapter_completion_reward(db, player_id, question.chapter)
+
+    return {
+        "status": "success",
+        "message": "recorded",
+        "chapterReward": reward_info
+    }
+
+
+def get_trivia_progress(db: Session, player_id: str) -> dict:
+    """取得各章節完成進度"""
+    # 取得所有題目數量（按章節）
+    chapter_totals = db.query(
+        models.TriviaQuestion.chapter,
+        func.count(models.TriviaQuestion.id)
+    ).group_by(models.TriviaQuestion.chapter).all()
+
+    # 取得該玩家已答對的題目數量（按章節）
+    correct_counts = db.query(
+        models.TriviaQuestion.chapter,
+        func.count(func.distinct(models.TriviaPlayerProgress.question_id))
+    ).join(
+        models.TriviaPlayerProgress,
+        models.TriviaPlayerProgress.question_id == models.TriviaQuestion.id
+    ).filter(
+        models.TriviaPlayerProgress.player_id == player_id,
+        models.TriviaPlayerProgress.is_correct == True
+    ).group_by(models.TriviaQuestion.chapter).all()
+
+    total_map = {ch: cnt for ch, cnt in chapter_totals}
+    correct_map = {ch: cnt for ch, cnt in correct_counts}
+
+    chapter_names = {
+        1: "雙打接殺與防守",
+        2: "雙打輪轉與補位",
+        3: "發接發與網前封網",
+        4: "中場平抽快攻與後場進攻",
+        5: "戰術閱讀與心理博弈",
+        6: "雙打跑位與補位(進階)"
+    }
+
+    chapters = []
+    total_correct = 0
+    total_questions = 0
+    for ch in range(1, 7):
+        total = total_map.get(ch, 0)
+        correct = correct_map.get(ch, 0)
+        total_correct += correct
+        total_questions += total
+        chapters.append({
+            "chapter": ch,
+            "name": chapter_names.get(ch, f"第{ch}章"),
+            "total": total,
+            "correct": correct,
+            "completed": correct >= total and total > 0
+        })
+
+    return {
+        "chapters": chapters,
+        "totalCorrect": total_correct,
+        "totalQuestions": total_questions
+    }
+
+
+def check_chapter_completion_reward(db: Session, player_id: str, chapter: int) -> Optional[dict]:
+    """檢查章節是否剛好全通，發放一次性獎勵"""
+    total = db.query(func.count(models.TriviaQuestion.id)).filter(
+        models.TriviaQuestion.chapter == chapter
+    ).scalar() or 0
+
+    if total == 0:
+        return None
+
+    correct = db.query(func.count(func.distinct(models.TriviaPlayerProgress.question_id))).join(
+        models.TriviaQuestion,
+        models.TriviaPlayerProgress.question_id == models.TriviaQuestion.id
+    ).filter(
+        models.TriviaPlayerProgress.player_id == player_id,
+        models.TriviaPlayerProgress.is_correct == True,
+        models.TriviaQuestion.chapter == chapter
+    ).scalar() or 0
+
+    if correct < total:
+        return None
+
+    # 檢查是否已經領過該章節獎勵（用 FeatherTransaction type 判斷）
+    reward_type = f"trivia_chapter_{chapter}_complete"
+    existing_reward = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id,
+        models.FeatherTransaction.type == reward_type
+    ).first()
+
+    if existing_reward:
+        return None  # 已領過
+
+    # 發放獎勵
+    reward_amount = 200
+    chapter_names = {
+        1: "雙打接殺與防守", 2: "雙打輪轉與補位",
+        3: "發接發與網前封網", 4: "中場平抽快攻與後場進攻",
+        5: "戰術閱讀與心理博弈", 6: "雙打跑位與補位(進階)"
+    }
+
+    player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if player:
+        player.feathers = (player.feathers or 0) + reward_amount
+        db.add(models.FeatherTransaction(
+            player_id=player_id,
+            amount=reward_amount,
+            type=reward_type,
+            description=f"🏆 知識小學堂全通獎勵：{chapter_names.get(chapter, f'第{chapter}章')} 全部答對！"
+        ))
+        db.commit()
+
+    return {
+        "chapter": chapter,
+        "chapterName": chapter_names.get(chapter, f"第{chapter}章"),
+        "rewardAmount": reward_amount
+    }
+
+
+
+
+def get_trivia_collection(db: Session, player_id: str) -> list:
+    """
+    取得玩家已經答對的所有小學堂題目與解析（題庫收集冊）
+    """
+    correct_progress = db.query(models.TriviaPlayerProgress).filter(
+        models.TriviaPlayerProgress.player_id == player_id,
+        models.TriviaPlayerProgress.is_correct == True
+    ).all()
+    
+    correct_question_ids = list(set([p.question_id for p in correct_progress]))
+    if not correct_question_ids:
+        return []
+        
+    questions = db.query(models.TriviaQuestion).filter(
+        models.TriviaQuestion.id.in_(correct_question_ids)
+    ).all()
+    
+    return [
+        {
+            "id": q.id,
+            "chapter": q.chapter,
+            "question": q.question,
+            "options": [q.option_a, q.option_b, q.option_c, q.option_d],
+            "answerIndex": q.answer_index,
+            "explanation": q.explanation
+        }
+        for q in questions
+    ]
+
+
+def get_minigame_weekly_claim_status(db: Session, player_id: str) -> dict:
+    from datetime import timedelta
+    now_taipei = datetime.utcnow() + timedelta(hours=8)
+    is_wednesday = now_taipei.weekday() == 2
+    
+    last_wed = get_last_wednesday_start()
+    next_wed = last_wed + timedelta(days=7)
+    last_wed_utc = last_wed - timedelta(hours=8)
+    
+    # Check if user has claimed weekly convert transaction since last Wednesday
+    existing_claim = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id,
+        models.FeatherTransaction.type == "minigame_weekly_convert",
+        models.FeatherTransaction.created_at >= last_wed_utc
+    ).first()
+    
+    # Query highest scores since last Wednesday for each game type
+    from sqlalchemy import func
+    feather_max = db.query(func.max(models.MiniGameRecord.score)).filter(
+        models.MiniGameRecord.player_id == player_id,
+        models.MiniGameRecord.game_type == "feather",
+        models.MiniGameRecord.created_at >= last_wed_utc
+    ).scalar() or 0
+    
+    trivia_max = db.query(func.max(models.MiniGameRecord.score)).filter(
+        models.MiniGameRecord.player_id == player_id,
+        models.MiniGameRecord.game_type == "trivia",
+        models.MiniGameRecord.created_at >= last_wed_utc
+    ).scalar() or 0
+
+    feather_rush_max = db.query(func.max(models.MiniGameRecord.score)).filter(
+        models.MiniGameRecord.player_id == player_id,
+        models.MiniGameRecord.game_type == "feather_rush",
+        models.MiniGameRecord.created_at >= last_wed_utc
+    ).scalar() or 0
+    
+    # Extract claim details if claimed
+    claimed_amount = existing_claim.amount if existing_claim else 0
+    claimed_game_type = None
+    if existing_claim:
+        claimed_game_type = parse_claimed_game_type_from_description(existing_claim.description or "")
+            
+    return {
+        "hasClaimed": existing_claim is not None,
+        "claimedAmount": claimed_amount,
+        "claimedGameType": claimed_game_type,
+        "claimedAt": (existing_claim.created_at + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S") if existing_claim else None,
+        "isWednesday": is_wednesday,
+        "highestScores": {
+            "feather": feather_max,
+            "trivia": trivia_max,
+            "feather_rush": feather_rush_max,
+        },
+        "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def claim_minigame_weekly_score(db: Session, player_id: str, game_type: str) -> dict:
+    # 先清理過期借貸，退還金額
+    check_and_expire_loans(db)
+    
+    db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
+    if not db_player:
+        return {"status": "error", "message": "找不到該球員"}
+        
+    from datetime import timedelta
+    now_taipei = datetime.utcnow() + timedelta(hours=8)
+    if now_taipei.weekday() != 2:
+        return {"status": "error", "message": "今天不是比賽日（週三），無法兌換羽毛"}
+        
+    last_wed = get_last_wednesday_start()
+    last_wed_utc = last_wed - timedelta(hours=8)
+    
+    # Check if already claimed
+    existing_claim = db.query(models.FeatherTransaction).filter(
+        models.FeatherTransaction.player_id == player_id,
+        models.FeatherTransaction.type == "minigame_weekly_convert",
+        models.FeatherTransaction.created_at >= last_wed_utc
+    ).first()
+    if existing_claim:
+        return {"status": "error", "message": "本週已兌換過小遊戲羽毛獎勵"}
+        
+    # Get highest score
+    from sqlalchemy import func
+    highest_score = db.query(func.max(models.MiniGameRecord.score)).filter(
+        models.MiniGameRecord.player_id == player_id,
+        models.MiniGameRecord.game_type == game_type,
+        models.MiniGameRecord.created_at >= last_wed_utc
+    ).scalar() or 0
+    
+    if highest_score <= 0:
+        return {"status": "error", "message": "本週沒有該遊戲的得分紀錄，無法兌換"}
+        
+    # Calculate pet daily bonus
+    daily_bonus = get_player_daily_bonus_rate(db_player)
+    bonus_amount = int(highest_score * daily_bonus)
+    total_reward = highest_score + bonus_amount
+    
+    db_player.feathers = (db_player.feathers or 0) + total_reward
+    
+    game_name = get_minigame_display_name(game_type)
+    desc = f"小遊戲分數兌換：{game_name} 本週最高 {highest_score} 分"
+    if bonus_amount > 0:
+        desc += f" (寵物加成 +{bonus_amount} 根)"
+        
+    db_tx = models.FeatherTransaction(
+        player_id=player_id,
+        amount=total_reward,
+        type="minigame_weekly_convert",
+        description=desc
+    )
+    db.add(db_tx)
+    
+    # ─── 自動扣款償還借貸 ───
+    active_loans = db.query(models.PlayerLoan).filter(
+        models.PlayerLoan.borrower_id == db_player.id,
+        models.PlayerLoan.status == 'active'
+    ).order_by(models.PlayerLoan.created_at.asc()).all()
+
+    for loan in active_loans:
+        if db_player.feathers <= 0:
+            break
+        due = loan.total_due - loan.repaid_amount
+        if due <= 0:
+            continue
+        
+        repay_amt = min(db_player.feathers, due)
+        db_player.feathers -= repay_amt
+        
+        lender = db.query(models.Player).filter(models.Player.id == loan.lender_id).first()
+        if lender:
+            lender.feathers = (lender.feathers or 0) + repay_amt
+            lender_tx = models.FeatherTransaction(
+                player_id=lender.id,
+                amount=repay_amt,
+                type="loan_repayment_receive",
+                description=f"收到來自 {db_player.name} 的借貸還款 (+{repay_amt} 根)"
+            )
+            db.add(lender_tx)
+            
+            loan.repaid_amount += repay_amt
+            if loan.repaid_amount >= loan.total_due:
+                loan.status = 'repaid'
+                loan.repaid_at = datetime.utcnow()
+                
+        borrower_tx = models.FeatherTransaction(
+            player_id=db_player.id,
+            amount=-repay_amt,
+            type="loan_repayment_pay",
+            description=f"自動扣款還款給 {lender.name if lender else '未知'} (-{repay_amt} 根)"
+        )
+        db.add(borrower_tx)
+        
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"兌換成功！已將 {game_name} 的最高得分 {highest_score} 分轉換為 {total_reward} 根羽毛！",
+        "amount": total_reward
+    }

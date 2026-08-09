@@ -324,36 +324,120 @@ class TestBettingV2(unittest.TestCase):
         db = self.db
         self._create_standard_match("test_minigame_match")
         
-        # 1. Initially, player should be eligible to play
-        status = crud.check_minigame_eligibility(db, "b1")
-        self.assertTrue(status["canPlay"])
+        # Mock datetime.utcnow to return a Wednesday (e.g. 2026-06-24)
+        from datetime import datetime as real_datetime
+        original_datetime = crud.datetime
         
-        # 2. Submit score
-        res = crud.submit_minigame_score(db, "b1", 150)
-        self.assertEqual(res["status"], "success")
-        self.assertEqual(res["reward"], 150)
+        class MockedDatetime:
+            @staticmethod
+            def utcnow():
+                # 2026-06-24 is Wednesday
+                return real_datetime(2026, 6, 24, 12, 0, 0)
+            
+            @staticmethod
+            def combine(*args, **kwargs):
+                return real_datetime.combine(*args, **kwargs)
+            
+            @staticmethod
+            def strptime(*args, **kwargs):
+                return real_datetime.strptime(*args, **kwargs)
+            
+            @staticmethod
+            def fromisoformat(*args, **kwargs):
+                return real_datetime.fromisoformat(*args, **kwargs)
         
-        b1 = db.query(models.Player).filter(models.Player.id == "b1").first()
-        self.assertEqual(b1.feathers, 1150) # 1000 + 150 = 1150
-        
-        # 3. Check eligibility again (should be False)
-        status2 = crud.check_minigame_eligibility(db, "b1")
-        self.assertFalse(status2["canPlay"])
-        
-        # 4. Attempting to submit again should fail
-        res2 = crud.submit_minigame_score(db, "b1", 200)
-        self.assertEqual(res2["status"], "error")
-        self.assertIn("本週已經挑戰過", res2["message"])
-        
-        # 5. Check anti-cheat cap (submit score 800 for eligible player b2)
-        status_b2 = crud.check_minigame_eligibility(db, "b2")
-        self.assertTrue(status_b2["canPlay"])
-        res_b2 = crud.submit_minigame_score(db, "b2", 800)
-        self.assertEqual(res_b2["status"], "success")
-        self.assertEqual(res_b2["reward"], 500) # Capped at 500
-        
-        b2 = db.query(models.Player).filter(models.Player.id == "b2").first()
-        self.assertEqual(b2.feathers, 1500) # 1000 + 500 = 1500
+        crud.datetime = MockedDatetime
+        try:
+            # 1. Initially, player should be eligible to play
+            status = crud.check_minigame_eligibility(db, "b1")
+            self.assertTrue(status["canPlay"])
+            
+            # 2. Submit score
+            res = crud.submit_minigame_score(db, "b1", 150)
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["reward"], 150)
+            
+            b1 = db.query(models.Player).filter(models.Player.id == "b1").first()
+            self.assertEqual(b1.feathers, 1150) # 1000 + 150 = 1150
+            
+            # 3. Check eligibility again (canPlay is True, but canEarnReward is False)
+            status2 = crud.check_minigame_eligibility(db, "b1")
+            self.assertTrue(status2["canPlay"])
+            self.assertFalse(status2["canEarnReward"])
+            
+            # 4. Attempting to submit again should succeed as practice mode (reward is 0)
+            res2 = crud.submit_minigame_score(db, "b1", 200)
+            self.assertEqual(res2["status"], "success")
+            self.assertEqual(res2["reward"], 0)
+            self.assertIn("已領取過羽毛獎勵", res2["message"])
+            
+            # 5. Check score reward (submit score 800 for eligible player b2)
+            status_b2 = crud.check_minigame_eligibility(db, "b2")
+            self.assertTrue(status_b2["canPlay"])
+            self.assertTrue(status_b2["canEarnReward"])
+            res_b2 = crud.submit_minigame_score(db, "b2", 800)
+            self.assertEqual(res_b2["status"], "success")
+            self.assertEqual(res_b2["reward"], 800) # Awards full score
+            
+            b2 = db.query(models.Player).filter(models.Player.id == "b2").first()
+            self.assertEqual(b2.feathers, 1800) # 1000 + 800 = 1800
+        finally:
+            crud.datetime = original_datetime
+
+    def test_feather_rush_minigame(self):
+        db = self.db
+        self._create_standard_match("test_feather_rush_match")
+
+        from datetime import datetime as real_datetime
+        original_datetime = crud.datetime
+
+        class MockedDatetime:
+            @staticmethod
+            def utcnow():
+                return real_datetime(2026, 6, 24, 12, 0, 0)
+
+            @staticmethod
+            def combine(*args, **kwargs):
+                return real_datetime.combine(*args, **kwargs)
+
+            @staticmethod
+            def strptime(*args, **kwargs):
+                return real_datetime.strptime(*args, **kwargs)
+
+            @staticmethod
+            def fromisoformat(*args, **kwargs):
+                return real_datetime.fromisoformat(*args, **kwargs)
+
+        crud.datetime = MockedDatetime
+        try:
+            res = crud.submit_minigame_score(db, "b1", "feather_rush", 850, 0)
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["reward"], 0)
+
+            record = db.query(models.MiniGameRecord).filter(
+                models.MiniGameRecord.player_id == "b1",
+                models.MiniGameRecord.game_type == "feather_rush",
+            ).first()
+            self.assertIsNotNone(record)
+            self.assertEqual(record.score, 850)
+
+            status = crud.get_minigame_weekly_claim_status(db, "b1")
+            self.assertEqual(status["highestScores"]["feather_rush"], 850)
+
+            leaderboard = crud.get_minigame_leaderboard(db)
+            self.assertIn("feather_rush", leaderboard)
+            self.assertTrue(any(e["name"] == "Bettor 1" for e in leaderboard["feather_rush"]["allTime"]))
+
+            claim = crud.claim_minigame_weekly_score(db, "b1", "feather_rush")
+            self.assertEqual(claim["status"], "success")
+            tx = db.query(models.FeatherTransaction).filter(
+                models.FeatherTransaction.player_id == "b1",
+                models.FeatherTransaction.type == "minigame_weekly_convert",
+            ).first()
+            self.assertIsNotNone(tx)
+            self.assertIn("飛羽衝鋒", tx.description)
+        finally:
+            crud.datetime = original_datetime
 
 if __name__ == "__main__":
     unittest.main()

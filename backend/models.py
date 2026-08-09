@@ -156,9 +156,72 @@ class MiniGameRecord(Base):
     __tablename__ = "minigame_records"
     id = Column(Integer, primary_key=True, index=True)
     player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    game_type = Column(String(20), default="feather")
     score = Column(Integer, nullable=False)
     max_combo = Column(Integer, default=0)
     is_practice = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class GameRoom(Base):
+    __tablename__ = "game_rooms"
+    id = Column(Integer, primary_key=True, index=True)
+    room_code = Column(String(50), unique=True, index=True, nullable=False)
+    host_player_id = Column(String(50), ForeignKey("players.id"), nullable=False)
+    guest_player_id = Column(String(50), ForeignKey("players.id"), nullable=True)
+    game_type = Column(String(50), nullable=False) # 'feather' or 'trivia'
+    wager_amount = Column(Integer, nullable=False)
+    status = Column(String(20), default="waiting") # waiting, playing, finished, cancelled
+    trivia_question_ids = Column(JSON, nullable=True)  # 約戰 trivia 預存題組 [id1, id2, ...]
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    host_player = relationship("Player", foreign_keys=[host_player_id])
+    guest_player = relationship("Player", foreign_keys=[guest_player_id])
+
+
+class GameMatch(Base):
+    __tablename__ = "game_matches"
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("game_rooms.id"), nullable=False)
+    host_score = Column(Integer, default=0)
+    guest_score = Column(Integer, default=0)
+    host_submitted = Column(Boolean, default=False)
+    guest_submitted = Column(Boolean, default=False)
+    winner_id = Column(String(50), ForeignKey("players.id"), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    room = relationship("GameRoom")
+    winner = relationship("Player", foreign_keys=[winner_id])
+
+
+class TriviaQuestion(Base):
+    __tablename__ = "trivia_questions"
+    id = Column(Integer, primary_key=True, index=True)
+    chapter = Column(Integer, nullable=False, index=True)
+    chapter_name = Column(String(100), nullable=False)
+    question_code = Column(String(20), nullable=False, unique=True)
+    question = Column(Text, nullable=False)
+    option_a = Column(Text, nullable=False)
+    option_b = Column(Text, nullable=False)
+    option_c = Column(Text, nullable=False)
+    option_d = Column(Text, nullable=False)
+    answer_index = Column(Integer, nullable=False)  # 0=A, 1=B, 2=C, 3=D
+    explanation = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TriviaPlayerProgress(Base):
+    __tablename__ = "trivia_player_progress"
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(String(50), ForeignKey("players.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("trivia_questions.id"), nullable=False)
+    is_correct = Column(Boolean, nullable=False)
+    answered_at = Column(DateTime, default=datetime.utcnow)
+
+    player = relationship("Player")
+    question = relationship("TriviaQuestion")
 
 

@@ -1,210 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import X from 'lucide-react/dist/esm/icons/x';
-import Play from 'lucide-react/dist/esm/icons/play';
-import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
-import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left';
-import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
-import ShoppingCart from 'lucide-react/dist/esm/icons/shopping-cart';
+import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left';
+import Lightbulb from 'lucide-react/dist/esm/icons/lightbulb';
 import * as gasApi from '../../lib/gasApi';
 import { useAuth } from '../../context/AuthContext';
-import { getAvatarUrl, cn } from '../../lib/utils';
+import { FeatherGameCanvas, GameFeatherIcon } from './minigame/FeatherGameCanvas';
+import { TriviaGamePlay } from './minigame/TriviaGamePlay';
+import { GameLobby } from './minigame/GameLobby';
+import { FeatherGameMenu } from './minigame/FeatherGameMenu';
+import { TriviaGameMenu } from './minigame/TriviaGameMenu';
+import { FeatherGameEnded } from './minigame/FeatherGameEnded';
+import { TriviaGameEnded } from './minigame/TriviaGameEnded';
+import { FeatherRushMenu } from './minigame/FeatherRushMenu';
+import { FeatherRushCanvas } from './minigame/FeatherRushCanvas';
+import { FeatherRushEnded } from './minigame/FeatherRushEnded';
+import { RoomLobbyModal } from './minigame/RoomLobbyModal';
+import { MiniGameType } from './minigame/types';
 
 interface MiniGameModalProps {
   isOpen: boolean;
   onClose: () => void;
   playerName?: string;
   playerAvatar?: string;
+  playerId?: string;
   onSuccess?: () => void;
 }
-
-type ItemType = 'normal' | 'gold' | 'super' | 'bomb' | 'rock';
-
-interface FallingItem {
-  id: number;
-  x: number; // percentage (0 - 100)
-  y: number; // pixels from top
-  speed: number;
-  type: ItemType;
-}
-
-interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  size: number;
-  alpha: number;
-}
-
-interface FloatingText {
-  id: number;
-  text: string;
-  x: number;
-  y: number;
-  color: string;
-  alpha: number;
-}
-
-const GameFeatherIcon: React.FC<{ color: string; glow?: boolean; className?: string }> = ({ color, glow = false, className = '' }) => {
-  return (
-    <svg
-      viewBox="0 0 24 32"
-      className={className}
-      style={{
-        width: '16px',
-        height: '20px',
-        transform: 'rotate(-15deg)',
-        filter: glow ? `drop-shadow(0 0 4px ${color})` : 'none',
-        display: 'inline-block',
-        verticalAlign: 'middle',
-      }}
-    >
-      <path
-        d="M 12 26 Q 6 16 9 4 Q 12 0 15 4 Q 18 16 12 26 Z"
-        fill={color}
-      />
-      <path
-        d="M 12 27 L 12 5"
-        stroke="#ffffff"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-};
-
-const GameBombIcon: React.FC<{ className?: string }> = ({ className = '' }) => {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      style={{
-        width: '18px',
-        height: '18px',
-        filter: 'drop-shadow(0 0 4px #f43f5e)',
-        display: 'inline-block',
-        verticalAlign: 'middle',
-      }}
-    >
-      <circle cx="12" cy="13" r="9" fill="#f43f5e" />
-      <circle cx="12" cy="13" r="7" fill="#090d16" />
-      <rect x="10.5" y="2" width="3" height="3" fill="#64748b" />
-      <circle cx="13.5" cy="1.5" r="2" fill="#fbbf24" style={{ filter: 'drop-shadow(0 0 2px #fbbf24)' }} />
-    </svg>
-  );
-};
-
-const GameRockIcon: React.FC<{ className?: string }> = ({ className = '' }) => {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      style={{
-        width: '18px',
-        height: '18px',
-        filter: 'drop-shadow(0 0 4px #64748b)',
-        display: 'inline-block',
-        verticalAlign: 'middle',
-      }}
-    >
-      <path
-        d="M 6 18 L 3 12 L 6 6 L 12 3 L 18 6 L 21 12 L 18 18 L 12 21 Z"
-        fill="#64748b"
-      />
-      <path
-        d="M 9 9 L 12 12 L 15 10"
-        stroke="#475569"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-};
-
-const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|Android/i.test(navigator.userAgent);
-
-let audioCtx: AudioContext | null = null;
-const playSynthSound = (type: 'catch' | 'gold' | 'super' | 'hit' | 'dizzy') => {
-  try {
-    if (typeof window === 'undefined') return;
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    
-    if (!audioCtx) {
-      audioCtx = new AudioContextClass();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    
-    const now = audioCtx.currentTime;
-    
-    if (type === 'catch') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(400, now);
-      osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
-      gain.gain.setValueAtTime(0.04, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-      osc.start(now);
-      osc.stop(now + 0.08);
-    } else if (type === 'gold') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(750, now);
-      osc.frequency.exponentialRampToValueAtTime(1050, now + 0.12);
-      gain.gain.setValueAtTime(0.06, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    } else if (type === 'super') {
-      // Little arpeggio
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now);
-      osc.frequency.setValueAtTime(659.25, now + 0.04);
-      osc.frequency.setValueAtTime(783.99, now + 0.08);
-      osc.frequency.setValueAtTime(1046.50, now + 0.12);
-      gain.gain.setValueAtTime(0.06, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
-      osc.start(now);
-      osc.stop(now + 0.20);
-    } else if (type === 'hit') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(160, now);
-      osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    } else if (type === 'dizzy') {
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(110, now);
-      osc.frequency.exponentialRampToValueAtTime(30, now + 0.25);
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    }
-  } catch (e) {
-    // Ignore audio initialization errors
-  }
-};
 
 export const MiniGameModal: React.FC<MiniGameModalProps> = ({
   isOpen,
   onClose,
   playerName = '球員',
   playerAvatar = '',
+  playerId,
   onSuccess,
 }) => {
   const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
 
   // API Eligibility Check
   const { data: eligibility, refetch: refetchEligibility } = useQuery({
@@ -213,750 +46,188 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     enabled: isOpen && !!currentUser?.email,
   });
 
-  // Game States
-  const [gameState, setGameState] = useState<'idle' | 'playing' | 'ended'>('idle');
-  const [score, setScore] = useState<number>(0);
-  const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds
-  const [combo, setCombo] = useState<number>(0); // 連擊數
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [submitResult, setSubmitResult] = useState<any>(null);
+  // Query weekly claim status
+  const { data: weeklyClaimStatus, refetch: refetchWeeklyClaimStatus } = useQuery({
+    queryKey: ['minigameWeeklyClaimStatus', currentUser?.email],
+    queryFn: () => gasApi.fetchMiniGameWeeklyClaimStatus(currentUser?.email || ''),
+    enabled: isOpen && !!currentUser?.email,
+  });
 
-  // Leaderboard States
-  const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'allTime'>('weekly');
-  const [activeMainTab, setActiveMainTab] = useState<'rules' | 'leaderboard'>('rules');
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimResult, setClaimResult] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
 
+  const handleClaimWeeklyScore = async (gameType: string) => {
+    if (!currentUser?.email) return;
+    setIsClaiming(true);
+    setClaimResult(null);
+    try {
+      const res = await gasApi.claimMiniGameWeeklyScore(currentUser.email, gameType);
+      setClaimResult({ status: 'success', message: res.message });
+      refetchWeeklyClaimStatus();
+      if (onSuccess) onSuccess();
+    } catch (e: any) {
+      setClaimResult({ status: 'error', message: e.message || "兌換失敗，請重試" });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  // Leaderboard Query
   const { data: leaderboard, refetch: refetchLeaderboard } = useQuery({
     queryKey: ['minigameLeaderboard'],
     queryFn: () => gasApi.fetchMiniGameLeaderboard(),
     enabled: isOpen,
   });
 
-  // References for Canvas and Game Loop
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const cartDOMRef = useRef<HTMLDivElement>(null);
-  
-  const requestRef = useRef<number | null>(null);
-  const itemsRef = useRef<FallingItem[]>([]);
-  const particlesRef = useRef<Particle[]>([]);
-  const comboRef = useRef<number>(0);
+  // Screen & Game Type States
+  const [currentScreen, setCurrentScreen] = useState<'lobby' | 'feather_menu' | 'trivia_menu' | 'feather_rush_menu'>('lobby');
+  const [gameType, setGameType] = useState<MiniGameType>('feather');
+
+  // Game States
+  const [gameState, setGameState] = useState<'idle' | 'playing' | 'ended'>('idle');
+  const [score, setScore] = useState<number>(0);
+  const [correctAnswersCount, setCorrectAnswersCount] = useState<number>(0);
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitResult, setSubmitResult] = useState<any>(null);
   const maxComboRef = useRef<number>(0);
-  
-  const nextItemIdRef = useRef<number>(0);
-  const nextParticleIdRef = useRef<number>(0);
-  const floatingTextsRef = useRef<FloatingText[]>([]);
-  const nextTextIdRef = useRef<number>(0);
 
-  // Cart physics (stored in ref to prevent 60fps React state re-renders)
-  const cartXRef = useRef<number>(50); // percentage (0 - 100)
-  const dizzyTimeRef = useRef<number>(0); // remaining dizzy ms
-  const [dizzyTimeLeft, setDizzyTimeLeft] = useState<number>(0);
+  // Wager Match States
+  const [isRoomLobbyOpen, setIsRoomLobbyOpen] = useState<boolean>(false);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [isWagerMatch, setIsWagerMatch] = useState<boolean>(false);
+  const [roomWagerAmount, setRoomWagerAmount] = useState<number>(0);
+  const [roomIsHost, setRoomIsHost] = useState<boolean>(false);
 
-  // Input states
-  const cartDirectionRef = useRef<'left' | 'right' | null>(null);
+  // Trivia States
+  const [triviaQuestions, setTriviaQuestions] = useState<any[]>([]);
 
-  // Stale state & performance refs
-  const timeLeftRef = useRef<number>(30);
-  const canvasWidthRef = useRef<number>(600);
-  const canvasHeightRef = useRef<number>(400);
-
-  // Dynamically observe container dimensions to avoid layout thrashing in game loop
+  // Reset states when modal opens/closes
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const updateSize = () => {
-      const w = container.clientWidth || 600;
-      const h = container.clientHeight || 400;
-      canvasWidthRef.current = w;
-      canvasHeightRef.current = h;
-      
-      const canvas = canvasRef.current;
-      if (canvas && (canvas.width !== w || canvas.height !== h)) {
-        canvas.width = w;
-        canvas.height = h;
-      }
-    };
-
-    updateSize();
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => {
-        updateSize();
-      });
-      observer.observe(container);
-      return () => observer.disconnect();
-    } else {
-      window.addEventListener('resize', updateSize);
-      return () => window.removeEventListener('resize', updateSize);
+    if (isOpen) {
+      setCurrentScreen('lobby');
+      setGameState('idle');
+      setSubmitResult(null);
+      setScore(0);
+      setCorrectAnswersCount(0);
+      maxComboRef.current = 0;
+      setRoomCode(null);
+      setIsWagerMatch(false);
+      setRoomWagerAmount(0);
+      setRoomIsHost(false);
+      setIsRoomLobbyOpen(false);
+      setTriviaQuestions([]);
+      setClaimResult(null);
     }
-  }, [gameState, isOpen]);
+  }, [isOpen]);
 
-  // Handle keyboard inputs
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (gameState !== 'playing' || dizzyTimeRef.current > 0) return;
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        cartDirectionRef.current = 'left';
-      }
-      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        cartDirectionRef.current = 'right';
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [gameState]);
-
-  // Click / Touch direction control
-  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (gameState !== 'playing' || dizzyTimeRef.current > 0 || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    if (clickX < rect.width / 2) {
-      cartDirectionRef.current = 'left';
-    } else {
-      cartDirectionRef.current = 'right';
-    }
-  };
-
-  const handleContainerTouch = (e: React.TouchEvent<HTMLDivElement>) => {
-    // Prevent Safari rubber-banding screen bounce scroll
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-    
-    if (gameState !== 'playing' || dizzyTimeRef.current > 0 || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    if (touchX < rect.width / 2) {
-      cartDirectionRef.current = 'left';
-    } else {
-      cartDirectionRef.current = 'right';
-    }
-  };
-
-  // Spawn particles on catch
-  const spawnParticles = (x: number, y: number, color: string, count = 10) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 4 + 1;
-      particlesRef.current.push({
-        id: nextParticleIdRef.current++,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1,
-        color,
-        size: Math.random() * 3 + 2,
-        alpha: 1,
-      });
-    }
-  };
-
-  // Canvas drawing helpers
-  const drawFeather = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, glow = false) => {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-Math.PI / 6); // tilted feather look
-    
-    if (glow && !isMobile) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-    }
-
-    // Outer shape
-    ctx.beginPath();
-    ctx.moveTo(0, 10);
-    ctx.quadraticCurveTo(-6, 0, -3, -12);
-    ctx.quadraticCurveTo(0, -16, 3, -12);
-    ctx.quadraticCurveTo(6, 0, 0, 10);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Inner stem line
-    ctx.beginPath();
-    ctx.moveTo(0, 11);
-    ctx.lineTo(0, -11);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.restore();
-  };
-
-  const drawBomb = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
-    ctx.save();
-    ctx.translate(x, y);
-
-    // Glowing warning outline
-    if (!isMobile) {
-      ctx.shadowColor = '#f43f5e'; // Rose-500 warning neon glow
-      ctx.shadowBlur = 12;
-    }
-
-    // Red warning outer ring
-    ctx.beginPath();
-    ctx.arc(0, 2, 11, 0, Math.PI * 2);
-    ctx.fillStyle = '#f43f5e';
-    ctx.fill();
-
-    // Reset shadow blur for the inner solid black body
-    ctx.shadowBlur = 0;
-
-    // Bomb body
-    ctx.beginPath();
-    ctx.arc(0, 2, 9, 0, Math.PI * 2);
-    ctx.fillStyle = '#090d16';
-    ctx.fill();
-
-    // Fuse cap
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(-2, -9, 4, 3);
-
-    // Spark
-    if (!isMobile) {
-      ctx.shadowColor = '#fbbf24';
-      ctx.shadowBlur = 8;
-    }
-    ctx.beginPath();
-    ctx.arc(2, -11, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#fbbf24';
-    ctx.fill();
-
-    ctx.restore();
-  };
-
-  const drawRock = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
-    ctx.save();
-    ctx.translate(x, y);
-
-    // Glowing outline for hazard visibility
-    if (!isMobile) {
-      ctx.shadowColor = '#64748b'; // Slate gray glow
-      ctx.shadowBlur = 8;
-    }
-
-    // Rock body (jagged polygon shape)
-    ctx.beginPath();
-    ctx.moveTo(-10, -6);
-    ctx.lineTo(-2, -12);
-    ctx.lineTo(8, -8);
-    ctx.lineTo(11, 2);
-    ctx.lineTo(5, 10);
-    ctx.lineTo(-6, 9);
-    ctx.lineTo(-11, 2);
-    ctx.closePath();
-    
-    ctx.fillStyle = '#475569'; // Slate-600
-    ctx.fill();
-
-    // Dark shading details for texture
-    ctx.shadowBlur = 0; // reset
-    ctx.beginPath();
-    ctx.moveTo(-10, -6);
-    ctx.lineTo(0, 0);
-    ctx.lineTo(5, 10);
-    ctx.strokeStyle = '#334155'; // Slate-700
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Highlights
-    ctx.beginPath();
-    ctx.moveTo(-2, -12);
-    ctx.lineTo(2, -4);
-    ctx.lineTo(8, -8);
-    ctx.strokeStyle = '#94a3b8'; // Slate-400
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.restore();
-  };
-
-  // Start game
-  const startGame = () => {
-    // Force initialize/resume AudioContext inside user click event to unlock iOS Safari audio
-    try {
-      if (typeof window !== 'undefined') {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          if (!audioCtx) {
-            audioCtx = new AudioContextClass();
-          }
-          if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-          }
-        }
-      }
-    } catch (err) {
-      // Ignore audio init errors
-    }
-
+  const startFeatherRushGame = () => {
     setScore(0);
-    setTimeLeft(30);
-    timeLeftRef.current = 30;
-    setCombo(0);
-    comboRef.current = 0;
     maxComboRef.current = 0;
-    cartXRef.current = 50;
     setGameState('playing');
     setSubmitResult(null);
-    setDizzyTimeLeft(0);
-    dizzyTimeRef.current = 0;
-    itemsRef.current = [];
-    particlesRef.current = [];
-    floatingTextsRef.current = [];
-    nextItemIdRef.current = 0;
-    nextParticleIdRef.current = 0;
-    nextTextIdRef.current = 0;
-    cartDirectionRef.current = null;
   };
 
-  // Optimized Game loop
-  useEffect(() => {
-    if (gameState !== 'playing') {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      return;
+  const startGame = () => {
+    setScore(0);
+    maxComboRef.current = 0;
+    setGameState('playing');
+    setSubmitResult(null);
+  };
+
+  const startTriviaGame = async () => {
+    try {
+      const questions = await gasApi.fetchTriviaQuestions(currentUser?.email, 6);
+      setTriviaQuestions(questions);
+    } catch (err) {
+      console.error("Failed to load trivia questions", err);
+      // fallback or error handling
+    }
+    setScore(0);
+    maxComboRef.current = 0;
+    setCorrectAnswersCount(0);
+    setGameState('playing');
+  };
+
+  // Callback to start the game directly from room waiting lobby
+  const handleStartRoomGame = async (code: string, type: MiniGameType, wager: number, isHost: boolean) => {
+    if (type === 'trivia') {
+      try {
+        const questions = await gasApi.fetchRoomTriviaQuestions(code);
+        setTriviaQuestions(questions);
+      } catch (err) {
+        console.error("Failed to load room trivia questions", err);
+      }
     }
 
-    let lastTime = performance.now();
-    let spawnTimer = 0;
-    let secondsTimer = 0;
+    setRoomCode(code);
+    setIsWagerMatch(true);
+    setRoomWagerAmount(wager);
+    setRoomIsHost(isHost);
+    setGameType(type);
+    setScore(0);
+    maxComboRef.current = 0;
+    setCorrectAnswersCount(0);
+    setGameState('playing');
+    setSubmitResult(null);
+  };
 
-    const gameStep = (time: number) => {
-      const rawDelta = time - lastTime;
-      lastTime = time;
-
-      // Freeze the game loop if the browser tab is hidden (lock screen, phone call, tab switch)
-      if (typeof document !== 'undefined' && document.hidden) {
-        requestRef.current = requestAnimationFrame(gameStep);
-        return;
-      }
-
-      // Clamp delta to prevent physics explosion after tab switch or GC stall
-      const delta = Math.min(rawDelta, 50);
-
-      const container = containerRef.current;
-      const canvas = canvasRef.current;
-      if (!container || !canvas) {
-        requestRef.current = requestAnimationFrame(gameStep);
-        return;
-      }
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // 1. Get cached container size from refs (prevents layout thrashing / frame stutter on mobile)
-      const width = canvasWidthRef.current;
-      const height = canvasHeightRef.current;
-
-      // 2. Update Dizzy stun
-      if (dizzyTimeRef.current > 0) {
-        dizzyTimeRef.current = Math.max(0, dizzyTimeRef.current - delta);
-        setDizzyTimeLeft(Math.ceil(dizzyTimeRef.current / 1000));
-        if (dizzyTimeRef.current === 0) {
-          cartDirectionRef.current = null;
-        }
-      }
-
-      // 3. Move Cart
-      if (dizzyTimeRef.current <= 0) {
-        const speed = 0.85; // percentage per frame
-        if (cartDirectionRef.current === 'left') {
-          cartXRef.current = Math.max(5, cartXRef.current - speed * (delta / 16));
-        } else if (cartDirectionRef.current === 'right') {
-          cartXRef.current = Math.min(95, cartXRef.current + speed * (delta / 16));
-        }
-      }
-
-      // Update cart element style directly (Bypass React state rendering)
-      if (cartDOMRef.current) {
-        cartDOMRef.current.style.left = `${cartXRef.current}%`;
-        
-        // GPU-accelerated tilt + flip based on direction (0% CPU impact)
-        let rotation = 0;
-        let scaleX = 1;
-        if (dizzyTimeRef.current <= 0) {
-          if (cartDirectionRef.current === 'left') { rotation = -4; scaleX = -1; }
-          else if (cartDirectionRef.current === 'right') { rotation = 4; scaleX = 1; }
-        }
-        cartDOMRef.current.style.transform = `translateX(-50%) scaleX(${scaleX}) rotate(${rotation}deg)`;
-      }
-
-      // 4. Game Clock & Speed Level calculation
-      secondsTimer += delta;
-      if (secondsTimer >= 1000) {
-        secondsTimer -= 1000;
-        timeLeftRef.current = Math.max(0, timeLeftRef.current - 1);
-        setTimeLeft(timeLeftRef.current);
-        if (timeLeftRef.current <= 0) {
-          setGameState('ended');
-          return; // Stop game loop immediately, don't schedule another frame
-        }
-      }
-
-      // 10s intervals (30s game)
-      // Level 1: 30 - 21s (timeLeft > 20)
-      // Level 2: 20 - 11s (timeLeft <= 20 && timeLeft > 10)
-      // Level 3: 10 - 1s (timeLeft <= 10)
-      let level = 1;
-      let spawnInterval = 600;
-      let speedMultiplier = 1.0;
-      
-      const currentSeconds = timeLeftRef.current;
-      if (currentSeconds <= 10) {
-        level = 3;
-        spawnInterval = 380;
-        speedMultiplier = 1.7;
-      } else if (currentSeconds <= 20) {
-        level = 2;
-        spawnInterval = 450;
-        speedMultiplier = 1.35;
-      }
-
-      // 5. Spawn items
-      spawnTimer += delta;
-      if (spawnTimer >= spawnInterval) {
-        spawnTimer = 0;
-        
-        // Staged spawn count
-        const spawnCount = (() => {
-          const r = Math.random();
-          if (level === 1) {
-            // Phase 1: 70% 1, 30% 2
-            return r < 0.70 ? 1 : 2;
-          } else if (level === 2) {
-            // Phase 2: 50% 1, 30% 2, 20% 3
-            if (r < 0.50) return 1;
-            if (r < 0.80) return 2;
-            return 3;
-          } else {
-            // Phase 3: 30% 1, 20% 2, 30% 3, 20% 4
-            if (r < 0.30) return 1;
-            if (r < 0.50) return 2;
-            if (r < 0.80) return 3;
-            return 4;
-          }
-        })();
-
-        // Pre-roll item types to enforce guaranteed catchable item (low-bound logic)
-        const rollItemType = (lvl: number): ItemType => {
-          const rand = Math.random();
-          if (lvl === 1) {
-            // Level 1: Safe, Low Reward (Beneficial 80% [72% Normal, 7% Gold, 1% Super], Hazard 20% [15% Rock, 5% Bomb])
-            if (rand < 0.05) return 'bomb';
-            else if (rand < 0.20) return 'rock';
-            else if (rand < 0.21) return 'super';
-            else if (rand < 0.28) return 'gold';
-            return 'normal';
-          } else if (lvl === 2) {
-            // Level 2: Medium Risk, Medium Reward (Beneficial 65% [42% Normal, 18% Gold, 5% Super], Hazard 35% [25% Rock, 10% Bomb])
-            if (rand < 0.10) return 'bomb';
-            else if (rand < 0.35) return 'rock';
-            else if (rand < 0.40) return 'super';
-            else if (rand < 0.58) return 'gold';
-            return 'normal';
-          } else {
-            // Level 3: High Risk, High Reward (Beneficial 50% [10% Normal, 25% Gold, 15% Super], Hazard 50% [30% Rock, 20% Bomb])
-            if (rand < 0.20) return 'bomb';
-            else if (rand < 0.50) return 'rock';
-            else if (rand < 0.65) return 'super';
-            else if (rand < 0.90) return 'gold';
-            return 'normal';
-          }
-        };
-
-        const rollBeneficialType = (): ItemType => {
-          const rand = Math.random();
-          if (rand < 0.15) {
-            return 'super';
-          }
-          if (rand < 0.50) {
-            return 'gold';
-          }
-          return 'normal';
-        };
-
-        const itemTypes: ItemType[] = [];
-        for (let i = 0; i < spawnCount; i++) {
-          itemTypes.push(rollItemType(level));
-        }
-
-        // Guarantee at least one catchable item if all rolled as hazards
-        const allHazards = itemTypes.every(t => t === 'bomb' || t === 'rock');
-        if (allHazards && spawnCount > 0) {
-          const forceIdx = Math.floor(Math.random() * spawnCount);
-          itemTypes[forceIdx] = rollBeneficialType();
-        }
-
-        // Generate X coordinates with spacing (at least 15% distance apart)
-        const getSeparatedXCoords = (count: number, lvl: number): number[] => {
-          const coords: number[] = [];
-          let min = 5;
-          let max = 95;
-          if (lvl === 1) { min = 30; max = 70; }
-          else if (lvl === 2) { min = 15; max = 85; }
-
-          for (let i = 0; i < count; i++) {
-            let attempts = 0;
-            let newX = 0;
-            let valid = false;
-            while (!valid && attempts < 100) {
-              newX = Math.random() * (max - min) + min;
-              valid = coords.every(existingX => Math.abs(existingX - newX) >= 15);
-              attempts++;
-            }
-            coords.push(newX);
-          }
-          return coords;
-        };
-
-        const xCoordinates = getSeparatedXCoords(spawnCount, level);
-
-        for (let i = 0; i < spawnCount; i++) {
-          const type = itemTypes[i];
-          const spawnX = xCoordinates[i];
-
-          // Vary speed multiplier by item type to make Gold & Super faster/more challenging
-          let typeSpeedMultiplier = 1.0;
-          if (type === 'rock') typeSpeedMultiplier = 1.4;       // Plummets down quickly
-          else if (type === 'super') typeSpeedMultiplier = 1.35;  // Falls very fast
-          else if (type === 'gold') typeSpeedMultiplier = 0.8;   // Falls slower due to swaying flutter
-          else if (type === 'bomb') typeSpeedMultiplier = 1.15;  // Falls moderately fast
-
-          // Random variation factor between 0.85 and 1.15 (+/- 15% random speed variation)
-          const speedVariance = Math.random() * 0.3 + 0.85;
-          const variedSpeed = (Math.random() * 2.5 + 3.5) * speedMultiplier * typeSpeedMultiplier * speedVariance;
-
-          itemsRef.current.push({
-            id: nextItemIdRef.current++,
-            x: spawnX,
-            y: -20 - (i * 18), // Stagger vertical start so they don't overlap on Y
-            speed: variedSpeed,
-            type,
-          });
-        }
-      }
-
-      // 6. Physics & Collision Loop (GC-free, optimized single-pass iteration)
-      const cartCenterPixel = (cartXRef.current / 100) * width;
-      const cartWidth = 52;
-      const collisionYThreshold = height - 65;
-
-      const items = itemsRef.current;
-      const nextItems: FallingItem[] = [];
-      const isInvincible = dizzyTimeRef.current > 0;
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-
-        // 6.1 Update Swaying X-axis & Y-axis position
-        let newX = item.x;
-        if (item.type === 'super') {
-          newX = item.x + Math.sin(item.y / 12) * 0.65;
-          newX = Math.max(5, Math.min(95, newX));
-        } else if (item.type === 'gold') {
-          newX = item.x + Math.sin(item.y / 20) * 0.4;
-          newX = Math.max(5, Math.min(95, newX));
-        }
-        item.x = newX;
-        item.y += item.speed * (delta / 16);
-
-        // Filter out items off screen
-        if (item.y > height) {
-          continue;
-        }
-
-        // 6.2 Collision Check
-        const itemXPixel = (item.x / 100) * width;
-        const dist = Math.abs(itemXPixel - cartCenterPixel);
-
-        if (item.y >= collisionYThreshold && item.y <= collisionYThreshold + 20 && dist < cartWidth / 2 + 12) {
-          // Collision Detected!
-          if (item.type === 'normal' || item.type === 'gold' || item.type === 'super') {
-            comboRef.current += 1;
-            setCombo(comboRef.current);
-            maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-
-            let multiplier = 1.0;
-            if (comboRef.current >= 15) multiplier = 2.0;
-            else if (comboRef.current >= 10) multiplier = 1.5;
-            else if (comboRef.current >= 5) multiplier = 1.2;
-
-            let basePoints = 5;
-            let pColor = '#38bdf8';
-            let pCount = 5;
-            let sType: 'catch' | 'gold' | 'super' = 'catch';
-            if (item.type === 'gold') {
-              basePoints = 20;
-              pColor = '#fbbf24';
-              pCount = 8;
-              sType = 'gold';
-            } else if (item.type === 'super') {
-              basePoints = 50;
-              pColor = '#d946ef';
-              pCount = 12;
-              sType = 'super';
-            }
-
-            const pointsEarned = Math.round(basePoints * multiplier);
-            setScore(s => s + pointsEarned);
-            spawnParticles(itemXPixel, collisionYThreshold, pColor, pCount);
-            playSynthSound(sType);
-
-            // Canvas floating score indicator
-            floatingTextsRef.current.push({
-              id: nextTextIdRef.current++,
-              text: `+${pointsEarned}`,
-              x: itemXPixel,
-              y: collisionYThreshold - 15,
-              color: pColor,
-              alpha: 1,
-            });
-          } else {
-            // Hazard hit
-            if (isInvincible) {
-              // Ignore collisions while invincible (pass-through)
-              nextItems.push(item);
-              continue;
-            }
-
-            comboRef.current = 0;
-            setCombo(0);
-
-            if (item.type === 'bomb') {
-              if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                navigator.vibrate(80);
-              }
-              setScore(s => Math.max(0, s - 30));
-              dizzyTimeRef.current = 800; // 0.8s dizzy invincibility
-              setDizzyTimeLeft(1);
-              cartDirectionRef.current = null;
-              spawnParticles(itemXPixel, collisionYThreshold, '#0f172a', 20);
-              playSynthSound('dizzy');
-            } else if (item.type === 'rock') {
-              if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                navigator.vibrate(30);
-              }
-              setScore(s => Math.max(0, s - 10));
-              spawnParticles(itemXPixel, collisionYThreshold, '#64748b', 12);
-              playSynthSound('hit');
-            }
-          }
-          continue; // item is consumed
-        }
-        nextItems.push(item);
-      }
-      itemsRef.current = nextItems;
-
-      // 6.3 Update Particles (GC-free loop)
-      const particles = particlesRef.current;
-      const nextParticles: Particle[] = [];
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.12;
-        p.alpha -= 0.025;
-        if (p.alpha > 0) {
-          nextParticles.push(p);
-        }
-      }
-      particlesRef.current = nextParticles;
-
-      // 6.4 Update Floating Texts (GC-free loop)
-      const texts = floatingTextsRef.current;
-      const nextTexts: FloatingText[] = [];
-      const textRate = delta / 16;
-      for (let i = 0; i < texts.length; i++) {
-        const t = texts[i];
-        t.y -= 1.2 * textRate;
-        t.alpha -= 0.02 * textRate;
-        if (t.alpha > 0) {
-          nextTexts.push(t);
-        }
-      }
-      floatingTextsRef.current = nextTexts;
-
-      // 7. RENDER ON CANVAS (GPU ACCELERATED BATCH RENDERING)
-      ctx.clearRect(0, 0, width, height);
-
-      // 7.1 Draw items
-      const itemsToDraw = itemsRef.current;
-      for (let i = 0; i < itemsToDraw.length; i++) {
-        const item = itemsToDraw[i];
-        const itemXPixel = (item.x / 100) * width;
-        if (item.type === 'bomb') {
-          drawBomb(ctx, itemXPixel, item.y);
-        } else if (item.type === 'gold') {
-          drawFeather(ctx, itemXPixel, item.y, '#fbbf24', true);
-        } else if (item.type === 'super') {
-          drawFeather(ctx, itemXPixel, item.y, '#d946ef', true);
-        } else if (item.type === 'rock') {
-          drawRock(ctx, itemXPixel, item.y);
-        } else {
-          drawFeather(ctx, itemXPixel, item.y, '#38bdf8', false);
-        }
-      }
-
-      // 7.2 Draw particles (batched context state config)
-      const particlesToDraw = particlesRef.current;
-      if (particlesToDraw.length > 0) {
-        ctx.save();
-        for (let i = 0; i < particlesToDraw.length; i++) {
-          const p = particlesToDraw[i];
-          ctx.globalAlpha = p.alpha;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
-          if (!isMobile) {
-            ctx.shadowColor = p.color;
-            ctx.shadowBlur = 6;
-          }
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      // 7.3 Draw floating texts (batched context state config)
-      const textsToDraw = floatingTextsRef.current;
-      if (textsToDraw.length > 0) {
-        ctx.save();
-        ctx.font = '900 13px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = '#090d16';
-        ctx.lineWidth = 3;
-        
-        for (let i = 0; i < textsToDraw.length; i++) {
-          const t = textsToDraw[i];
-          ctx.globalAlpha = t.alpha;
-          ctx.fillStyle = t.color;
-          ctx.strokeText(t.text, t.x, t.y);
-          ctx.fillText(t.text, t.x, t.y);
-        }
-        ctx.restore();
-      }
-
-      requestRef.current = requestAnimationFrame(gameStep);
-    };
-
-    requestRef.current = requestAnimationFrame(gameStep);
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    };
-  }, [gameState]);
+  const handleTriviaAnswerSubmit = async (questionId: number, isCorrect: boolean) => {
+    if (!currentUser?.email) return;
+    try {
+      await gasApi.submitTriviaAnswer(currentUser.email, questionId, isCorrect);
+    } catch (e) {
+      console.error("Failed to submit trivia answer", e);
+    }
+  };
 
   // Submit the score to server
   const handleSubmitScore = async () => {
     if (!currentUser?.email) return;
     setIsSubmitting(true);
     try {
-      const res = await gasApi.submitMiniGameScore(currentUser.email, score, maxComboRef.current);
+      let res;
+      if (isWagerMatch && roomCode) {
+        // Submit score to 1v1 wager room
+        const roomRes = await gasApi.submitMiniGameRoomScore(roomCode, currentUser.email, score);
+        if (roomRes.settled) {
+          // Fetch room details to set roomIsHost correctly based on room host_player_name vs currentUser.name
+          try {
+            const room = await gasApi.fetchMiniGameRoom(roomCode);
+            if (room) {
+              setRoomIsHost(room.host_player_name === currentUser?.name);
+            }
+          } catch (e) {
+            console.error("Failed to fetch room details for isHost detection", e);
+          }
+
+          res = {
+            status: 'success',
+            settled: true,
+            winner: roomRes.winner,
+            host_score: roomRes.host_score,
+            guest_score: roomRes.guest_score,
+            message: `對戰完成！贏家是：${roomRes.winner} (您: ${score} 分 | 對手: ${
+              roomIsHost ? roomRes.guest_score : roomRes.host_score
+            } 分)`
+          };
+        } else {
+          res = {
+            status: 'success',
+            settled: false,
+            message: '已成功送出成績，等待對手完成中...'
+          };
+        }
+      } else {
+        // Standard single-player weekly submission
+        res = await gasApi.submitMiniGameScore(currentUser.email, score, maxComboRef.current, gameType);
+      }
+      
       setSubmitResult(res);
       refetchEligibility();
       refetchLeaderboard();
+      refetchWeeklyClaimStatus();
+      queryClient.invalidateQueries({ queryKey: ['activeMiniGameRooms'] });
       if (onSuccess) onSuccess();
     } catch (err: any) {
       setSubmitResult({ status: 'error', message: err.message || '連線錯誤' });
@@ -965,10 +236,60 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     }
   };
 
-  const getResetMessage = (nextResetStr?: string) => {
-    if (!nextResetStr) return '每週三可獲得一次羽毛獎勵 (無上限)';
-    return `每週三可獲得一次羽毛獎勵 (無上限)，下一次重置時間為 ${nextResetStr}`;
-  };
+  // Auto-submit score when game ends for wager match
+  useEffect(() => {
+    if (gameState === 'ended' && isWagerMatch && !isSubmitting && !submitResult) {
+      handleSubmitScore();
+    }
+  }, [gameState, isWagerMatch, isSubmitting, submitResult]);
+
+  // Poll room status if score submitted but match is not yet settled
+  useEffect(() => {
+    let intervalId: any = null;
+    if (isWagerMatch && roomCode && submitResult && submitResult.settled === false) {
+      intervalId = setInterval(async () => {
+        try {
+          const room = await gasApi.fetchMiniGameRoom(roomCode);
+          if (room && (room.status === 'finished' || (room.match && room.match.host_submitted && room.match.guest_submitted))) {
+            clearInterval(intervalId);
+            
+            const hostScore = room.match?.host_score ?? 0;
+            const guestScore = room.match?.guest_score ?? 0;
+            
+            // Set roomIsHost dynamically based on room details
+            const isHost = room.host_player_name === currentUser?.name;
+            setRoomIsHost(isHost);
+
+            let winnerName = "平手";
+            if (hostScore > guestScore) {
+              winnerName = room.host_player_name || "Host";
+            } else if (guestScore > hostScore) {
+              winnerName = room.guest_player_name || "Guest";
+            }
+            
+            setSubmitResult({
+              status: 'success',
+              settled: true,
+              winner: winnerName,
+              host_score: hostScore,
+              guest_score: guestScore,
+              message: '對戰完成！'
+            });
+            
+            refetchEligibility();
+            refetchLeaderboard();
+            queryClient.invalidateQueries({ queryKey: ['activeMiniGameRooms'] });
+            if (onSuccess) onSuccess();
+          }
+        } catch (err) {
+          console.error("Error polling wager room settlement:", err);
+        }
+      }, 1500);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isWagerMatch, roomCode, submitResult, currentUser]);
 
   return (
     <AnimatePresence>
@@ -991,33 +312,33 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
             transition={{ type: 'spring', duration: 0.5 }}
             className="relative w-full max-w-md bg-slate-900 border border-slate-800 text-white rounded-3xl shadow-2xl overflow-hidden flex flex-col"
           >
-            {/* Custom keyframes for dizzy shaking (safe for GPU layout/render) */}
-            <style>{`
-              @keyframes game-shake {
-                0%, 100% { transform: translateX(-50%) rotate(0deg); }
-                20%, 60% { transform: translateX(-53%) rotate(-3deg); }
-                40%, 80% { transform: translateX(-47%) rotate(3deg); }
-              }
-              .animate-game-shake {
-                animation: game-shake 0.15s infinite !important;
-              }
-              @keyframes combo-pop {
-                0% { transform: scale(0.9); }
-                50% { transform: scale(1.08); }
-                100% { transform: scale(1.0); }
-              }
-              .animate-combo-pop {
-                animation: combo-pop 0.22s ease-out forwards;
-                display: inline-block;
-              }
-            `}</style>
-
             {/* Header */}
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2">
-                <GameFeatherIcon color="#38bdf8" glow={true} className="w-5 h-6" />
+                {currentScreen !== 'lobby' && gameState === 'idle' ? (
+                  <button
+                    onClick={() => setCurrentScreen('lobby')}
+                    className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors mr-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                ) : currentScreen === 'lobby' ? (
+                  <span className="text-xl">🎮</span>
+                ) : gameType === 'feather' ? (
+                  <GameFeatherIcon color="#38bdf8" glow={true} className="w-5 h-6" />
+                ) : gameType === 'feather_rush' ? (
+                  <span className="text-lg">🚀</span>
+                ) : (
+                  <Lightbulb className="w-5 h-5 text-amber-400" style={{ filter: 'drop-shadow(0 0 4px #fbbf24)' }} />
+                )}
                 <h3 className="text-base md:text-lg font-black tracking-wide bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">
-                  每週接羽毛挑戰小遊戲
+                  {currentScreen === 'lobby'
+                    ? "安柏羽球社 遊戲大廳"
+                    : currentScreen === 'feather_menu' || gameType === 'feather'
+                    ? "每週接羽毛挑戰小遊戲"
+                    : currentScreen === 'feather_rush_menu' || gameType === 'feather_rush'
+                    ? "飛羽衝鋒"
+                    : "羽球小學堂智力挑戰"}
                 </h3>
               </div>
               {gameState !== 'playing' && (
@@ -1031,430 +352,222 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
             </div>
 
             {/* Content Area */}
-            <div className="relative flex-1 min-h-[400px] flex flex-col justify-center bg-slate-950 overflow-hidden">
+            <div className="relative flex-1 min-h-[500px] flex flex-col justify-center bg-slate-950 overflow-hidden">
               
-              {/* 1. IDLE (START SCREEN) */}
+              {/* 1. IDLE STATE VIEW */}
               {gameState === 'idle' && (
-                <div className="flex flex-col overflow-hidden">
-                  {/* Main Tab Switcher */}
-                  <div className="flex border-b border-slate-800 bg-slate-950/60 p-1 shrink-0">
-                    <button
-                      onClick={() => setActiveMainTab('rules')}
-                      className={cn(
-                        "flex-1 text-center py-2 text-xs font-black transition-colors rounded-xl",
-                        activeMainTab === 'rules'
-                          ? "bg-slate-800 text-white shadow-md border border-slate-700/50"
-                          : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      📖 遊戲規則
-                    </button>
-                    <button
-                      onClick={() => setActiveMainTab('leaderboard')}
-                      className={cn(
-                        "flex-1 text-center py-2 text-xs font-black transition-colors rounded-xl",
-                        activeMainTab === 'leaderboard'
-                          ? "bg-slate-800 text-white shadow-md border border-slate-700/50"
-                          : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      🏆 挑戰排行
-                    </button>
-                  </div>
-
-                  {/* Tab Contents */}
-                  <div className="p-5 overflow-y-auto max-h-[290px] flex-1">
-                    {activeMainTab === 'rules' ? (
-                      <div className="flex flex-col space-y-4">
-                        <div className="flex flex-col items-center space-y-3 text-center">
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-sky-500/20 animate-pulse">
-                            <GameFeatherIcon color="#ffffff" glow={true} className="w-6 h-8" />
-                          </div>
-                          <div>
-                            <h4 className="text-base font-extrabold mb-1">接羽毛！拿獎勵！</h4>
-                            <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-                              點擊畫面左右側或按 A/D 鍵移動推車。接住羽毛累積得分，避開炸彈與落石！難度每 10 秒將會升級。
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Rules & Rewards Preview */}
-                        <div className="w-full grid grid-cols-2 gap-2 text-left bg-slate-900 border border-slate-800/60 p-3 rounded-xl text-[10px] font-semibold text-slate-300">
-                          <div className="flex items-center gap-1.5">
-                            <GameFeatherIcon color="#38bdf8" />
-                            <span>普通羽毛 (+5)</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <GameFeatherIcon color="#fbbf24" glow={true} />
-                            <span>金色羽毛 (+20)</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <GameFeatherIcon color="#d946ef" glow={true} />
-                            <span>超級羽毛 (+50)</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <GameBombIcon />
-                            <span>黑色炸彈 (-30 & 眩暈)</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 col-span-2 border-t border-slate-800/50 pt-1.5 mt-0.5">
-                            <GameRockIcon />
-                            <span>灰色落石 (-10 根，無眩暈)</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col space-y-3 h-full">
-                        {/* Sub-tabs for leaderboard */}
-                        <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-                          <span className="text-[10px] font-black tracking-wider text-slate-400">📊 點數結算排名</span>
-                          <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800/60">
-                            <button
-                              onClick={() => setLeaderboardTab('weekly')}
-                              className={cn(
-                                "text-[9px] font-bold px-2 py-0.5 rounded transition-colors",
-                                leaderboardTab === 'weekly'
-                                  ? "bg-slate-800 text-white font-black"
-                                  : "text-slate-400 hover:text-white"
-                              )}
-                            >
-                              本週
-                            </button>
-                            <button
-                              onClick={() => setLeaderboardTab('allTime')}
-                              className={cn(
-                                "text-[9px] font-bold px-2 py-0.5 rounded transition-colors",
-                                leaderboardTab === 'allTime'
-                                  ? "bg-slate-800 text-white font-black"
-                                  : "text-slate-400 hover:text-white"
-                              )}
-                            >
-                              歷史最高
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Rank List */}
-                        <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
-                          {(!leaderboard || (leaderboardTab === 'weekly' ? !leaderboard.weekly || leaderboard.weekly.length === 0 : !leaderboard.allTime || leaderboard.allTime.length === 0)) ? (
-                            <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-[10px] font-bold">
-                              <span>🪶 暫無排行數據</span>
-                              <span className="mt-1 text-[9px] text-slate-600">(登錄練習模式與挑戰模式的最佳成績)</span>
-                            </div>
-                          ) : (
-                            (leaderboardTab === 'weekly' ? leaderboard.weekly : leaderboard.allTime).map((item: any, i: number) => (
-                              <div
-                                key={i}
-                                className={cn(
-                                  "flex items-center justify-between p-2 rounded-xl border transition-all",
-                                  i === 0 
-                                    ? "bg-amber-500/10 border-amber-500/20" 
-                                    : i === 1 
-                                      ? "bg-slate-400/10 border-slate-400/20" 
-                                      : i === 2 
-                                        ? "bg-amber-700/10 border-amber-700/20" 
-                                        : "bg-slate-900/40 border-slate-800/40"
-                                )}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="w-5 text-center text-xs font-black text-slate-400">
-                                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
-                                  </span>
-                                  <img
-                                    src={getAvatarUrl(item.avatar, item.name)}
-                                    alt={item.name}
-                                    className="w-5 h-5 rounded-full object-cover border border-slate-700"
-                                  />
-                                  <span className="text-xs font-bold text-white max-w-[120px] truncate">
-                                    {item.name}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {item.maxCombo > 0 && (
-                                    <span className="text-[8px] bg-indigo-950/60 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded font-black whitespace-nowrap">
-                                      🔥 {item.maxCombo} Combo
-                                    </span>
-                                  )}
-                                  <div className="flex items-center gap-0.5">
-                                    <span className="text-xs font-black text-amber-400 tabular-nums">
-                                      {item.score}
-                                    </span>
-                                    <span className="text-[9px] text-slate-500 font-semibold">分</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bottom Notice & Play Button (Always visible at the bottom of the Idle Screen) */}
-                  <div className="p-5 border-t border-slate-800/60 bg-slate-900/20 space-y-3 shrink-0">
-                    {/* Notice */}
-                    <div className="w-full bg-slate-900/80 border border-slate-800/50 p-3 rounded-xl text-center">
-                      {eligibility?.canEarnReward ? (
-                        <p className="text-[11px] text-emerald-400 font-black">
-                          🏆 本次挑戰成功將可獲得 1:1 的羽毛獎勵！(無上限限制)
-                        </p>
-                      ) : eligibility?.alreadyClaimed ? (
-                        <p className="text-[11px] text-amber-500 font-black">
-                          ℹ️ 練習模式：您本週三已領取過羽毛獎勵囉。
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-amber-500 font-black">
-                          ℹ️ 練習模式：今天非週三，挑戰僅作練習、不發放羽毛。
-                        </p>
-                      )}
-                      <p className="text-[9px] text-slate-500 font-semibold mt-1">
-                        {getResetMessage(eligibility?.nextReset)}
-                      </p>
-                    </div>
-
-                    {/* Play Button */}
-                    <button
-                      onClick={startGame}
-                      className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-98 text-white font-extrabold py-2.5 px-6 rounded-xl shadow-lg shadow-sky-500/10 transition-all flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Play className="w-4 h-4 fill-current" />
-                      {eligibility?.canEarnReward ? '立即開始挑戰 (限時 30 秒)' : '開始練習模式 (限時 30 秒)'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 2. PLAYING SCREEN (GAME WINDOW WITH CANVAS) */}
-              {gameState === 'playing' && (
-                <div
-                  ref={containerRef}
-                  onTouchStart={handleContainerTouch}
-                  onClick={handleContainerClick}
-                  className="relative w-full h-[400px] bg-gradient-to-b from-slate-950 to-slate-900 select-none touch-none overscroll-contain overflow-hidden"
-                >
-                  {/* Stats overlay (Mobile optimized layout using icons to prevent squishing) */}
-                  <div className="absolute top-4 inset-x-4 z-20 flex justify-between items-center bg-slate-900/95 px-4 py-2 rounded-2xl border border-slate-800/60 shadow-lg text-sm select-none">
-                    {/* Left: Score */}
-                    <div className="flex items-center gap-1.5 font-black text-amber-400">
-                      <span className="text-base">🏆</span>
-                      <span className="text-base tracking-wider tabular-nums">{score}</span>
-                    </div>
-
-                    {/* Center: Level Badge */}
-                    <div className="flex items-center">
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border transition-all",
-                        timeLeft > 20 
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                          : timeLeft > 10 
-                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
-                            : "bg-red-500/25 text-red-400 border-red-500/40 animate-pulse"
-                      )}>
-                        {timeLeft > 20 ? 'Lv.1 輕鬆' : timeLeft > 10 ? 'Lv.2 加速 ⚡' : 'Lv.3 狂暴 🔥'}
-                      </span>
-                    </div>
-
-                    {/* Right: Time */}
-                    <div className="flex items-center gap-1.5 font-black text-white">
-                      <span className="text-base">⏱️</span>
-                      <span className={cn(
-                        "text-sm tracking-wider tabular-nums",
-                        timeLeft <= 5 ? "text-red-500 animate-pulse" : "text-white"
-                      )}>
-                        {timeLeft}s
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* High performance Canvas */}
-                  <canvas ref={canvasRef} className="absolute inset-0 z-10 w-full h-full block" />
-
-                  {/* Center Background Combo Watermark (Low opacity, GPU safe, no distraction) */}
-                  {combo > 0 && (
-                    <div key={combo} className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                      <span className={cn(
-                        "text-5xl md:text-6xl font-black tracking-widest uppercase animate-combo-pop select-none",
-                        combo >= 15 ? "text-fuchsia-500/15" : combo >= 10 ? "text-amber-500/15" : "text-sky-400/15"
-                      )}>
-                        {combo} Combo
-                      </span>
-                      {combo >= 5 && (
-                        <span className="text-[10px] font-black tracking-widest uppercase opacity-20 mt-1.5 text-slate-500 animate-combo-pop">
-                          MULTIPLIER: {combo >= 15 ? '2.0' : combo >= 10 ? '1.5' : '1.2'}x
-                        </span>
-                      )}
-                    </div>
+                <>
+                  {currentScreen === 'lobby' && (
+                    <GameLobby
+                      playerName={playerName}
+                      featherHighScore={leaderboard?.feather?.allTime?.find((item: any) => item.name === playerName)?.score || leaderboard?.allTime?.find((item: any) => item.name === playerName)?.score || 0}
+                      triviaHighScore={leaderboard?.trivia?.allTime?.find((item: any) => item.name === playerName)?.score || 0}
+                      featherRushHighScore={leaderboard?.feather_rush?.allTime?.find((item: any) => item.name === playerName)?.score || 0}
+                      weeklyClaimStatus={weeklyClaimStatus}
+                      isClaiming={isClaiming}
+                      onClaimWeeklyScore={handleClaimWeeklyScore}
+                      claimResult={claimResult}
+                      onSelectFeather={() => {
+                        setGameType('feather');
+                        setCurrentScreen('feather_menu');
+                      }}
+                      onSelectTrivia={() => {
+                        setGameType('trivia');
+                        setCurrentScreen('trivia_menu');
+                      }}
+                      onSelectFeatherRush={() => {
+                        setGameType('feather_rush');
+                        setCurrentScreen('feather_rush_menu');
+                      }}
+                      onOpenWagerRooms={() => setIsRoomLobbyOpen(true)}
+                    />
                   )}
 
-                  {/* Player Cart: DOM element updated directly via Ref (Bypasses React VDOM) */}
-                  <div
-                    ref={cartDOMRef}
-                    style={{
-                      position: 'absolute',
-                      left: '50%',
-                      bottom: '24px',
-                      transform: 'translateX(-50%)',
-                      width: '52px',
-                      transition: 'transform 0.05s ease-out',
-                    }}
-                    className="absolute z-20 flex flex-col items-center select-none"
-                  >
+                  {currentScreen === 'feather_menu' && (
+                    <FeatherGameMenu
+                      leaderboard={leaderboard}
+                      playerName={playerName}
+                      eligibility={eligibility}
+                      onStartGame={startGame}
+                    />
+                  )}
 
-                    {/* Floating Player Card */}
-                    <div className="bg-slate-800/95 dark:bg-slate-900/95 border border-slate-700/80 rounded-full px-2 py-0.5 flex items-center gap-1 shadow-lg backdrop-blur-sm -mt-12 mb-1.5 select-none">
-                      <img
-                        src={getAvatarUrl(playerAvatar, playerName)}
-                        alt={playerName}
-                        className="w-4 h-4 rounded-full border border-sky-400 object-cover"
-                      />
-                      <span className="text-[9px] font-black tracking-tight text-white whitespace-nowrap overflow-hidden max-w-[50px] truncate">
-                        {playerName}
-                      </span>
-                    </div>
+                  {currentScreen === 'trivia_menu' && (
+                    <TriviaGameMenu
+                      leaderboard={leaderboard}
+                      playerName={playerName}
+                      playerEmail={currentUser?.email || ''}
+                      eligibility={eligibility}
+                      onStartGame={startTriviaGame}
+                    />
+                  )}
 
-                    {/* Dizzy overlay */}
-                    {dizzyTimeLeft > 0 && (
-                      <div className="absolute -top-6 text-yellow-400 font-extrabold text-xs animate-bounce drop-shadow-[0_0_3px_black]">
-                        💫 眩暈中 ({dizzyTimeLeft}s)
-                      </div>
-                    )}
-
-                    {/* Cart container */}
-                    <div
-                      className={cn(
-                        "h-11 w-[52px] bg-gradient-to-b from-sky-500/90 to-indigo-600/95 border-t-2 border-sky-300 rounded-b-xl flex items-center justify-center shadow-lg relative",
-                        dizzyTimeLeft > 0 && "opacity-70 animate-game-shake border-red-500 from-red-600 to-red-800"
-                      )}
-                    >
-                      {/* Wire Grid Overlay */}
-                      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.18)_1px,transparent_1px)] bg-[size:6px_6px] rounded-b-xl pointer-events-none" />
-
-                      {/* Top rim cover */}
-                      <div className="absolute inset-x-0 -top-1 h-1.5 bg-sky-200 rounded-full" />
-
-                      {/* Handle bar */}
-                      <div className="absolute -left-3 top-0 w-3 h-5 border-t-2 border-l-2 border-sky-300 rounded-tl-lg transform -rotate-[15deg] origin-top-right pointer-events-none shadow-sm" />
-
-                      {/* Left Wheel */}
-                      <div className="absolute -bottom-2.5 left-1 w-3.5 h-3.5 bg-zinc-900 border border-slate-300 rounded-full shadow-md flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
-                      </div>
-
-                      {/* Right Wheel */}
-                      <div className="absolute -bottom-2.5 right-1 w-3.5 h-3.5 bg-zinc-900 border border-slate-300 rounded-full shadow-md flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
-                      </div>
-
-                      {/* Basket support structure */}
-                      <div className="absolute -bottom-1.5 inset-x-3.5 h-1 bg-sky-400/80 rounded" />
-
-                      {/* Inner item icon */}
-                      <ShoppingCart className="w-4 h-4 text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] z-10" />
-                    </div>
-                  </div>
-
-                  {/* Mobile Button Controls overlay */}
-                  <div className="absolute bottom-4 left-4 right-4 z-30 flex justify-between gap-10 pointer-events-none md:hidden">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (gameState === 'playing' && dizzyTimeRef.current <= 0) {
-                          cartDirectionRef.current = 'left';
-                        }
-                      }}
-                      className="pointer-events-auto w-16 h-16 bg-slate-900/80 active:bg-sky-500/30 text-white rounded-full border border-slate-700 flex items-center justify-center active:scale-95 transition-all shadow-xl"
-                    >
-                      <ChevronLeft className="w-8 h-8" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (gameState === 'playing' && dizzyTimeRef.current <= 0) {
-                          cartDirectionRef.current = 'right';
-                        }
-                      }}
-                      className="pointer-events-auto w-16 h-16 bg-slate-900/80 active:bg-sky-500/30 text-white rounded-full border border-slate-700 flex items-center justify-center active:scale-95 transition-all shadow-xl"
-                    >
-                      <ChevronRight className="w-8 h-8" />
-                    </button>
-                  </div>
-                </div>
+                  {currentScreen === 'feather_rush_menu' && (
+                    <FeatherRushMenu
+                      leaderboard={leaderboard}
+                      playerName={playerName}
+                      eligibility={eligibility}
+                      onStartGame={startFeatherRushGame}
+                    />
+                  )}
+                </>
               )}
 
-              {/* 3. ENDED SCREEN (SCORE SUMMIT) */}
-              {gameState === 'ended' && (
-                <div className="p-6 flex flex-col items-center justify-center space-y-6 text-center max-w-md mx-auto">
-                  <div className="text-4xl">🏆</div>
-                  <div>
-                    <h4 className="text-xl font-black mb-1">挑戰時間結束！</h4>
-                    <p className="text-xs text-slate-400 font-semibold">你本局共接到了</p>
-                    <div className="text-4xl font-black text-amber-400 tracking-wider my-3 tabular-nums">
-                      {score} <span className="text-sm text-slate-400 font-bold">根羽毛</span>
-                    </div>
-                  </div>
+              {/* 2. PLAYING STATE VIEW */}
+              {gameState === 'playing' && (
+                <>
+                  {gameType === 'feather' && (
+                    <FeatherGameCanvas
+                      playerName={playerName}
+                      playerAvatar={playerAvatar}
+                      onGameEnd={(finalScore, maxCombo) => {
+                        setScore(finalScore);
+                        maxComboRef.current = maxCombo;
+                        setGameState('ended');
+                      }}
+                    />
+                  )}
 
-                  {/* Submission */}
-                  <div className="w-full pt-2">
-                    {!submitResult ? (
-                      <button
-                        onClick={handleSubmitScore}
-                        disabled={isSubmitting}
-                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-98 text-white font-extrabold py-3 px-6 rounded-xl shadow-lg shadow-emerald-500/10 transition-all flex items-center justify-center gap-2"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            正在儲存獎勵至雲端...
-                          </>
-                        ) : (
-                          eligibility?.canEarnReward ? '領取並匯入羽毛獎勵' : '送出成績並結束 (練習模式)'
-                        )}
-                      </button>
-                    ) : submitResult?.status === 'success' ? (
-                      <div className="space-y-4">
-                        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl text-xs font-black">
-                          🎉 {submitResult?.message}
-                        </div>
-                        <button
-                          onClick={() => {
-                            setGameState('idle');
-                            onClose();
-                          }}
-                          className="w-full bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-2 px-6 rounded-lg text-sm transition-colors"
-                        >
-                          返回大廳
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-xs font-black">
-                          ❌ 領取失敗: {submitResult?.message || '未知錯誤'}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleSubmitScore}
-                            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-2 rounded-lg text-sm transition-colors"
-                          >
-                            重試領取
-                          </button>
-                          <button
-                            onClick={() => {
-                              setGameState('idle');
-                              onClose();
-                            }}
-                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-2 rounded-lg text-sm transition-colors"
-                          >
-                            放棄回大廳
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  {gameType === 'trivia' && (
+                    <TriviaGamePlay
+                      questions={triviaQuestions}
+                      onAnswerSubmit={handleTriviaAnswerSubmit}
+                      onGameEnd={(finalScore, maxCombo, correctCount, answers) => {
+                        setScore(finalScore);
+                        maxComboRef.current = maxCombo;
+                        setCorrectAnswersCount(correctCount);
+                        setUserAnswers(answers);
+                        setGameState('ended');
+                      }}
+                    />
+                  )}
+
+                  {gameType === 'feather_rush' && (
+                    <FeatherRushCanvas
+                      playerName={playerName}
+                      playerAvatar={playerAvatar}
+                      onGameEnd={(finalScore, maxCombo) => {
+                        setScore(finalScore);
+                        maxComboRef.current = maxCombo;
+                        setGameState('ended');
+                      }}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* 3. ENDED STATE VIEW */}
+              {gameState === 'ended' && (
+                <>
+                  {!isWagerMatch && gameType === 'feather' && (
+                    <FeatherGameEnded
+                      score={score}
+                      isSubmitting={isSubmitting}
+                      submitResult={submitResult}
+                      canEarnReward={false}
+                      nextReset={eligibility?.nextReset}
+                      onSubmit={handleSubmitScore}
+                      onClose={onClose}
+                      onReturnToLobby={() => {
+                        setGameState('idle');
+                        setCurrentScreen('lobby');
+                      }}
+                    />
+                  )}
+
+                  {!isWagerMatch && gameType === 'trivia' && (
+                    <TriviaGameEnded
+                      score={score}
+                      correctAnswersCount={correctAnswersCount}
+                      totalQuestions={triviaQuestions.length}
+                      questions={triviaQuestions}
+                      userAnswers={userAnswers}
+                      maxCombo={maxComboRef.current}
+                      isSubmitting={isSubmitting}
+                      submitResult={submitResult}
+                      canEarnReward={false}
+                      nextReset={eligibility?.nextReset}
+                      onSubmit={handleSubmitScore}
+                      onReturnToLobby={() => {
+                        setGameState('idle');
+                        setCurrentScreen('lobby');
+                      }}
+                    />
+                  )}
+
+                  {!isWagerMatch && gameType === 'feather_rush' && (
+                    <FeatherRushEnded
+                      score={score}
+                      isSubmitting={isSubmitting}
+                      submitResult={submitResult}
+                      nextReset={eligibility?.nextReset}
+                      onSubmit={handleSubmitScore}
+                      onClose={onClose}
+                      onReturnToLobby={() => {
+                        setGameState('idle');
+                        setCurrentScreen('lobby');
+                      }}
+                    />
+                  )}
+
+                  {isWagerMatch && gameType === 'feather_rush' && (
+                    <FeatherRushEnded
+                      score={score}
+                      isSubmitting={isSubmitting}
+                      submitResult={submitResult}
+                      isWagerMatch={true}
+                      roomIsHost={roomIsHost}
+                      wagerAmount={roomWagerAmount}
+                      currentUserName={currentUser?.name}
+                      onSubmit={handleSubmitScore}
+                      onClose={onClose}
+                      onReturnToLobby={() => {
+                        setGameState('idle');
+                        setCurrentScreen('lobby');
+                        setIsWagerMatch(false);
+                        setRoomCode(null);
+                        queryClient.invalidateQueries({ queryKey: ['activeMiniGameRooms'] });
+                      }}
+                    />
+                  )}
+
+                  {isWagerMatch && gameType !== 'feather_rush' && (
+                    <FeatherGameEnded
+                      score={score}
+                      isSubmitting={isSubmitting}
+                      submitResult={submitResult}
+                      canEarnReward={false}
+                      isWagerMatch={true}
+                      roomIsHost={roomIsHost}
+                      wagerAmount={roomWagerAmount}
+                      currentUserName={currentUser?.name}
+                      onSubmit={handleSubmitScore}
+                      onClose={onClose}
+                      onReturnToLobby={() => {
+                        setGameState('idle');
+                        setCurrentScreen('lobby');
+                        setIsWagerMatch(false);
+                        setRoomCode(null);
+                        queryClient.invalidateQueries({ queryKey: ['activeMiniGameRooms'] });
+                      }}
+                    />
+                  )}
+                </>
               )}
             </div>
           </motion.div>
         </div>
       )}
+
+      {/* Room Lobby Wager Matching Modal overlay */}
+      <RoomLobbyModal
+        isOpen={isRoomLobbyOpen && isOpen}
+        onClose={() => setIsRoomLobbyOpen(false)}
+        playerName={playerName}
+        playerEmail={currentUser?.email || ''}
+        playerId={playerId}
+        onSelectGame={handleStartRoomGame}
+      />
     </AnimatePresence>
   );
 };

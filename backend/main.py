@@ -66,6 +66,44 @@ def run_db_migrations():
             """))
             conn.commit()
 
+        if 'game_rooms' not in inspector.get_table_names():
+            print("MIGRATION: Creating game_rooms table...")
+            conn.execute(text("""
+                CREATE TABLE game_rooms (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    room_code VARCHAR(50) UNIQUE NOT NULL,
+                    host_player_id VARCHAR(50) NOT NULL,
+                    guest_player_id VARCHAR(50),
+                    game_type VARCHAR(50) NOT NULL,
+                    wager_amount INT NOT NULL,
+                    status VARCHAR(20) DEFAULT 'waiting',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (host_player_id) REFERENCES players(id),
+                    FOREIGN KEY (guest_player_id) REFERENCES players(id),
+                    INDEX idx_room_code (room_code)
+                )
+            """))
+            conn.commit()
+
+        if 'game_matches' not in inspector.get_table_names():
+            print("MIGRATION: Creating game_matches table...")
+            conn.execute(text("""
+                CREATE TABLE game_matches (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    room_id INT NOT NULL,
+                    host_score INT DEFAULT 0,
+                    guest_score INT DEFAULT 0,
+                    host_submitted BOOLEAN DEFAULT FALSE,
+                    guest_submitted BOOLEAN DEFAULT FALSE,
+                    winner_id VARCHAR(50),
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    ended_at TIMESTAMP NULL DEFAULT NULL,
+                    FOREIGN KEY (room_id) REFERENCES game_rooms(id),
+                    FOREIGN KEY (winner_id) REFERENCES players(id)
+                )
+            """))
+            conn.commit()
+
             
     # 2. Seed data update
     db = SessionLocal()
@@ -135,6 +173,13 @@ def run_db_migrations():
         print(f"MIGRATION ERROR: Failed to update shop items seeds: {e}")
     finally:
         db.close()
+
+    # 3. Seed Trivia Questions
+    try:
+        from trivia_seed import seed_trivia_questions
+        seed_trivia_questions()
+    except Exception as e:
+        print(f"MIGRATION ERROR: Failed to seed trivia questions: {e}")
 
 run_db_migrations()
 
@@ -463,15 +508,168 @@ async def submit_minigame_score(req: schemas.MiniGameSubmitRequest, db: Session 
     player = crud.get_player_by_email(db, req.playerEmail)
     if not player:
         return error("找不到球員資料，請確認是否已綁定帳號")
-    res = crud.submit_minigame_score(db, player.id, req.score, req.maxCombo)
+    res = crud.submit_minigame_score(db, player.id, req.gameType, req.score, req.maxCombo)
     if res.get("status") == "error":
         return error(res.get("message"))
     return success(res)
+
+@app.get("/minigame/weekly_claim_status")
+def get_weekly_claim_status(playerEmail: str, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    res = crud.get_minigame_weekly_claim_status(db, player.id)
+    return success(res)
+
+@app.post("/minigame/weekly_claim")
+def claim_weekly_score(req: schemas.WeeklyClaimRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    res = crud.claim_minigame_weekly_score(db, player.id, req.gameType)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
 
 @app.get("/minigame/leaderboard")
 def get_minigame_leaderboard(db: Session = Depends(get_db)):
     leaderboard_info = crud.get_minigame_leaderboard(db)
     return success(leaderboard_info)
+
+
+@app.post("/minigame/rooms/create")
+def create_minigame_room(req: schemas.RoomCreate, db: Session = Depends(get_db)):
+    res = crud.create_game_room(db, req.playerEmail, req.gameType, req.wagerAmount)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
+
+@app.post("/minigame/rooms/join/{room_code}")
+def join_minigame_room(room_code: str, req: schemas.RoomJoin, db: Session = Depends(get_db)):
+    res = crud.join_game_room(db, room_code, req.playerEmail)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
+
+@app.post("/minigame/rooms/start/{room_code}")
+def start_minigame_room(room_code: str, db: Session = Depends(get_db)):
+    res = crud.start_game_room(db, room_code)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
+
+@app.get("/minigame/rooms/active")
+def get_active_minigame_rooms(db: Session = Depends(get_db)):
+    res = crud.get_active_game_rooms(db)
+    return success(res)
+
+
+@app.get("/minigame/rooms/{room_code}")
+def get_minigame_room(room_code: str, db: Session = Depends(get_db)):
+    room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not room:
+        return error("找不到該房間")
+    
+    db_host = db.query(models.Player).filter(models.Player.id == room.host_player_id).first()
+    db_guest = db.query(models.Player).filter(models.Player.id == room.guest_player_id).first() if room.guest_player_id else None
+
+    # Get match details
+    match = db.query(models.GameMatch).filter(models.GameMatch.room_id == room.id).first()
+
+    return success({
+        "id": room.id,
+        "room_code": room.room_code,
+        "host_player_id": room.host_player_id,
+        "guest_player_id": room.guest_player_id,
+        "host_player_name": db_host.name if db_host else "Unknown",
+        "guest_player_name": db_guest.name if db_guest else None,
+        "game_type": room.game_type,
+        "wager_amount": room.wager_amount,
+        "status": room.status,
+        "created_at": room.created_at,
+        "match": {
+            "host_score": match.host_score if match else None,
+            "guest_score": match.guest_score if match else None,
+            "host_submitted": match.host_submitted if match else False,
+            "guest_submitted": match.guest_submitted if match else False,
+            "winner_id": match.winner_id if match else None,
+        } if match else None
+    })
+
+
+@app.post("/minigame/rooms/submit/{room_code}")
+def submit_minigame_room_score(room_code: str, req: schemas.RoomSubmitScore, db: Session = Depends(get_db)):
+    res = crud.submit_room_match_score(db, room_code, req.playerEmail, req.score)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
+
+@app.post("/minigame/rooms/leave/{room_code}")
+def leave_minigame_room(room_code: str, req: schemas.RoomJoin, db: Session = Depends(get_db)):
+    res = crud.leave_game_room(db, room_code, req.playerEmail)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
+
+@app.get("/minigame/trivia/questions")
+def get_trivia_questions(playerEmail: str = None, count: int = 5, db: Session = Depends(get_db)):
+    player_id = None
+    if playerEmail:
+        player = crud.get_player_by_email(db, playerEmail)
+        if player:
+            player_id = player.id
+
+    questions = crud.get_trivia_questions_for_game(db, player_id=player_id, count=count)
+    return success(questions)
+
+@app.get("/minigame/rooms/{room_code}/trivia/questions")
+def get_room_trivia_questions(room_code: str, db: Session = Depends(get_db)):
+    room = db.query(models.GameRoom).filter(models.GameRoom.room_code == room_code).first()
+    if not room:
+        return error("找不到房間")
+    if room.game_type != "trivia":
+        return error("此房間不是知識小學堂模式")
+    
+    trivia_ids = room.trivia_question_ids or []
+    questions = crud.get_trivia_questions_by_ids(db, trivia_ids)
+    return success(questions)
+
+@app.post("/minigame/trivia/answer")
+def submit_trivia_answer(req: schemas.TriviaAnswerRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料")
+    
+    res = crud.record_trivia_answer(db, player.id, req.questionId, req.isCorrect)
+    return success(res)
+
+
+@app.get("/minigame/trivia/progress")
+def get_trivia_progress(playerEmail: str, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, playerEmail)
+    if not player:
+        return error("找不到球員資料")
+    
+    res = crud.get_trivia_progress(db, player.id)
+    return success(res)
+
+
+@app.get("/minigame/trivia/collection")
+def get_trivia_collection(playerEmail: str, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, playerEmail)
+    if not player:
+        return error("找不到球員資料")
+    
+    res = crud.get_trivia_collection(db, player.id)
+    return success(res)
+
+
 
 # Matches API
 @app.get("/matches")

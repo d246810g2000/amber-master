@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import X from 'lucide-react/dist/esm/icons/x';
 import ShieldAlert from 'lucide-react/dist/esm/icons/shield-alert';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
@@ -49,7 +50,7 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-6 md:p-8">
@@ -106,6 +107,7 @@ export function AdminLoginModal({ isOpen, onClose }: AdminLoginModalProps) {
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

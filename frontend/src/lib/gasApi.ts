@@ -215,8 +215,16 @@ export async function fetchMiniGameStatus(playerEmail: string) {
   return apiGet('/minigame/status', { playerEmail }, z.any());
 }
 
-export async function submitMiniGameScore(playerEmail: string, score: number, maxCombo?: number) {
-  return apiPost('/minigame/submit', { playerEmail, score, maxCombo }, z.any());
+export async function submitMiniGameScore(playerEmail: string, score: number, maxCombo?: number, gameType: string = 'feather') {
+  return apiPost('/minigame/submit', { playerEmail, score, maxCombo, gameType }, z.any());
+}
+
+export async function fetchMiniGameWeeklyClaimStatus(playerEmail: string) {
+  return apiGet('/minigame/weekly_claim_status', { playerEmail }, z.any());
+}
+
+export async function claimMiniGameWeeklyScore(playerEmail: string, gameType: string) {
+  return apiPost('/minigame/weekly_claim', { playerEmail, gameType }, z.any());
 }
 
 export async function fetchMiniGameLeaderboard() {
@@ -237,6 +245,11 @@ export async function fetchMatches(date?: string): Promise<RawMatch[]> {
     console.warn('Failed to fetch matches:', err);
     return [];
   }
+}
+
+/** 取得知識小學堂的已答對題庫收集冊 */
+export async function fetchTriviaCollection(playerEmail: string) {
+  return apiGet('/minigame/trivia/collection', { playerEmail }, z.any());
 }
 
 /** 呼叫後端進行進階配對 */
@@ -527,3 +540,61 @@ export async function fetchChatMessages(date: string): Promise<any[]> {
 }
 
 
+/** 建立對戰房間 */
+export async function createMiniGameRoom(playerEmail: string, gameType: string, wagerAmount: number) {
+  return apiPost('/minigame/rooms/create', { playerEmail, gameType, wagerAmount }, z.any());
+}
+
+/** 加入對戰房間 */
+export async function joinMiniGameRoom(roomCode: string, playerEmail: string) {
+  return apiPost(`/minigame/rooms/join/${roomCode}`, { playerEmail }, z.any());
+}
+
+/** 開始對戰房間遊戲 */
+export async function startMiniGameRoom(roomCode: string) {
+  return apiPost(`/minigame/rooms/start/${roomCode}`, {}, z.any());
+}
+
+/** 取得所有活躍對戰房間 */
+export async function fetchActiveMiniGameRooms() {
+  return apiGet('/minigame/rooms/active', undefined, z.array(z.any()));
+}
+
+/** 取得單一對戰房間詳細資料 */
+export async function fetchMiniGameRoom(roomCode: string) {
+  return apiGet(`/minigame/rooms/${roomCode}`, undefined, z.any());
+}
+
+/** 提交對戰房間遊戲得分 */
+export async function submitMiniGameRoomScore(roomCode: string, playerEmail: string, score: number) {
+  return apiPost(`/minigame/rooms/submit/${roomCode}`, { playerEmail, score }, z.any());
+}
+
+/** 離開/解散對戰房間 */
+export async function leaveMiniGameRoom(roomCode: string, playerEmail: string) {
+  return apiPost(`/minigame/rooms/leave/${roomCode}`, { playerEmail }, z.any());
+}
+
+/** 取得知識小學堂題目 */
+export async function fetchTriviaQuestions(playerEmail?: string, count: number = 6) {
+  const params: Record<string, string> = { count: count.toString() };
+  if (playerEmail) {
+    params.playerEmail = playerEmail;
+  }
+  return apiGet('/minigame/trivia/questions', params, z.array(z.any()));
+}
+
+/** 取得知識小學堂房間題目 (約戰模式) */
+export async function fetchRoomTriviaQuestions(roomCode: string) {
+  return apiGet(`/minigame/rooms/${roomCode}/trivia/questions`, undefined, z.array(z.any()));
+}
+
+/** 提交知識小學堂單題答案 */
+export async function submitTriviaAnswer(playerEmail: string, questionId: number, isCorrect: boolean) {
+  return apiPost('/minigame/trivia/answer', { playerEmail, questionId, isCorrect }, z.any());
+}
+
+/** 取得知識小學堂進度 */
+export async function fetchTriviaProgress(playerEmail: string) {
+  return apiGet('/minigame/trivia/progress', { playerEmail }, z.any());
+}

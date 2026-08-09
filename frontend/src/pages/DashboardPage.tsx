@@ -21,7 +21,7 @@ import { useDashboardSummary } from "../hooks/useDashboardSummary";
 import { CourtCard, CourtCardSkeleton } from "../components/CourtCard";
 import { useNavigate } from 'react-router-dom';
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import { GeminiBot } from "../components/chat/GeminiBot";
+// import { GeminiBot } from "../components/chat/GeminiBot";
 import { DailyBattleSummaryModal } from "../components/dashboard/DailyBattleSummaryModal";
 import { HouseDetailModal } from "../components/dashboard/HouseDetailModal";
 import ImageDown from "lucide-react/dist/esm/icons/image-down";
@@ -614,12 +614,14 @@ export function DashboardPage() {
         />
       )}
       
+      {/* 隱藏安柏羽球教練AI
       <GeminiBot 
         players={players as any} 
         playerStatus={playerStatus}
         courts={courts}
         recommendedPlayers={recommendedPlayers as any}
       />
+      */}
 
       <DailyBattleSummaryModal
         isOpen={dailySummaryOpen}
@@ -673,6 +675,7 @@ export function DashboardPage() {
           onClose={() => setIsMiniGameOpen(false)}
           playerName={boundPlayer?.name}
           playerAvatar={boundPlayer?.avatar}
+          playerId={boundPlayer?.id}
           onSuccess={() => {
             refetchPlayers();
             queryClient.invalidateQueries({ queryKey: ['players-base'] });

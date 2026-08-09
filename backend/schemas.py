@@ -215,6 +215,7 @@ class HouseDonateRequest(BaseModel):
 
 class MiniGameSubmitRequest(BaseModel):
     playerEmail: str
+    gameType: str = "feather"
     score: int
     maxCombo: Optional[int] = 0
 
@@ -313,5 +314,47 @@ class ChatMessage(ChatMessageBase):
 
     class Config:
         from_attributes = True
+
+
+class RoomCreate(BaseModel):
+    playerEmail: str
+    gameType: str # 'feather' or 'trivia'
+    wagerAmount: int
+
+
+class RoomJoin(BaseModel):
+    playerEmail: str
+
+
+class RoomResponse(BaseModel):
+    id: int
+    room_code: str
+    host_player_id: str
+    guest_player_id: Optional[str] = None
+    host_player_name: str
+    guest_player_name: Optional[str] = None
+    game_type: str
+    wager_amount: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RoomSubmitScore(BaseModel):
+    playerEmail: str
+    score: int
+
+
+class TriviaAnswerRequest(BaseModel):
+    playerEmail: str
+    questionId: int
+    isCorrect: bool
+
+
+class WeeklyClaimRequest(BaseModel):
+    playerEmail: str
+    gameType: str
 
 

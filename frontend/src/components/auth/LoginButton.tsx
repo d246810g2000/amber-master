@@ -4,14 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LogOut from 'lucide-react/dist/esm/icons/log-out';
+import Terminal from 'lucide-react/dist/esm/icons/terminal';
 import * as gasApi from '../../lib/gasApi';
 import { cn, getAvatarUrl } from '../../lib/utils';
 import { AdminLoginModal } from './AdminLoginModal';
+import { DevLoginModal } from './DevLoginModal';
 
 export function LoginButton() {
   const navigate = useNavigate();
   const { currentUser, loginWithUser, logout } = useAuth();
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
+  const [isDevModalOpen, setIsDevModalOpen] = React.useState(false);
 
   const handleCustomLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -124,6 +127,16 @@ export function LoginButton() {
           </div>
         </button>
 
+        {currentUser.isAdmin && (
+          <button
+            onClick={() => setIsDevModalOpen(true)}
+            className="ml-0.5 p-1 md:p-2 rounded-full text-slate-400 dark:text-slate-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors shrink-0 flex items-center justify-center h-[28px] w-[28px] md:h-[36px] md:w-[36px] relative before:absolute before:-inset-2 active:scale-90"
+            title="模擬球員"
+          >
+            <Terminal className="w-3.5 h-3.5 md:w-4 md:h-4" />
+          </button>
+        )}
+
         <button
           onClick={logout}
           className="ml-0.5 p-1 md:p-2 rounded-full text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center justify-center h-[28px] w-[28px] md:h-[36px] md:w-[36px] relative before:absolute before:-inset-2 active:scale-90"
@@ -131,6 +144,11 @@ export function LoginButton() {
         >
           <LogOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
         </button>
+
+        <DevLoginModal 
+          isOpen={isDevModalOpen} 
+          onClose={() => setIsDevModalOpen(false)} 
+        />
       </div>
     );
   }
@@ -163,6 +181,11 @@ export function LoginButton() {
       <AdminLoginModal 
         isOpen={isAdminModalOpen} 
         onClose={() => setIsAdminModalOpen(false)} 
+      />
+
+      <DevLoginModal 
+        isOpen={isDevModalOpen} 
+        onClose={() => setIsDevModalOpen(false)} 
       />
     </div>
   );
