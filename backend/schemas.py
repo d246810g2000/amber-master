@@ -213,11 +213,14 @@ class HouseDonateRequest(BaseModel):
     playerEmail: str
     amount: int
 
+ALLOWED_MINIGAME_TYPES = ("feather", "trivia", "feather_rush")
+
 class MiniGameSubmitRequest(BaseModel):
     playerEmail: str
     gameType: str = "feather"
     score: int
     maxCombo: Optional[int] = 0
+
 
 class FeatherClaimResponse(BaseModel):
     status: str

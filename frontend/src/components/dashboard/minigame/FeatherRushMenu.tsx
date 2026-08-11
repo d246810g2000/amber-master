@@ -71,12 +71,12 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
             <div className="w-full grid grid-cols-2 gap-2 text-left bg-slate-900 border border-slate-800/60 p-3 rounded-xl text-[10px] font-semibold text-slate-300">
               <div>🪶 開局 80 羽毛（戰力）</div>
               <div>⏱️ 約 90 秒一場</div>
-              <div>⬅️➡️ 持續等速橫移</div>
-              <div>🏸 自動向前殺球</div>
-              <div>🚪 訓練門左右二選一（靠近會提示此側）</div>
-              <div>💥 四段球場主題對決</div>
+              <div>⬅️➡️ 三線道切換／滑動</div>
+              <div>🏸 時機殺球 Perfect～Miss</div>
+              <div>🚪 三線數字門策略選擇</div>
+              <div>🔥 連擊 10 觸發 FEVER</div>
               <div className="col-span-2 border-t border-slate-800/50 pt-1.5 mt-0.5 text-sky-300">
-                練習場 → 網前區 → 後場 → 決勝場。最終分數＝場上剩餘羽毛（期望約 500～1500）
+                敵人由遠逼近 → 換道閃避 → 擊球連擊 → 底線 Boss 壓上。分數＝剩餘羽毛（期望約 500～1500）
               </div>
             </div>
           </div>

@@ -4,16 +4,12 @@ import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
 import { cn, getAvatarUrl } from '../../../lib/utils';
 import {
-  BALANCE,
-  BOSSES,
-  PHASE_SCROLL_LENGTHS,
+  BALANCE, BOSSES, PHASE_SCROLL_LENGTHS, LANE_X, LaneIndex, EnemyState, EnemyKind,
+  ShotGrade, BossBehavior, BossPhase, GateOperation, bossPhaseFromHp, gradeShot,
 } from './featherRushTypes';
-import type { BossBehavior, GateOperation } from './featherRushTypes';
 import {
-  applyGate,
-  computeFinalScore,
-  formatGateLabel,
-  generateGatePair,
+  applyGate, computeFinalScore, generateGateTriplet, isGoodOp, isBadOp,
+  laneToX, xToNearestLane, shotDamage,
 } from './featherRushEngine';
 import { PETS_CATALOG, PetCatalogEntry } from '../../../lib/petCatalog';
 import { PetRenderer } from '../../PetRenderer';
@@ -25,115 +21,101 @@ interface FeatherRushCanvasProps {
 }
 
 type SubPhase = 'run' | 'boss' | 'sprint' | 'ended';
-type MoveDir = 'left' | 'right' | null;
 
 interface MathGate {
   id: number;
   z: number;
-  left: GateOperation;
-  right: GateOperation;
+  ops: [GateOperation, GateOperation, GateOperation];
+  category: string;
   resolved: boolean;
-  isMystery?: boolean;
-  revealed?: boolean;
-  /** 通過後淡出，避免高大門板在腳邊瞬間蒸發 */
   fade?: number;
 }
 
 interface Enemy {
   id: number;
-  xPct: number;
+  lane: LaneIndex;
   z: number;
-  maxHp: number;
   hp: number;
-  reward: number;
+  maxHp: number;
+  kind: EnemyKind;
+  state: EnemyState;
   emoji: string;
-  isHazard?: boolean;
+  reward: number;
+  speed: number;
   hitFlash?: number;
+  isHazard?: boolean;
 }
 
 interface Projectile {
   id: number;
+  lane: LaneIndex;
   xPct: number;
-  offsetPct: number;
   z: number;
   damage: number;
-  powerShot?: boolean;
+  grade: ShotGrade;
   dead?: boolean;
 }
 
 interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  life: number;
-  size: number;
+  id: number; x: number; y: number; vx: number; vy: number;
+  color: string; life: number; size: number;
 }
 
 interface FloatingText {
-  id: number;
-  text: string;
-  x: number;
-  y: number;
-  color: string;
-  life: number;
+  id: number; text: string; x: number; y: number; color: string; life: number;
 }
 
 interface MagnetFeather {
-  id: number;
-  startX: number;
-  startY: number;
-  x: number;
-  y: number;
-  progress: number;
-  value: number;
+  id: number; startX: number; startY: number; x: number; y: number;
+  progress: number; value: number;
 }
 
 interface ScreenPos {
-  x: number;
-  y: number;
-  scale: number;
-  progress: number;
-  dist: number;
+  x: number; y: number; scale: number; progress: number; dist: number;
 }
 
 const PLAYER_Y_RATIO = 0.80;
 const HORIZON_Y_RATIO = 0.22;
 const VIEW_DEPTH = 420;
 const HIT_DEPTH = 8;
-/** 數字門必須跑過門線後才結算（負值＝已通過腳下），避免「門還在眼前卻突然沒了」 */
 const GATE_PASS_DEPTH = -18;
-/** 羽球射程：可打到走道一半深度 */
 const COMBAT_RANGE = Math.round(VIEW_DEPTH * 0.5);
 const SCROLL_SPEED = 3.0;
-const BULLET_SPEED = 3.0;
+const BULLET_SPEED = 3.2;
 const HAZARD_SPEED = 4.0;
-const MOVE_SPEED = 0.9;
-const PLAYER_X_MIN = 8;
-const PLAYER_X_MAX = 92;
-const HIT_X_PCT = 13;
-const RUN_PHASE_SEC = 9.5;
-const TOTAL_GAME_SEC = 60;
-/** Boss 從走道盡頭生成，持續朝玩家走近 */
+const LANE_LERP = 0.18;
+const RUN_PHASE_SEC = 11;
+const TOTAL_GAME_SEC = 90;
 const BOSS_SPAWN_DIST = Math.round(VIEW_DEPTH * 0.92);
 const BOSS_APPROACH_SPEED = 2.35;
-const BOSS_CONTACT_X = 26;
-const BOSS_PASS_LOSS_PCT = 0.18;
-const BOSS_HIT_Z = 48;
-const BOSS_HIT_X = 28;
+const BOSS_PASS_LOSS_PCT = BALANCE.bossFailLossPct;
 const ROAD_HALF_FAR = 0.20;
 const ROAD_HALF_NEAR = 0.46;
-
 const GATE_BREATH_GAP = 220;
 const ENEMY_BREATH_GAP = 260;
-const MAX_PROJECTILES = 10;
+const MAX_PROJECTILES = 8;
 const HIT_STOP_MS = 90;
 const BOSS_INTRO_MS = 750;
-/** 防守者造型：人物感 emoji，避免與數字門混淆 */
-const BADMINTON_ENEMIES = ['😤', '🧤', '🏸', '💪', '😈'] as const;
+const MAX_PARTICLES = 80;
+
+const GRADE_LABELS: Record<ShotGrade, string> = {
+  perfect: '完美!', great: '精準!', good: '好球', miss: '揮空',
+};
+const GRADE_COLORS: Record<ShotGrade, string> = {
+  perfect: '#fde047', great: '#c4b5fd', good: '#7dd3fc', miss: '#94a3b8',
+};
+
 const SEGMENT_NAMES = ['練習場衝刺', '網前纏鬥', '後場對轟', '決勝殺球'] as const;
+
+const ENEMY_DEFS: Record<EnemyKind, { emoji: string; hpMul: number; speedMul: number }> = {
+  runner: { emoji: '😤', hpMul: 0.85, speedMul: 1.15 },
+  tank: { emoji: '💪', hpMul: 1.45, speedMul: 0.75 },
+  dodger: { emoji: '🏸', hpMul: 0.9, speedMul: 1.1 },
+  shield: { emoji: '🧤', hpMul: 1.25, speedMul: 0.85 },
+  bomber: { emoji: '💥', hpMul: 0.7, speedMul: 1.0 },
+};
+
+const ENEMY_KINDS: EnemyKind[] = ['runner', 'tank', 'dodger', 'shield', 'bomber'];
 
 interface CourtTheme {
   label: string;
@@ -142,57 +124,17 @@ interface CourtTheme {
   edge: string;
   accent: string;
   haze: string;
+  starColor: string;
 }
 
 const COURT_THEMES: CourtTheme[] = [
-  {
-    label: '練習場',
-    sky: ['#020617', '#0f172a', '#1e3a2f'],
-    road: ['#14532d', '#052e16'],
-    edge: '#86efac',
-    accent: '#38bdf8',
-    haze: 'rgba(52, 211, 153, 0.12)',
-  },
-  {
-    label: '網前區',
-    sky: ['#0c0a1a', '#1e1b4b', '#312e81'],
-    road: ['#1e3a5f', '#0f172a'],
-    edge: '#c4b5fd',
-    accent: '#a78bfa',
-    haze: 'rgba(167, 139, 250, 0.14)',
-  },
-  {
-    label: '後場',
-    sky: ['#1c1917', '#292524', '#78350f'],
-    road: ['#3f2e1a', '#1c1410'],
-    edge: '#fcd34d',
-    accent: '#f59e0b',
-    haze: 'rgba(251, 191, 36, 0.12)',
-  },
-  {
-    label: '決勝場',
-    sky: ['#1a0a0a', '#3f0a0a', '#7f1d1d'],
-    road: ['#3f1515', '#1a0808'],
-    edge: '#fda4af',
-    accent: '#f43f5e',
-    haze: 'rgba(244, 63, 94, 0.14)',
-  },
+  { label: '練習場', sky: ['#020617', '#0f172a', '#1e3a2f'], road: ['#14532d', '#052e16'], edge: '#86efac', accent: '#38bdf8', haze: 'rgba(52,211,153,0.12)', starColor: '#e2e8f0' },
+  { label: '網前區', sky: ['#0c0a1a', '#1e1b4b', '#312e81'], road: ['#1e3a5f', '#0f172a'], edge: '#c4b5fd', accent: '#a78bfa', haze: 'rgba(167,139,250,0.14)', starColor: '#ddd6fe' },
+  { label: '後場', sky: ['#1c1917', '#292524', '#78350f'], road: ['#3f2e1a', '#1c1410'], edge: '#fcd34d', accent: '#f59e0b', haze: 'rgba(251,191,36,0.12)', starColor: '#fde68a' },
+  { label: '決勝場', sky: ['#1a0a0a', '#3f0a0a', '#7f1d1d'], road: ['#3f1515', '#1a0808'], edge: '#fda4af', accent: '#f43f5e', haze: 'rgba(244,63,94,0.14)', starColor: '#fecdd3' },
 ];
 
-function isGoodOp(op: GateOperation): boolean {
-  return op.type === 'add' || op.type === 'mul' || op.type === 'pct_add';
-}
-
-function isBadOp(op: GateOperation): boolean {
-  return op.type === 'sub' || op.type === 'div' || op.type === 'pct_sub';
-}
-
-function worldToScreen(
-  xPct: number,
-  dist: number,
-  w: number,
-  h: number,
-): ScreenPos | null {
+function worldToScreen(xPct: number, dist: number, w: number, h: number): ScreenPos | null {
   if (dist < -90 || dist > VIEW_DEPTH + 80) return null;
   const horizonY = h * HORIZON_Y_RATIO;
   const playerY = h * PLAYER_Y_RATIO;
@@ -207,147 +149,155 @@ function worldToScreen(
   return { x, y, scale, progress: screenProgress, dist };
 }
 
-/** Road half-width at a given screen progress (0 = horizon, 1 = feet). */
 function roadHalfWidthAt(progress: number, w: number): number {
   return w * (ROAD_HALF_FAR + (ROAD_HALF_NEAR - ROAD_HALF_FAR) * progress);
 }
 
-function spawnEnemiesAt(
-  z: number,
-  phase: number,
-  rewardFactor: number,
-  nextId: () => number,
-  baseEmoji: string,
-  altEmoji: string,
-): { enemies: Enemy[]; span: number } {
-  const enemies: Enemy[] = [];
-  const patternRand = Math.random();
-
-  if (patternRand < 0.45) {
-    const open = Math.floor(Math.random() * 3);
-    const slots = [
-      { xPct: 22, hp: Math.max(10, 10 + phase * 8 + Math.floor(Math.random() * 6)) },
-      { xPct: 50, hp: Math.max(12, 12 + phase * 9 + Math.floor(Math.random() * 6)) },
-      { xPct: 78, hp: Math.max(14, 14 + phase * 10 + Math.floor(Math.random() * 6)) },
-    ];
-    slots.forEach((slot, idx) => {
-      if (idx === open) return;
-      enemies.push({
-        id: nextId(),
-        xPct: slot.xPct,
-        z,
-        maxHp: slot.hp,
-        hp: slot.hp,
-        reward: Math.max(2, Math.floor(slot.hp * rewardFactor * 0.55)),
-        emoji: idx === 0 ? '😤' : baseEmoji,
-      });
-    });
-    return { enemies, span: 340 };
-  }
-
-  if (patternRand < 0.75) {
-    let xPct = 20 + Math.random() * 60;
-    for (let k = 0; k < 3; k++) {
-      const hp = Math.max(8, 8 + phase * 5 + Math.floor(Math.random() * 4));
-      enemies.push({
-        id: nextId(),
-        xPct,
-        z: z + k * 90,
-        maxHp: hp,
-        hp,
-        reward: Math.max(1, Math.floor(hp * rewardFactor * 0.5)),
-        emoji: k === 1 ? '🏸' : altEmoji,
-      });
-      xPct = Math.max(18, Math.min(82, xPct + (Math.random() > 0.5 ? 28 : -28)));
-    }
-    return { enemies, span: 380 };
-  }
-
-  const side = Math.random() > 0.5 ? 28 : 72;
-  for (let k = 0; k < 2; k++) {
-    const hp = Math.max(12, 12 + phase * 8 + Math.floor(Math.random() * 5));
-    enemies.push({
-      id: nextId(),
-      xPct: side + (k === 0 ? -8 : 8),
-      z: z + k * 36,
-      maxHp: hp,
-      hp,
-      reward: Math.max(2, Math.floor(hp * rewardFactor * 0.55)),
-      emoji: '💪',
-    });
-  }
-  return { enemies, span: 320 };
+function enemyStateFromDist(dist: number): EnemyState {
+  if (dist > 280) return 'far';
+  if (dist > 120) return 'approaching';
+  if (dist > 40) return 'warning';
+  return 'attacking';
 }
 
-/**
- * Rhythm: GATE → gap (~220) → ENEMIES → gap (~260) → GATE → …
- * First gate at VIEW_DEPTH + 40.
- */
-function spawnTrackEvents(
-  phase: number,
-  startId: number,
-  feathers: number,
-): { gates: MathGate[]; enemies: Enemy[] } {
+function pickEnemyKind(phase: number): EnemyKind {
+  const pool = ENEMY_KINDS.slice(0, Math.min(ENEMY_KINDS.length, 2 + phase));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function makeEnemy(id: number, lane: LaneIndex, z: number, phase: number, kind?: EnemyKind): Enemy {
+  const k = kind ?? pickEnemyKind(phase);
+  const def = ENEMY_DEFS[k];
+  const baseHp = Math.max(8, 10 + phase * 7 + Math.floor(Math.random() * 5));
+  const hp = Math.round(baseHp * def.hpMul);
+  const dist = z;
+  return {
+    id, lane, z, hp, maxHp: hp, kind: k, state: enemyStateFromDist(dist),
+    emoji: def.emoji, reward: Math.max(2, Math.floor(hp * BALANCE.enemyRewardFactor * 0.55)),
+    speed: def.speedMul,
+  };
+}
+
+function spawnEnemyPack(z: number, phase: number, nextId: () => number): { enemies: Enemy[]; span: number } {
+  const count = 1 + Math.floor(Math.random() * 2);
+  const lanes: LaneIndex[] = [];
+  while (lanes.length < count) {
+    const l = Math.floor(Math.random() * 3) as LaneIndex;
+    if (!lanes.includes(l)) lanes.push(l);
+  }
+  const enemies = lanes.map((lane, i) => makeEnemy(nextId(), lane, z + i * 32, phase));
+  return { enemies, span: 300 + count * 40 };
+}
+
+function spawnTrackEvents(phase: number, startId: number, feathers: number): { gates: MathGate[]; enemies: Enemy[] } {
   const gates: MathGate[] = [];
   const enemies: Enemy[] = [];
   const trackLen = Math.min(PHASE_SCROLL_LENGTHS[phase] ?? 1100, 1100);
-  const rewardFactor = BALANCE.enemyRewardFactor;
-
   let z = VIEW_DEPTH + 40;
   const endZ = VIEW_DEPTH + trackLen;
   let counter = startId;
-  const nextId = () => {
-    counter += 1;
-    return counter;
-  };
-
-  const baseEmoji = BADMINTON_ENEMIES[Math.min(BADMINTON_ENEMIES.length - 1, phase * 2)];
-  const altEmoji = BADMINTON_ENEMIES[Math.min(BADMINTON_ENEMIES.length - 1, phase * 2 + 1)];
+  const nextId = () => { counter += 1; return counter; };
   let expectGate = true;
-
   while (z < endZ - 80) {
     if (expectGate) {
-      const pair = generateGatePair(phase, feathers);
-      gates.push({
-        id: nextId(),
-        z,
-        left: pair.left,
-        right: pair.right,
-        resolved: false,
-        isMystery: Math.random() < 0.32,
-        revealed: false,
-      });
+      const triplet = generateGateTriplet(phase, feathers);
+      gates.push({ id: nextId(), z, ops: triplet.ops, category: triplet.category, resolved: false });
       z += GATE_BREATH_GAP;
       expectGate = false;
     } else {
-      const pack = spawnEnemiesAt(z, phase, rewardFactor, nextId, baseEmoji, altEmoji);
+      const pack = spawnEnemyPack(z, phase, nextId);
       enemies.push(...pack.enemies);
       z += pack.span + ENEMY_BREATH_GAP;
       expectGate = true;
     }
   }
-
   return { gates, enemies };
 }
 
-function drawShuttlecock(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  powerShot: boolean,
-  alpha = 1,
-) {
-  const headR = (powerShot ? 8 : 6) * scale;
-  const tailLen = (powerShot ? 24 : 18) * scale;
+function drawParallax(ctx: CanvasRenderingContext2D, w: number, horizonY: number, scroll: number, theme: CourtTheme) {
+  for (let i = 0; i < 36; i++) {
+    const layer = i % 3;
+    const speed = 0.04 + layer * 0.06;
+    const x = ((i * 47 + scroll * speed) % (w + 40)) - 20;
+    const y = (i * 31) % Math.floor(horizonY * 0.85);
+    const r = layer === 0 ? 1 : layer === 1 ? 1.5 : 2.2;
+    ctx.globalAlpha = 0.25 + layer * 0.15;
+    ctx.fillStyle = theme.starColor;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.08;
+  for (let c = 0; c < 4; c++) {
+    const cx = ((c * 180 + scroll * 0.02) % (w + 120)) - 60;
+    const cy = horizonY * (0.25 + c * 0.12);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 40 + c * 8, 12 + c * 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
 
+function drawCourtMarkings(ctx: CanvasRenderingContext2D, w: number, h: number, horizonY: number, scroll: number) {
+  const depths = [VIEW_DEPTH * 0.38, VIEW_DEPTH * 0.62];
+  ctx.save();
+  ctx.strokeStyle = 'rgba(226,232,240,0.18)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([10, 14]);
+  depths.forEach((dist) => {
+    const t = 1 - dist / VIEW_DEPTH;
+    const progress = Math.pow(t, 1.25);
+    const y = horizonY + (h * PLAYER_Y_RATIO - horizonY) * progress;
+    const half = roadHalfWidthAt(progress, w);
+    ctx.lineDashOffset = -(scroll * 0.6 + dist * 0.08) % 24;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5 - half * 0.92, y);
+    ctx.lineTo(w * 0.5 + half * 0.92, y);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  LANE_X.forEach((lx) => {
+    const pos = worldToScreen(lx, VIEW_DEPTH * 0.5, w, h);
+    if (!pos) return;
+    ctx.strokeStyle = 'rgba(226,232,240,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pos.x, horizonY);
+    ctx.lineTo(pos.x, h);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawLaneGlow(ctx: CanvasRenderingContext2D, lane: LaneIndex, w: number, h: number, horizonY: number, color: string, alpha: number) {
+  const lx = LANE_X[lane];
+  const near = worldToScreen(lx, 60, w, h);
+  const far = worldToScreen(lx, VIEW_DEPTH * 0.7, w, h);
+  if (!near || !far) return;
+  const halfNear = roadHalfWidthAt(near.progress, w) / 3.2;
   ctx.save();
   ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(far.x - halfNear * 0.3, far.y);
+  ctx.lineTo(far.x + halfNear * 0.3, far.y);
+  ctx.lineTo(near.x + halfNear, near.y);
+  ctx.lineTo(near.x - halfNear, near.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
 
-  // Shuttlecock Motion Trail (energy streak behind projectile)
+function drawShuttlecock(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, grade: ShotGrade, alpha = 1) {
+  const power = grade === 'perfect' || grade === 'great';
+  const headR = (power ? 8 : 6) * scale;
+  const tailLen = (power ? 24 : 18) * scale;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   const trailGrad = ctx.createLinearGradient(x, y + tailLen, x, y + tailLen * 2.2);
-  trailGrad.addColorStop(0, powerShot ? 'rgba(253, 224, 71, 0.55)' : 'rgba(56, 189, 248, 0.45)');
-  trailGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  trailGrad.addColorStop(0, power ? 'rgba(253,224,71,0.55)' : 'rgba(56,189,248,0.45)');
+  trailGrad.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = trailGrad;
   ctx.beginPath();
   ctx.moveTo(x - headR * 0.8, y);
@@ -356,83 +306,38 @@ function drawShuttlecock(
   ctx.lineTo(x - headR * 1.5, y + tailLen * 2.2);
   ctx.closePath();
   ctx.fill();
-
-  if (powerShot) {
-    ctx.shadowColor = '#fde047';
-    ctx.shadowBlur = 14 * scale;
-  } else {
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 6 * scale;
-  }
-
-  ctx.fillStyle = powerShot ? '#fef08a' : '#fbbf24';
+  ctx.shadowColor = power ? '#fde047' : '#38bdf8';
+  ctx.shadowBlur = power ? 14 * scale : 6 * scale;
+  ctx.fillStyle = power ? '#fef08a' : '#fbbf24';
   ctx.beginPath();
   ctx.ellipse(x, y - tailLen * 0.35, headR, headR * 0.85, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  ctx.strokeStyle = powerShot ? '#fff7ed' : '#e2e8f0';
-  ctx.lineWidth = Math.max(1, 1.5 * scale);
-  ctx.lineCap = 'round';
-  for (let i = -2; i <= 2; i++) {
-    ctx.beginPath();
-    ctx.moveTo(x + i * headR * 0.35, y - tailLen * 0.2);
-    ctx.lineTo(x + i * headR * 0.95, y + tailLen * 0.55);
-    ctx.stroke();
-  }
-
-  ctx.strokeStyle = '#94a3b8';
-  ctx.lineWidth = Math.max(1, scale);
-  ctx.beginPath();
-  ctx.moveTo(x, y - tailLen * 0.35);
-  ctx.lineTo(x, y + tailLen * 0.5);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
-function drawCourtMarkings(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  horizonY: number,
-  scroll: number,
-) {
-  const serviceDepths = [VIEW_DEPTH * 0.38, VIEW_DEPTH * 0.62];
-
-  ctx.save();
-  ctx.strokeStyle = 'rgba(226, 232, 240, 0.18)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([10, 14]);
-
-  serviceDepths.forEach((dist) => {
-    const t = 1 - dist / VIEW_DEPTH;
-    const progress = Math.pow(t, 1.25);
-    const y = horizonY + (h * PLAYER_Y_RATIO - horizonY) * progress;
-    const half = roadHalfWidthAt(progress, w);
-    const dashOffset = -(scroll * 0.6 + dist * 0.08) % 24;
-    ctx.lineDashOffset = dashOffset;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.5 - half * 0.92, y);
-    ctx.lineTo(w * 0.5 + half * 0.92, y);
-    ctx.stroke();
-  });
-
-  ctx.setLineDash([]);
   ctx.restore();
 }
 
 function bossActionInterval(behavior: BossBehavior): number {
-  switch (behavior) {
-    case 'clear_lob': return 1500;
-    case 'jump_smash': return 1100;
-    default: return 999999;
-  }
+  if (behavior === 'clear_lob') return 1500;
+  if (behavior === 'jump_smash') return 1100;
+  return 999999;
 }
 
+function baseShotDamage(feathers: number): number {
+  if (feathers >= 100) return 3;
+  if (feathers >= 50) return 2;
+  return 1;
+}
+
+function fireIntervalMs(feathers: number, fever: boolean): number {
+  let ms = 240;
+  if (feathers >= 50) ms = 170;
+  if (feathers >= 100) ms = 140;
+  if (fever) ms *= 0.75;
+  return ms;
+}
+
+
 export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
-  playerName,
-  playerAvatar,
-  onGameEnd,
+  playerName, playerAvatar, onGameEnd,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -446,13 +351,12 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const phaseRef = useRef(0);
   const subPhaseRef = useRef<SubPhase>('run');
   const scrollRef = useRef(0);
+  const playerLaneRef = useRef<LaneIndex>(1);
   const playerXRef = useRef(50);
-  const moveDirRef = useRef<MoveDir>(null);
-  const playerTiltRef = useRef(0);
   const timeLeftRef = useRef(TOTAL_GAME_SEC);
   const bossHpRef = useRef(0);
   const bossAnchorZRef = useRef(VIEW_DEPTH + 1000);
-  const bossXPctRef = useRef(50);
+  const bossLaneRef = useRef<LaneIndex>(1);
   const mathGatesRef = useRef<MathGate[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
@@ -475,43 +379,58 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const hitStopRef = useRef(0);
   const bossIntroRef = useRef(0);
   const vignetteRef = useRef(0);
-  const tipUntilRef = useRef(performance.now() + 5500);
+  const tipUntilRef = useRef(performance.now() + 5000);
   const flashWhiteRef = useRef(0);
-
-  const spawnMagnetFeather = (startX: number, startY: number, val: number) => {
-    magnetFeathersRef.current.push({
-      id: nextId(),
-      startX,
-      startY,
-      x: startX,
-      y: startY,
-      progress: 0,
-      value: val,
-    });
-  };
+  const comboRef = useRef(0);
+  const maxComboRef = useRef(0);
+  const feverUntilRef = useRef(0);
+  const feverActiveRef = useRef(false);
+  const bossHopTimerRef = useRef(0);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const [feathers, setFeathers] = useState(BALANCE.initialFeathers);
   const [timeLeft, setTimeLeft] = useState(TOTAL_GAME_SEC);
+  const [combo, setCombo] = useState(0);
+  const [fever, setFever] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState<string>(SEGMENT_NAMES[0]);
   const [segmentIndex, setSegmentIndex] = useState(1);
-  const [moveDir, setMoveDir] = useState<MoveDir>(null);
-  const [subPhase, setSubPhase] = useState<SubPhase>('run');
-  const [bossHp, setBossHp] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [bossHp, setBossHp] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [bossScreen, setBossScreen] = useState({ x: 0, y: 0, scale: 0.2, visible: false });
   const [bossPet, setBossPet] = useState<PetCatalogEntry | null>(null);
   const [showTip, setShowTip] = useState(true);
   const [bossBanner, setBossBanner] = useState<string | null>(null);
+  const [lane, setLane] = useState<LaneIndex>(1);
+  const [subPhase, setSubPhase] = useState<SubPhase>('run');
 
-  const nextId = () => {
-    idCounterRef.current += 1;
-    return idCounterRef.current;
+  const nextId = () => { idCounterRef.current += 1; return idCounterRef.current; };
+
+  const isFeverActive = () => performance.now() < feverUntilRef.current;
+
+  const incrementCombo = () => {
+    comboRef.current += 1;
+    maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
+    setCombo(comboRef.current);
+    if (comboRef.current >= BALANCE.feverComboThreshold) {
+      feverUntilRef.current = performance.now() + BALANCE.feverDurationMs;
+      setFever(true);
+    }
   };
 
-  const setDirection = (dir: MoveDir) => {
-    moveDirRef.current = dir;
-    setMoveDir(dir);
+  const resetCombo = () => {
+    comboRef.current = 0;
+    setCombo(0);
+  };
+
+  const shiftLane = (dir: 'left' | 'right') => {
+    const cur = playerLaneRef.current;
+    if (dir === 'left' && cur > 0) {
+      playerLaneRef.current = (cur - 1) as LaneIndex;
+    } else if (dir === 'right' && cur < 2) {
+      playerLaneRef.current = (cur + 1) as LaneIndex;
+    }
+    setLane(playerLaneRef.current);
   };
 
   const showToast = (text: string) => {
@@ -534,21 +453,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     }
   };
 
-  const addParticles = (x: number, y: number, color: string, count = 16) => {
+  const addParticles = (x: number, y: number, color: string, count = 12) => {
     for (let i = 0; i < count; i++) {
       particlesRef.current.push({
-        id: nextId(),
-        x,
-        y,
+        id: nextId(), x, y,
         vx: (Math.random() - 0.5) * 9,
         vy: (Math.random() - 0.5) * 9 - 1,
-        color,
-        life: 1,
-        size: 2 + Math.random() * 4,
+        color, life: 1, size: 2 + Math.random() * 4,
       });
     }
-    if (particlesRef.current.length > 80) {
-      particlesRef.current = particlesRef.current.slice(-80);
+    if (particlesRef.current.length > MAX_PARTICLES) {
+      particlesRef.current = particlesRef.current.slice(-MAX_PARTICLES);
     }
   };
 
@@ -556,16 +471,20 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     const w = canvasWidthRef.current || 400;
     const h = canvasHeightRef.current || 500;
     floatTextsRef.current.push({
-      id: nextId(),
-      text,
+      id: nextId(), text,
       x: Math.max(24, Math.min(w - 24, x)),
       y: Math.max(28, Math.min(h - 28, y)),
-      color,
-      life: 1,
+      color, life: 1,
     });
     if (floatTextsRef.current.length > 18) {
       floatTextsRef.current = floatTextsRef.current.slice(-18);
     }
+  };
+
+  const spawnMagnetFeather = (startX: number, startY: number, val: number) => {
+    magnetFeathersRef.current.push({
+      id: nextId(), startX, startY, x: startX, y: startY, progress: 0, value: val,
+    });
   };
 
   const loadPhaseTrack = (phase: number) => {
@@ -575,16 +494,12 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     const endZ = VIEW_DEPTH + Math.min(PHASE_SCROLL_LENGTHS[phase] ?? 1100, 1100);
     trackEndZRef.current = endZ;
     bossAnchorZRef.current = endZ + 80;
-    bossXPctRef.current = 50;
+    bossLaneRef.current = 1;
     const boss = BOSSES[phase];
     bossHpRef.current = boss.hp;
     setBossHp(boss.hp);
     const candidates = PETS_CATALOG.filter((p) => p.tier === boss.tier);
-    setBossPet(
-      candidates.length > 0
-        ? candidates[Math.floor(Math.random() * candidates.length)]
-        : null,
-    );
+    setBossPet(candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null);
     scrollRef.current = 0;
     runClosingRef.current = false;
     tauntShownRef.current = false;
@@ -595,32 +510,26 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
 
   const screenIsClearForBoss = () => {
     const cam = scrollRef.current;
-    // 前方任何未通過／未淡完的數字門都擋住轉場，絕不默默清掉
     const gateBlocking = mathGatesRef.current.some((g) => {
       if (g.resolved && (g.fade ?? 0) <= 0) return false;
-      const dist = g.z - cam;
-      return dist > GATE_PASS_DEPTH;
+      return g.z - cam > GATE_PASS_DEPTH;
     });
     if (gateBlocking) return false;
-    const enemyBlocking = enemiesRef.current.some((e) => {
+    return !enemiesRef.current.some((e) => {
       if (e.hp <= 0) return false;
       const dist = e.z - cam;
       return dist > HIT_DEPTH && dist < VIEW_DEPTH + 100;
     });
-    return !enemyBlocking;
   };
 
   const beginBossFight = () => {
-    if (subPhaseRef.current === 'boss') return;
-    // 雙重保險：前方還有門就不開打
-    if (!screenIsClearForBoss()) return;
-
+    if (subPhaseRef.current === 'boss' || !screenIsClearForBoss()) return;
     subPhaseRef.current = 'boss';
     runClosingRef.current = false;
     const boss = BOSSES[phaseRef.current];
     bossHpRef.current = boss.hp;
     setBossHp(boss.hp);
-    bossXPctRef.current = 50;
+    bossLaneRef.current = 1;
     setPhaseLabel(boss.title);
     setSubPhase('boss');
     lastBossActionTimeRef.current = 0;
@@ -628,18 +537,14 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     enemiesRef.current = [];
     projectilesRef.current = [];
     mathGatesRef.current = mathGatesRef.current.filter((g) => g.resolved && (g.fade ?? 0) > 0);
-    // 從走道盡頭登場，之後持續走向玩家
     bossAnchorZRef.current = scrollRef.current + BOSS_SPAWN_DIST;
     bossIntroRef.current = BOSS_INTRO_MS;
     flashWhiteRef.current = 0.55;
     shakeRef.current = Math.max(shakeRef.current, 10);
     setBossBanner(boss.title);
-
     if (!tauntShownRef.current) {
       tauntShownRef.current = true;
-      const w = canvasWidthRef.current;
-      const h = canvasHeightRef.current;
-      addFloatText(boss.taunt, w * 0.5, h * 0.32, boss.color);
+      addFloatText(boss.taunt, canvasWidthRef.current * 0.5, canvasHeightRef.current * 0.32, boss.color);
     }
   };
 
@@ -649,8 +554,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   };
 
   const advanceAfterBoss = () => {
-    const phase = phaseRef.current;
-    if (phase >= 3) {
+    if (phaseRef.current >= 3) {
       subPhaseRef.current = 'sprint';
       sprintRef.current = 0;
       setPhaseLabel('決勝局 · 結算衝刺');
@@ -670,67 +574,178 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     subPhaseRef.current = 'ended';
     setSubPhase('ended');
     const { score } = computeFinalScore(feathersRef.current);
-    onGameEnd(score, 0, feathersRef.current);
+    onGameEnd(score, maxComboRef.current, feathersRef.current);
   };
 
-  const updateBossLateral = (behavior: BossBehavior, delta: number) => {
-    switch (behavior) {
-      case 'wall':
-        bossXPctRef.current = 50;
-        break;
-      case 'sidestep':
-        bossXPctRef.current = 50 + Math.sin(phaseTimerRef.current / 240) * 26;
-        break;
-      case 'clear_lob':
-        bossXPctRef.current = 50 + Math.sin(phaseTimerRef.current / 520) * 6;
-        break;
-      case 'jump_smash': {
-        const base = 50 + Math.sin(phaseTimerRef.current / 380) * 8;
-        if (Math.random() < 0.018 * (delta / 16)) {
-          bossXPctRef.current = Math.max(28, Math.min(72, base + (Math.random() > 0.5 ? 14 : -14)));
-        } else {
-          bossXPctRef.current = base;
-        }
-        break;
-      }
-      default:
-        bossXPctRef.current = 50;
+  const updateBossLane = (bossPhase: BossPhase, behavior: BossBehavior, delta: number) => {
+    if (bossPhase === 1) {
+      bossLaneRef.current = 1;
+      return;
+    }
+    if (bossPhase === 2) {
+      bossLaneRef.current = Math.sin(phaseTimerRef.current / 240) > 0 ? 2 : 0;
+      return;
+    }
+    bossHopTimerRef.current -= delta;
+    if (bossHopTimerRef.current <= 0) {
+      bossHopTimerRef.current = bossPhase >= 4 ? 680 : 920;
+      bossLaneRef.current = Math.floor(Math.random() * 3) as LaneIndex;
+    }
+    if (behavior === 'clear_lob') {
+      bossLaneRef.current = (Math.round(phaseTimerRef.current / 900) % 3) as LaneIndex;
     }
   };
 
   const spawnBossHazard = (behavior: BossBehavior) => {
+    const lane = Math.floor(Math.random() * 3) as LaneIndex;
     if (behavior === 'clear_lob') {
       enemiesRef.current.push({
-        id: nextId(),
-        xPct: 18 + Math.random() * 64,
-        z: bossAnchorZRef.current - 12,
-        maxHp: 3,
-        hp: 3,
-        reward: 1,
-        emoji: Math.random() < 0.5 ? '📦' : '🏐',
-        isHazard: true,
+        id: nextId(), lane, z: bossAnchorZRef.current - 12,
+        maxHp: 3, hp: 3, kind: 'bomber', state: 'approaching',
+        emoji: Math.random() < 0.5 ? '📦' : '🏐', reward: 1, speed: 1, isHazard: true,
       });
     } else if (behavior === 'jump_smash') {
       enemiesRef.current.push({
-        id: nextId(),
-        xPct: 14 + Math.random() * 72,
-        z: bossAnchorZRef.current - 12,
-        maxHp: 1,
-        hp: 1,
-        reward: 0,
-        emoji: '🔥',
-        isHazard: true,
+        id: nextId(), lane, z: bossAnchorZRef.current - 12,
+        maxHp: 1, hp: 1, kind: 'bomber', state: 'approaching',
+        emoji: '🔥', reward: 0, speed: 1.2, isHazard: true,
       });
     }
   };
+
+  const tryAutoFire = (w: number, h: number, px: number, playerY: number, frame: number) => {
+    if (fireCooldownRef.current > 0 || bossIntroRef.current > 0) return;
+    const cam = scrollRef.current;
+    const feverActive = isFeverActive();
+    const alive = projectilesRef.current.filter((p) => !p.dead).length;
+    if (alive >= MAX_PROJECTILES) return;
+
+    let target: Enemy | null = null;
+    let targetDist = Infinity;
+
+    if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
+      const bossDist = bossAnchorZRef.current - cam;
+      if (bossDist <= COMBAT_RANGE && bossDist > HIT_DEPTH) {
+        const grade = gradeShot(bossDist, COMBAT_RANGE);
+        const dmg = shotDamage(baseShotDamage(feathersRef.current), grade, feverActive);
+        projectilesRef.current.push({
+          id: nextId(), lane: playerLaneRef.current, xPct: playerXRef.current,
+          z: cam + HIT_DEPTH + 40, damage: dmg, grade,
+        });
+        fireCooldownRef.current = fireIntervalMs(feathersRef.current, feverActive);
+        addParticles(px, playerY - 36, grade === 'perfect' ? '#fde047' : '#38bdf8', 4);
+        return;
+      }
+    }
+
+    enemiesRef.current.forEach((e) => {
+      if (e.hp <= 0 || e.isHazard) return;
+      const dist = e.z - cam;
+      if (dist > COMBAT_RANGE || dist <= HIT_DEPTH) return;
+      if (e.lane !== playerLaneRef.current) return;
+      if (dist < targetDist) { targetDist = dist; target = e; }
+    });
+
+    if (!target) return;
+    const grade = gradeShot(targetDist, COMBAT_RANGE);
+    const dmg = shotDamage(baseShotDamage(feathersRef.current), grade, feverActive);
+    projectilesRef.current.push({
+      id: nextId(), lane: playerLaneRef.current, xPct: playerXRef.current,
+      z: cam + HIT_DEPTH + 40, damage: dmg, grade,
+    });
+    fireCooldownRef.current = fireIntervalMs(feathersRef.current, feverActive);
+    addParticles(px, playerY - 36, grade === 'perfect' ? '#fde047' : '#38bdf8', grade === 'perfect' ? 6 : 3);
+  };
+
+  const resolveProjectileHits = (w: number, h: number, frame: number) => {
+    const cam = scrollRef.current;
+    projectilesRef.current.forEach((proj) => {
+      if (proj.dead) return;
+      proj.z += (SCROLL_SPEED + BULLET_SPEED) * frame;
+
+      if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
+        const bossDist = bossAnchorZRef.current - cam;
+        const pDist = proj.z - cam;
+        if (Math.abs(pDist - bossDist) > 32) return;
+        const bX = laneToX(bossLaneRef.current);
+        const bScreen = worldToScreen(bX, bossDist, w, h);
+        const pScreen = worldToScreen(proj.xPct, pDist, w, h);
+        if (!bScreen || !pScreen) return;
+        if (Math.abs(pScreen.x - bScreen.x) > 48 * bScreen.scale) return;
+        proj.dead = true;
+        const grade = proj.grade;
+        if (grade === 'miss') { resetCombo(); return; }
+        incrementCombo();
+        bossHpRef.current = Math.max(0, bossHpRef.current - proj.damage);
+        setBossHp(bossHpRef.current);
+        shakeRef.current = Math.max(shakeRef.current, grade === 'perfect' ? 10 : 6);
+        addParticles(pScreen.x, pScreen.y, '#a78bfa', grade === 'perfect' ? 14 : 8);
+        addFloatText(GRADE_LABELS[grade], pScreen.x, pScreen.y - 18, GRADE_COLORS[grade]);
+        addFloatText(`-${proj.damage}`, pScreen.x, pScreen.y - 4, '#f87171');
+        if (bossHpRef.current <= 0) {
+          const boss = BOSSES[phaseRef.current];
+          feathersRef.current += boss.reward;
+          setFeathers(feathersRef.current);
+          triggerImpact('hard');
+          flashWhiteRef.current = Math.max(flashWhiteRef.current, 0.8);
+          addFloatText(`+${boss.reward} 羽毛！`, w * 0.5, h * 0.38, '#fbbf24');
+          addFloatText('擊破對手 · 勝利！', w * 0.5, h * 0.44, '#7dd3fc');
+          if (bScreen) { addParticles(bScreen.x, bScreen.y, '#fbbf24', 40); spawnMagnetFeather(bScreen.x, bScreen.y, boss.reward); }
+          if (phaseRef.current >= 3) setTimeout(() => finishGame(), 1200);
+          else { progressRef.current = (phaseRef.current + 1) / 4; scheduleAdvance(); }
+        }
+        return;
+      }
+
+      enemiesRef.current.forEach((e) => {
+        if (proj.dead || e.hp <= 0) return;
+        const dist = e.z - cam;
+        const pDist = proj.z - cam;
+        if (Math.abs(pDist - dist) > 28) return;
+        if (e.lane !== proj.lane) return;
+        proj.dead = true;
+        const grade = proj.grade;
+        const screen = worldToScreen(laneToX(e.lane), dist, w, h);
+        if (grade === 'miss') {
+          resetCombo();
+          if (screen) addFloatText(GRADE_LABELS.miss, screen.x, screen.y - 16, GRADE_COLORS.miss);
+          return;
+        }
+        incrementCombo();
+        e.hp -= proj.damage;
+        e.hitFlash = 6;
+        if (screen) {
+          addFloatText(GRADE_LABELS[grade], screen.x, screen.y - 20, GRADE_COLORS[grade]);
+          addParticles(screen.x, screen.y, '#f43f5e', grade === 'perfect' ? 12 : 6);
+        }
+        if (e.hp <= 0) {
+          triggerImpact('soft');
+          if (screen) {
+            addParticles(screen.x, screen.y, '#fbbf24', 20);
+            spawnMagnetFeather(screen.x, screen.y, e.reward);
+            addFloatText('接住!', screen.x, screen.y + 6, '#7dd3fc');
+            addFloatText(`+${e.reward}`, screen.x, screen.y + 22, '#fbbf24');
+          }
+          feathersRef.current += e.reward;
+          setFeathers(feathersRef.current);
+        } else if (screen) {
+          addFloatText(`-${proj.damage}`, screen.x, screen.y - 4, '#ef4444');
+        }
+      });
+    });
+    projectilesRef.current = projectilesRef.current.filter((p) => {
+      if (p.dead) return false;
+      const dist = p.z - cam;
+      return dist > 0 && dist < COMBAT_RANGE + 30;
+    });
+  };
+
 
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = getAvatarUrl(playerAvatar, playerName);
-    img.onload = () => {
-      avatarImgRef.current = img;
-    };
+    img.onload = () => { avatarImgRef.current = img; };
   }, [playerAvatar, playerName]);
 
   useEffect(() => {
@@ -753,9 +768,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     resize();
     window.addEventListener('resize', resize);
 
-    const blockTouch = (e: TouchEvent) => {
-      if (e.cancelable) e.preventDefault();
-    };
+    const blockTouch = (e: TouchEvent) => { if (e.cancelable) e.preventDefault(); };
     const el = containerRef.current;
     el?.addEventListener('touchmove', blockTouch, { passive: false });
 
@@ -785,19 +798,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         tipUntilRef.current = -1;
         setShowTip(false);
       }
+      const feverActive = isFeverActive();
+      if (feverActive !== feverActiveRef.current) {
+        feverActiveRef.current = feverActive;
+        setFever(feverActive);
+      }
 
-      if (vignetteRef.current > 0) {
-        vignetteRef.current = Math.max(0, vignetteRef.current - rawDelta * 0.0018);
-      }
-      if (flashWhiteRef.current > 0) {
-        flashWhiteRef.current = Math.max(0, flashWhiteRef.current - rawDelta * 0.0024);
-      }
+      if (vignetteRef.current > 0) vignetteRef.current = Math.max(0, vignetteRef.current - rawDelta * 0.0018);
+      if (flashWhiteRef.current > 0) flashWhiteRef.current = Math.max(0, flashWhiteRef.current - rawDelta * 0.0024);
 
       const canvas = canvasRef.current;
-      if (!canvas) {
-        requestRef.current = requestAnimationFrame(gameStep);
-        return;
-      }
+      if (!canvas) { requestRef.current = requestAnimationFrame(gameStep); return; }
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -812,58 +823,40 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         secondsTimerRef.current -= 1000;
         timeLeftRef.current = Math.max(0, timeLeftRef.current - 1);
         setTimeLeft(timeLeftRef.current);
-        if (timeLeftRef.current <= 0 && subPhaseRef.current !== 'sprint') {
-          finishGame();
-          return;
-        }
+        if (timeLeftRef.current <= 0 && subPhaseRef.current !== 'sprint') { finishGame(); return; }
       }
 
-      if (moveDirRef.current === 'left') {
-        playerXRef.current = Math.max(PLAYER_X_MIN, playerXRef.current - MOVE_SPEED * frame);
-      } else if (moveDirRef.current === 'right') {
-        playerXRef.current = Math.min(PLAYER_X_MAX, playerXRef.current + MOVE_SPEED * frame);
-      }
-      const tiltTarget = moveDirRef.current === 'left' ? -0.25 : moveDirRef.current === 'right' ? 0.25 : 0;
-      playerTiltRef.current += (tiltTarget - playerTiltRef.current) * 0.2 * (delta / 16.67);
+      const targetX = laneToX(playerLaneRef.current);
+      playerXRef.current += (targetX - playerXRef.current) * LANE_LERP * frame;
       const playerScreen = worldToScreen(playerXRef.current, 0, w, h);
       const px = playerScreen?.x ?? w * 0.5;
 
       if (subPhaseRef.current === 'sprint') {
         sprintRef.current += frame;
         progressRef.current = Math.min(1, 0.97 + (sprintRef.current / 90) * 0.03);
-        if (sprintRef.current > 90) {
-          finishGame();
-          return;
-        }
+        if (sprintRef.current > 90) { finishGame(); return; }
       } else if (subPhaseRef.current === 'run') {
         phaseTimerRef.current += delta;
         scrollRef.current += SCROLL_SPEED * frame;
-
         const runTarget = trackEndZRef.current - VIEW_DEPTH * 0.35;
         const runPct = Math.min(1, scrollRef.current / Math.max(1, runTarget));
-        // 全局進度：每局 0.55 賽道 + 0.45 Boss
         progressRef.current = (phaseRef.current + runPct * 0.55) / 4;
-
-        if (
-          !runClosingRef.current
-          && (phaseTimerRef.current / 1000 >= RUN_PHASE_SEC
-            || scrollRef.current >= trackEndZRef.current - VIEW_DEPTH * 0.35)
-        ) {
+        if (!runClosingRef.current && (phaseTimerRef.current / 1000 >= RUN_PHASE_SEC || scrollRef.current >= runTarget)) {
           runClosingRef.current = true;
           setPhaseLabel('即將對決…');
-          // 不再剔除前方數字門／防守者——等玩家自然通過後再進 Boss
         }
-
-        if (runClosingRef.current && screenIsClearForBoss()) {
-          beginBossFight();
-        }
+        if (runClosingRef.current && screenIsClearForBoss()) beginBossFight();
       } else if (subPhaseRef.current === 'boss') {
         phaseTimerRef.current += delta;
-        // Boss 戰：攝影機幾乎不動，改由 Boss 從盡頭走向玩家
-        if (bossIntroRef.current <= 0 && bossHpRef.current > 0) {
-          bossAnchorZRef.current -= BOSS_APPROACH_SPEED * frame;
-        }
         const boss = BOSSES[phaseRef.current];
+        const bPhase = bossPhaseFromHp(bossHpRef.current, boss.hp);
+        let speed = BOSS_APPROACH_SPEED;
+        if (bPhase >= 3) speed *= 1.25;
+        if (bPhase >= 4) speed *= 1.2;
+        if (bossIntroRef.current <= 0 && bossHpRef.current > 0) {
+          bossAnchorZRef.current -= speed * frame;
+        }
+        updateBossLane(bPhase, boss.behavior, delta);
         const hpPct = 1 - bossHpRef.current / Math.max(1, boss.hp);
         progressRef.current = (phaseRef.current + 0.55 + hpPct * 0.45) / 4;
       }
@@ -875,387 +868,151 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
 
       if (subPhaseRef.current === 'run' || subPhaseRef.current === 'boss') {
         fireCooldownRef.current -= delta;
-        const aliveProjs = projectilesRef.current.filter((p) => !p.dead).length;
-        if (fireCooldownRef.current <= 0 && aliveProjs < MAX_PROJECTILES && bossIntroRef.current <= 0) {
-          let fireInterval = 220;
-          let burstCount = 1;
-          let damage = 1;
-          const f = feathersRef.current;
-          if (f >= 20 && f < 50) { fireInterval = 180; burstCount = 2; }
-          else if (f >= 50 && f < 100) { fireInterval = 150; burstCount = 2; }
-          else if (f >= 100) { fireInterval = 130; burstCount = 3; damage = 2; }
-
-          if (aliveProjs >= MAX_PROJECTILES - 4) burstCount = 1;
-
-          const powerShot = f >= 100;
-          const offsets = burstCount === 1 ? [0] : burstCount === 2 ? [-2.4, 2.4] : [-3.4, 0, 3.4];
-          const spawnZ = scrollRef.current + HIT_DEPTH + 50;
-          offsets.forEach((offsetPct) => {
-            if (projectilesRef.current.filter((p) => !p.dead).length >= MAX_PROJECTILES) return;
-            projectilesRef.current.push({
-              id: nextId(),
-              xPct: playerXRef.current,
-              offsetPct,
-              z: spawnZ,
-              damage,
-              powerShot,
-            });
-          });
-          fireCooldownRef.current = fireInterval;
-
-          // Muzzle flash visual juice
-          addParticles(px, playerY - 36, powerShot ? '#fde047' : '#38bdf8', powerShot ? 5 : 3);
-
-          if (powerShot && Math.random() < 0.15) {
-            addFloatText('殺球!', px + (Math.random() - 0.5) * 30, playerY - 44, '#fde047');
-          }
-        }
+        tryAutoFire(w, h, px, playerY, frame);
+        resolveProjectileHits(w, h, frame);
       }
 
-      projectilesRef.current.forEach((proj) => {
-        proj.z += (SCROLL_SPEED + BULLET_SPEED) * frame;
-      });
-      projectilesRef.current = projectilesRef.current.filter((proj) => {
-        const dist = proj.z - scrollRef.current;
-        const bossDist = bossAnchorZRef.current - scrollRef.current;
-        // 跑酷：飛到走道一半；Boss：至少打得到站定距離
-        const maxReach = subPhaseRef.current === 'boss'
-          ? Math.max(COMBAT_RANGE + 20, bossDist + BOSS_HIT_Z + 8)
-          : COMBAT_RANGE + 20;
-        return !proj.dead && dist > 0 && dist < maxReach;
-      });
-
+      const warningLanes = new Set<LaneIndex>();
       if (subPhaseRef.current === 'run') {
-        // Arrow a Row Mechanic: Shoot Math Gates to upgrade good ones or weaken bad ones!
-        mathGatesRef.current.forEach((gate) => {
-          if (gate.resolved) return;
-          const gDist = gate.z - cam;
-          if (gDist < 20 || gDist > COMBAT_RANGE + 40) return;
-
-          projectilesRef.current.forEach((proj) => {
-            if (proj.dead) return;
-            const pDist = proj.z - cam;
-            if (Math.abs(pDist - gDist) > 28) return;
-
-            const projX = proj.xPct + proj.offsetPct;
-            const chooseLeft = projX < 50;
-            const op = chooseLeft ? gate.left : gate.right;
-            const screen = worldToScreen(chooseLeft ? 24 : 76, gDist, w, h);
-            if (!screen) return;
-
-            proj.dead = true;
-            shakeRef.current = Math.max(shakeRef.current, 2);
-
-            const bad = isBadOp(op);
-            if (bad) {
-              if (op.type === 'sub') {
-                op.value = Math.max(0, op.value - Math.max(1, Math.floor(op.value * 0.12)));
-              } else if (op.type === 'div') {
-                op.value = Math.max(1, Number((op.value - 0.08).toFixed(2)));
-              } else if (op.type === 'pct_sub') {
-                op.value = Math.max(0, op.value - 2);
-              }
-              op.label = formatGateLabel(op);
-              addParticles(screen.x, screen.y, '#ef4444', 4);
-              addFloatText(`削弱! ${op.label}`, screen.x, screen.y - 12, '#fca5a5');
-            } else {
-              if (op.type === 'add') {
-                op.value += Math.max(2, Math.floor(op.value * 0.06));
-              } else if (op.type === 'mul') {
-                op.value = Number((op.value + 0.03).toFixed(2));
-              } else if (op.type === 'pct_add') {
-                op.value += 2;
-              }
-              op.label = formatGateLabel(op);
-              addParticles(screen.x, screen.y, '#38bdf8', 6);
-              addFloatText(`升級! ${op.label}`, screen.x, screen.y - 12, '#7dd3fc');
-            }
-          });
-        });
-
-        mathGatesRef.current.forEach((gate) => {
-          if (gate.resolved) {
-            if (gate.fade != null && gate.fade > 0) {
-              gate.fade = Math.max(0, gate.fade - delta * 0.0045);
-            }
-            return;
-          }
-          const dist = gate.z - scrollRef.current;
-
-          if (gate.isMystery && !gate.revealed && dist <= VIEW_DEPTH * 0.55) {
-            gate.revealed = true;
-            const mid = worldToScreen(50, dist, w, h);
-            if (mid) {
-              addParticles(mid.x - 36, mid.y, '#c4b5fd', 8);
-              addParticles(mid.x + 36, mid.y, '#c4b5fd', 8);
-              addFloatText('解鎖！', mid.x, mid.y - 18, '#c4b5fd');
-            }
-          }
-
-          // 必須整扇門通過腳下後才結算，避免門板還在畫面中央就消失
-          if (dist <= GATE_PASS_DEPTH) {
-            gate.resolved = true;
-            gate.fade = 1;
-            const op = playerXRef.current < 50 ? gate.left : gate.right;
-            feathersRef.current = applyGate(feathersRef.current, op);
-            setFeathers(feathersRef.current);
-            const bad = isBadOp(op);
-            const good = isGoodOp(op);
-            addFloatText(
-              good ? '通過!' : bad ? (Math.random() > 0.5 ? '出界!' : '撞網!') : op.label,
-              px,
-              playerY - 32,
-              bad ? '#f87171' : '#7dd3fc',
-            );
-            addFloatText(op.label, px, playerY - 50, bad ? '#fca5a5' : '#fde68a');
-            addParticles(px, playerY, bad ? '#ef4444' : '#38bdf8', bad ? 28 : 16);
-            if (bad) {
-              triggerImpact('fail');
-              showToast(`選錯門 ${op.label}`);
-            } else if (good) {
-              triggerImpact('soft');
-            }
-          }
-        });
-        mathGatesRef.current = mathGatesRef.current.filter(
-          (g) => !g.resolved || (g.fade != null && g.fade > 0.02),
-        );
-
         enemiesRef.current.forEach((e) => {
           if (e.hp <= 0) return;
-          const dist = e.z - scrollRef.current;
-          const screen = worldToScreen(e.xPct, dist, w, h);
-
+          const dist = e.z - cam;
+          e.state = enemyStateFromDist(dist);
+          if (e.state === 'warning' || e.state === 'attacking') warningLanes.add(e.lane);
           if (dist <= HIT_DEPTH) {
-            if (Math.abs(playerXRef.current - e.xPct) <= HIT_X_PCT) {
-              const loss = Math.min(feathersRef.current, e.hp);
+            if (e.lane === playerLaneRef.current || Math.abs(playerXRef.current - laneToX(e.lane)) < 14) {
+              const loss = Math.min(feathersRef.current, e.maxHp);
               feathersRef.current = Math.max(0, feathersRef.current - loss);
               setFeathers(feathersRef.current);
               e.hp = 0;
+              resetCombo();
               triggerImpact('fail');
-              addParticles(px, playerY, '#ef4444', 32);
+              addParticles(px, playerY, '#ef4444', 28);
               addFloatText(`-${loss}`, px, playerY - 28, '#ef4444');
               showToast('撞到防守者');
               if (feathersRef.current <= 0) finishGame();
-            } else if (dist < -40) {
-              e.hp = 0;
-            }
+            } else if (dist < -40) e.hp = 0;
             return;
           }
-
-          if (!screen || dist > COMBAT_RANGE) return;
-
-          projectilesRef.current.forEach((proj) => {
-            if (proj.dead) return;
-            const pDist = proj.z - scrollRef.current;
-            if (pDist > COMBAT_RANGE) return;
-            if (Math.abs(pDist - dist) > 28) return;
-            if (Math.abs((proj.xPct + proj.offsetPct) - e.xPct) > 14) return;
-            proj.dead = true;
-            e.hp -= proj.damage;
-            e.hitFlash = 6;
-            addParticles(screen.x, screen.y, '#f43f5e', proj.damage >= 2 ? 10 : 5);
-            if (e.hp <= 0) {
-              triggerImpact('soft');
-              addParticles(screen.x, screen.y, '#fbbf24', 22);
-              spawnMagnetFeather(screen.x, screen.y, e.reward);
-              feathersRef.current += e.reward;
-              setFeathers(feathersRef.current);
-              addFloatText('接住!', screen.x, screen.y + 6, '#7dd3fc');
-              addFloatText(`+${e.reward}`, screen.x, screen.y + 22, '#fbbf24');
-            } else if (proj.damage >= 2 || Math.random() < 0.4) {
-              addFloatText(`-${proj.damage}`, screen.x, screen.y - 8, '#ef4444');
-            }
-          });
         });
         enemiesRef.current = enemiesRef.current.filter((e) => e.hp > 0);
+
+        mathGatesRef.current.forEach((gate) => {
+          if (gate.resolved) {
+            if (gate.fade != null && gate.fade > 0) gate.fade = Math.max(0, gate.fade - delta * 0.0045);
+            return;
+          }
+          const dist = gate.z - cam;
+          if (dist <= GATE_PASS_DEPTH) {
+            gate.resolved = true;
+            gate.fade = 1;
+            const laneIdx = xToNearestLane(playerXRef.current);
+            const op = gate.ops[laneIdx];
+            feathersRef.current = applyGate(feathersRef.current, op);
+            setFeathers(feathersRef.current);
+            const good = isGoodOp(op);
+            const bad = isBadOp(op);
+            if (good) incrementCombo();
+            else if (bad) resetCombo();
+            addFloatText(good ? '通過!' : bad ? '撞網!' : op.label, px, playerY - 32, bad ? '#f87171' : '#7dd3fc');
+            addFloatText(op.label, px, playerY - 50, bad ? '#fca5a5' : '#fde68a');
+            addParticles(px, playerY, bad ? '#ef4444' : '#38bdf8', bad ? 24 : 14);
+            if (bad) { triggerImpact('fail'); showToast(`選錯門 ${op.label}`); }
+            else if (good) triggerImpact('soft');
+          }
+        });
+        mathGatesRef.current = mathGatesRef.current.filter((g) => !g.resolved || (g.fade != null && g.fade > 0.02));
       }
 
       if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
         const boss = BOSSES[phaseRef.current];
-        const bossDist = bossAnchorZRef.current - scrollRef.current;
-
-        updateBossLateral(boss.behavior, delta);
-
+        const bPhase = bossPhaseFromHp(bossHpRef.current, boss.hp);
         const interval = bossActionInterval(boss.behavior);
-        if (
-          (boss.behavior === 'clear_lob' || boss.behavior === 'jump_smash')
+        if ((boss.behavior === 'clear_lob' || boss.behavior === 'jump_smash')
           && phaseTimerRef.current - lastBossActionTimeRef.current >= interval
-          && bossIntroRef.current <= 0
-        ) {
+          && bossIntroRef.current <= 0) {
           lastBossActionTimeRef.current = phaseTimerRef.current;
           spawnBossHazard(boss.behavior);
         }
 
         enemiesRef.current.forEach((e) => {
           if (e.isHazard) e.z -= HAZARD_SPEED * frame;
-          const dist = e.z - scrollRef.current;
+          const dist = e.z - cam;
+          e.state = enemyStateFromDist(dist);
+          if (e.state === 'warning' || e.state === 'attacking') warningLanes.add(e.lane);
           if (dist <= HIT_DEPTH) {
-            if (Math.abs(playerXRef.current - e.xPct) <= HIT_X_PCT) {
-              const loss = e.emoji === '🔥'
-                ? Math.min(feathersRef.current, 8)
+            if (e.lane === playerLaneRef.current) {
+              const loss = e.emoji === '🔥' ? Math.min(feathersRef.current, 8)
                 : Math.min(feathersRef.current, Math.max(3, e.hp));
               feathersRef.current = Math.max(0, feathersRef.current - loss);
               setFeathers(feathersRef.current);
               e.hp = 0;
+              resetCombo();
               triggerImpact('fail');
-              addParticles(px, playerY, '#ef4444', 26);
+              addParticles(px, playerY, '#ef4444', 22);
               addFloatText(`-${loss}`, px, playerY - 28, '#ef4444');
-              showToast(e.emoji === '🔥' ? '被殺球擊中' : '撞到防守者');
+              showToast(e.emoji === '🔥' ? '被殺球擊中' : '撞到障礙');
               if (feathersRef.current <= 0) finishGame();
-            } else if (dist < -50) {
-              e.hp = 0;
-            }
-            return;
+            } else if (dist < -50) e.hp = 0;
           }
-          if (e.isHazard) return;
-          if (dist > COMBAT_RANGE) return;
-          const screen = worldToScreen(e.xPct, dist, w, h);
-          if (!screen) return;
-          projectilesRef.current.forEach((proj) => {
-            if (proj.dead) return;
-            const pDist = proj.z - scrollRef.current;
-            if (pDist > COMBAT_RANGE) return;
-            if (Math.abs(proj.z - e.z) > 36) return;
-            if (Math.abs((proj.xPct + proj.offsetPct) - e.xPct) > 14) return;
-            proj.dead = true;
-            e.hp -= proj.damage;
-            e.hitFlash = 6;
-            if (e.hp <= 0) {
-              feathersRef.current += e.reward;
-              setFeathers(feathersRef.current);
-              spawnMagnetFeather(screen.x, screen.y, e.reward);
-              addFloatText(`+${e.reward}`, screen.x, screen.y - 8, '#fbbf24');
-            }
-          });
         });
-        enemiesRef.current = enemiesRef.current.filter((e) => e.hp > 0 && e.z > scrollRef.current - 80);
+        enemiesRef.current = enemiesRef.current.filter((e) => e.hp > 0 && e.z > cam - 80);
 
-        // Boss 走進射程內就可打（走道一半）
-        if (bossDist <= COMBAT_RANGE + 40 && bossDist > -40) {
-          const bScreen = worldToScreen(bossXPctRef.current, bossDist, w, h);
-          projectilesRef.current.forEach((proj) => {
-            if (proj.dead) return;
-            const pDist = proj.z - scrollRef.current;
-            const pScreen = worldToScreen(proj.xPct + proj.offsetPct, pDist, w, h);
-            if (!bScreen || !pScreen) return;
-
-            const dx = Math.abs(pScreen.x - bScreen.x);
-            const dy = Math.abs(pScreen.y - bScreen.y);
-            const hitR_X = Math.max(28, 68 * bScreen.scale);
-            const hitR_Y = Math.max(28, 60 * bScreen.scale);
-
-            if (dx <= hitR_X && dy <= hitR_Y) {
-              proj.dead = true;
-              bossHpRef.current = Math.max(0, bossHpRef.current - proj.damage);
-              setBossHp(bossHpRef.current);
-              shakeRef.current = Math.max(shakeRef.current, proj.powerShot ? 8 : 5);
-              addParticles(pScreen.x, pScreen.y, '#a78bfa', proj.damage >= 2 ? 12 : 7);
-              addFloatText(`-${proj.damage}`, pScreen.x, pScreen.y - 8, '#f87171');
-              if (proj.damage >= 2) addFloatText('殺球!', pScreen.x, pScreen.y - 22, '#fde047');
-
-              if (bossHpRef.current <= 0) {
-                feathersRef.current += boss.reward;
-                setFeathers(feathersRef.current);
-                triggerImpact('hard');
-                flashWhiteRef.current = Math.max(flashWhiteRef.current, 0.8);
-                addFloatText(`+${boss.reward} 羽毛！`, w * 0.5, h * 0.38, '#fbbf24');
-                addFloatText('擊破對手 · 勝利！', w * 0.5, h * 0.44, '#7dd3fc');
-                if (bScreen) {
-                  addParticles(bScreen.x, bScreen.y, '#fbbf24', 50);
-                  spawnMagnetFeather(bScreen.x, bScreen.y, boss.reward);
-                }
-
-                if (phaseRef.current >= 3) {
-                  // Final Boss Defeated! Finish game and show settlement rewards
-                  setTimeout(() => {
-                    finishGame();
-                  }, 1200);
-                } else {
-                  progressRef.current = (phaseRef.current + 1) / 4;
-                  setProgress(progressRef.current);
-                  scheduleAdvance();
-                }
-              }
-            }
-          });
-        }
-
-        // 穿過玩家：扣羽毛，並從盡頭再次壓上
+        const bossDist = bossAnchorZRef.current - cam;
         if (bossHpRef.current > 0 && bossDist <= HIT_DEPTH) {
-          const overlapped = Math.abs(playerXRef.current - bossXPctRef.current) <= BOSS_CONTACT_X;
-          if (overlapped) {
-            const loss = Math.min(
-              feathersRef.current,
-              Math.max(10, Math.floor(feathersRef.current * BOSS_PASS_LOSS_PCT)),
-            );
+          const sameLane = playerLaneRef.current === bossLaneRef.current;
+          if (sameLane) {
+            const lossPct = bPhase >= 4 ? BOSS_PASS_LOSS_PCT * 1.25 : BOSS_PASS_LOSS_PCT;
+            const loss = Math.min(feathersRef.current, Math.max(10, Math.floor(feathersRef.current * lossPct)));
             feathersRef.current = Math.max(0, feathersRef.current - loss);
             setFeathers(feathersRef.current);
+            resetCombo();
             triggerImpact('fail');
-            addParticles(px, playerY, '#ef4444', 34);
+            addParticles(px, playerY, '#ef4444', 30);
             addFloatText(`-${loss}`, px, playerY - 28, '#ef4444');
             showToast('被對手穿過！');
-            if (feathersRef.current <= 0) {
-              finishGame();
-              return;
-            }
+            if (feathersRef.current <= 0) { finishGame(); return; }
           } else {
             addFloatText('閃過！', px, playerY - 36, '#7dd3fc');
           }
-          bossAnchorZRef.current = scrollRef.current + BOSS_SPAWN_DIST;
-          bossXPctRef.current = 50;
+          bossAnchorZRef.current = cam + BOSS_SPAWN_DIST;
+          bossLaneRef.current = 1;
           addFloatText('對手再次從底線壓上！', w * 0.5, h * 0.3, boss.color);
         }
       }
 
       {
-        const bossDist = bossAnchorZRef.current - scrollRef.current;
-        const bScreen = worldToScreen(bossXPctRef.current, bossDist, w, h);
-        if (
-          bScreen
-          && bossDist > -60
-          && bossDist < VIEW_DEPTH + 120
-          && bossHpRef.current > 0
-          && subPhaseRef.current !== 'sprint'
-          && subPhaseRef.current !== 'ended'
-        ) {
-          setBossScreen({
-            x: Math.max(36, Math.min(w - 36, bScreen.x)),
-            y: Math.max(36, Math.min(h - 30, bScreen.y)),
-            scale: bScreen.scale,
-            visible: true,
-          });
+        const bossDist = bossAnchorZRef.current - cam;
+        const bScreen = worldToScreen(laneToX(bossLaneRef.current), bossDist, w, h);
+        if (bScreen && bossDist > -60 && bossDist < VIEW_DEPTH + 120 && bossHpRef.current > 0
+          && subPhaseRef.current !== 'sprint' && subPhaseRef.current !== 'ended') {
+          setBossScreen({ x: Math.max(36, Math.min(w - 36, bScreen.x)), y: Math.max(36, Math.min(h - 30, bScreen.y)), scale: bScreen.scale, visible: true });
         } else {
           setBossScreen((s) => (s.visible ? { ...s, visible: false } : s));
         }
       }
 
       if (shakeRef.current > 0) shakeRef.current -= delta * 0.08;
-
       magnetFeathersRef.current.forEach((mf) => {
         mf.progress += delta * 0.0038;
         const t = Math.min(1, mf.progress);
         const easeT = Math.pow(t, 2);
         mf.x = mf.startX + (px - mf.startX) * easeT + Math.sin(t * Math.PI) * 32;
         mf.y = mf.startY + (playerY - mf.startY) * easeT;
-        if (t >= 1) {
-          addParticles(px, playerY, '#38bdf8', 4);
-        }
+        if (t >= 1) addParticles(px, playerY, '#38bdf8', 4);
       });
       magnetFeathersRef.current = magnetFeathersRef.current.filter((mf) => mf.progress < 1);
-
       particlesRef.current = particlesRef.current
         .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, vy: p.vy + 0.04, life: p.life - delta * 0.0022 }))
         .filter((p) => p.life > 0);
+      if (particlesRef.current.length > MAX_PARTICLES) particlesRef.current = particlesRef.current.slice(-MAX_PARTICLES);
       floatTextsRef.current = floatTextsRef.current
         .map((t) => ({ ...t, y: t.y - delta * 0.045, life: t.life - delta * 0.002 }))
         .filter((t) => t.life > 0);
 
       const shakeX = shakeRef.current > 0 ? (Math.random() - 0.5) * shakeRef.current : 0;
       const shakeY = shakeRef.current > 0 ? (Math.random() - 0.5) * shakeRef.current * 0.5 : 0;
-
       ctx.clearRect(0, 0, w, h);
-
       const theme = COURT_THEMES[Math.min(COURT_THEMES.length - 1, phaseRef.current)] ?? COURT_THEMES[0];
 
       const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -1264,6 +1021,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       skyGrad.addColorStop(1, theme.sky[2]);
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, w, horizonY);
+      drawParallax(ctx, w, horizonY, scrollRef.current + (subPhaseRef.current === 'boss' ? phaseTimerRef.current * 0.08 : 0), theme);
 
       ctx.fillStyle = theme.haze;
       ctx.beginPath();
@@ -1282,7 +1040,6 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       const farR = w * (0.5 + ROAD_HALF_FAR);
       const nearL = w * (0.5 - ROAD_HALF_NEAR);
       const nearR = w * (0.5 + ROAD_HALF_NEAR);
-
       const roadGrad = ctx.createLinearGradient(0, horizonY, 0, h);
       roadGrad.addColorStop(0, theme.road[0]);
       roadGrad.addColorStop(1, theme.road[1]);
@@ -1306,65 +1063,32 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       ctx.lineTo(nearR, h);
       ctx.stroke();
       ctx.shadowBlur = 0;
-
       drawCourtMarkings(ctx, w, h, horizonY, scrollRef.current);
 
-      ctx.strokeStyle = 'rgba(226, 232, 240, 0.28)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([16, 20]);
-      ctx.lineDashOffset = -(scrollRef.current + (subPhaseRef.current === 'boss' ? phaseTimerRef.current * 0.15 : 0)) * 1.3;
-      ctx.beginPath();
-      ctx.moveTo(w * 0.5, horizonY);
-      ctx.lineTo(w * 0.5, h);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      warningLanes.forEach((ln) => drawLaneGlow(ctx, ln, w, h, horizonY, theme.accent, 0.22));
 
-      // 靠近數字門時高亮即將選中的半場
-      if (subPhaseRef.current === 'run') {
-        const nearGate = mathGatesRef.current.find((g) => {
-          if (g.resolved) return false;
-          const d = g.z - cam;
-          return d > HIT_DEPTH && d < 110;
-        });
-        if (nearGate) {
-          const chooseLeft = playerXRef.current < 50;
-          ctx.save();
-          ctx.globalAlpha = 0.12;
-          ctx.fillStyle = theme.accent;
-          ctx.beginPath();
-          if (chooseLeft) {
-            ctx.moveTo(farL, horizonY);
-            ctx.lineTo(w * 0.5, horizonY);
-            ctx.lineTo(w * 0.5, h);
-            ctx.lineTo(nearL, h);
-          } else {
-            ctx.moveTo(w * 0.5, horizonY);
-            ctx.lineTo(farR, horizonY);
-            ctx.lineTo(nearR, h);
-            ctx.lineTo(w * 0.5, h);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
-      }
+      const selectedLane = playerLaneRef.current;
+      LANE_X.forEach((lx, i) => {
+        if (i !== selectedLane) return;
+        const pos = worldToScreen(lx, 30, w, h);
+        if (!pos) return;
+        ctx.save();
+        ctx.globalAlpha = 0.1;
+        ctx.fillStyle = theme.accent;
+        const hw = roadHalfWidthAt(pos.progress, w) / 3.5;
+        ctx.fillRect(pos.x - hw, pos.y - 20, hw * 2, h - pos.y + 20);
+        ctx.restore();
+      });
 
-      type DrawItem =
-        | { kind: 'gate'; dist: number; gate: MathGate }
-        | { kind: 'enemy'; dist: number; enemy: Enemy }
-        | { kind: 'proj'; dist: number; proj: Projectile };
-
+      type DrawItem = { kind: 'gate' | 'enemy' | 'proj'; dist: number; gate?: MathGate; enemy?: Enemy; proj?: Projectile };
       const drawQueue: DrawItem[] = [];
-
       if (subPhaseRef.current === 'run') {
         mathGatesRef.current.forEach((gate) => {
           const dist = gate.z - cam;
-          // 含淡出中的已通過門
           if (gate.resolved && (gate.fade == null || gate.fade <= 0.02)) return;
           if (dist > -60 && dist < VIEW_DEPTH + 40) drawQueue.push({ kind: 'gate', dist, gate });
         });
       }
-
       if (subPhaseRef.current === 'run' || subPhaseRef.current === 'boss') {
         enemiesRef.current.forEach((enemy) => {
           if (enemy.hp <= 0) return;
@@ -1377,97 +1101,50 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           if (dist > 0 && dist < VIEW_DEPTH) drawQueue.push({ kind: 'proj', dist, proj });
         });
       }
-
       const kindOrder = { proj: 0, enemy: 1, gate: 2 } as const;
-      drawQueue.sort((a, b) => {
-        if (Math.abs(a.dist - b.dist) < 12) return kindOrder[a.kind] - kindOrder[b.kind];
-        return b.dist - a.dist;
-      });
+      drawQueue.sort((a, b) => Math.abs(a.dist - b.dist) < 12 ? kindOrder[a.kind] - kindOrder[b.kind] : b.dist - a.dist);
 
       drawQueue.forEach((item) => {
-        if (item.kind === 'gate') {
+        if (item.kind === 'gate' && item.gate) {
           const { gate, dist } = item;
-          const left = worldToScreen(24, dist, w, h);
-          const right = worldToScreen(76, dist, w, h);
-          if (!left || !right) return;
-          const showMystery = gate.isMystery && !gate.revealed;
-          const near = dist < 130;
-          const chooseLeft = playerXRef.current < 50;
-
-          if (left.progress > 0.2) {
-            ctx.save();
-            ctx.globalAlpha = Math.min(0.55, 0.2 + left.progress * 0.4);
-            ctx.strokeStyle = '#e2e8f0';
-            ctx.lineWidth = Math.max(2, 3 * left.scale);
-            ctx.beginPath();
-            ctx.moveTo(left.x + shakeX, left.y - 36 * left.scale);
-            ctx.quadraticCurveTo(
-              w * 0.5 + shakeX,
-              left.y - 58 * left.scale,
-              right.x + shakeX,
-              right.y - 36 * right.scale,
-            );
-            ctx.stroke();
-            ctx.restore();
-          }
-
-          ([
-            { screen: left, op: gate.left, side: 'left' as const },
-            { screen: right, op: gate.right, side: 'right' as const },
-          ]).forEach(({ screen, op, side }) => {
+          const fadeMul = gate.resolved ? Math.max(0, gate.fade ?? 0) : 1;
+          gate.ops.forEach((op, laneIdx) => {
+            const screen = worldToScreen(LANE_X[laneIdx], dist, w, h);
+            if (!screen) return;
             const bad = isBadOp(op);
             const good = isGoodOp(op);
-            const selected = near && !gate.resolved && ((side === 'left') === chooseLeft);
+            const selected = !gate.resolved && laneIdx === selectedLane && dist < 130;
             ctx.save();
-            const fadeMul = gate.resolved ? Math.max(0, gate.fade ?? 0) : 1;
-            // 靠近時壓低門板高度，避免「腳邊觸發但畫面還是一整片牆」的錯覺
-            const heightMul = 0.55 + (1 - screen.progress) * 0.45;
             ctx.globalAlpha = Math.min(0.95, 0.48 + screen.progress * 0.5) * fadeMul;
-            const rw = 118 * screen.scale;
-            const rh = 88 * screen.scale * heightMul;
+            const rw = 88 * screen.scale;
+            const rh = 72 * screen.scale;
             const rx = screen.x - rw / 2 + shakeX;
             const ry = screen.y - rh * 0.55;
-            const r = 8 * screen.scale;
-            ctx.fillStyle = showMystery
-              ? 'rgba(109, 40, 217, 0.55)'
-              : bad
-                ? 'rgba(185, 28, 28, 0.55)'
-                : good
-                  ? 'rgba(180, 83, 9, 0.5)'
-                  : 'rgba(30, 64, 175, 0.5)';
-            ctx.strokeStyle = selected
-              ? '#fff'
-              : showMystery ? '#e9d5ff' : bad ? '#fca5a5' : good ? '#fde68a' : '#93c5fd';
-            ctx.lineWidth = Math.max(2, (selected ? 4.2 : 3.2) * screen.scale);
-            if (selected) {
-              ctx.shadowColor = '#ffffff';
-              ctx.shadowBlur = 12 * screen.scale;
-            }
+            ctx.fillStyle = bad ? 'rgba(185,28,28,0.55)' : good ? 'rgba(180,83,9,0.5)' : op.isRecovery ? 'rgba(16,185,129,0.5)' : 'rgba(30,64,175,0.5)';
+            ctx.strokeStyle = selected ? '#fff' : bad ? '#fca5a5' : good ? '#fde68a' : '#93c5fd';
+            ctx.lineWidth = Math.max(2, (selected ? 4 : 3) * screen.scale);
+            if (selected) { ctx.shadowColor = '#fff'; ctx.shadowBlur = 12 * screen.scale; }
             ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(rx, ry, rw, rh, r);
+            if (ctx.roundRect) ctx.roundRect(rx, ry, rw, rh, 8 * screen.scale);
             else ctx.rect(rx, ry, rw, rh);
             ctx.fill();
             ctx.stroke();
             ctx.shadowBlur = 0;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-            ctx.fillRect(rx + 4 * screen.scale, ry + 4 * screen.scale, rw - 8 * screen.scale, 14 * screen.scale);
-            ctx.fillStyle = '#cbd5e1';
-            ctx.font = `bold ${Math.max(8, Math.floor(10 * screen.scale))}px sans-serif`;
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${Math.max(12, Math.floor(22 * screen.scale))}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(
-              gate.resolved ? '通過' : selected ? '▶ 此側' : '數字門',
-              screen.x + shakeX,
-              ry + 11 * screen.scale,
-            );
-            ctx.fillStyle = '#fff';
-            ctx.font = `bold ${Math.max(14, Math.floor(26 * screen.scale))}px sans-serif`;
-            ctx.fillText(showMystery ? '❓' : op.label, screen.x + shakeX, screen.y - 2 * screen.scale);
+            ctx.fillText(op.label, screen.x + shakeX, screen.y);
+            if (selected) {
+              ctx.font = `bold ${Math.max(8, Math.floor(9 * screen.scale))}px sans-serif`;
+              ctx.fillStyle = '#cbd5e1';
+              ctx.fillText('▶ 此道', screen.x + shakeX, ry + 10 * screen.scale);
+            }
             ctx.restore();
           });
-        } else if (item.kind === 'enemy') {
+        } else if (item.kind === 'enemy' && item.enemy) {
           const { enemy, dist } = item;
-          const screen = worldToScreen(enemy.xPct, dist, w, h);
+          const screen = worldToScreen(laneToX(enemy.lane), dist, w, h);
           if (!screen) return;
           ctx.save();
           ctx.globalAlpha = Math.min(1, 0.35 + screen.progress * 0.9);
@@ -1480,32 +1157,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           const sx = screen.x + shakeX;
           const sy = screen.y;
           const sc = screen.scale;
-          const isSmash = enemy.emoji === '🔥';
-          const isHazard = !!enemy.isHazard;
-
-          // 身影
           ctx.beginPath();
           ctx.ellipse(sx, sy + 22 * sc, 28 * sc, 8 * sc, 0, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+          ctx.fillStyle = 'rgba(15,23,42,0.35)';
           ctx.fill();
-
-          if (isSmash || isHazard) {
-            const rw = 48 * sc;
-            const rh = 40 * sc;
-            ctx.fillStyle = isSmash ? '#ea580c' : '#0284c7';
-            ctx.strokeStyle = isSmash ? '#fdba74' : '#7dd3fc';
-            ctx.lineWidth = Math.max(1.5, 2 * sc);
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(sx - rw / 2, sy - rh / 2, rw, rh, 10 * sc);
-            else ctx.rect(sx - rw / 2, sy - rh / 2, rw, rh);
-            ctx.fill();
-            ctx.stroke();
+          if (enemy.isHazard) {
+            ctx.fillStyle = enemy.emoji === '🔥' ? '#ea580c' : '#0284c7';
+            ctx.fillRect(sx - 24 * sc, sy - 20 * sc, 48 * sc, 40 * sc);
             ctx.font = `${Math.max(14, Math.floor(22 * sc))}px sans-serif`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
             ctx.fillText(enemy.emoji, sx, sy);
           } else {
-            // 防守者：頭＋身＋球拍；血條固定在頭頂，並夾在畫布內
             const bodyW = 36 * sc;
             const bodyH = 40 * sc;
             const grad = ctx.createLinearGradient(sx, sy - bodyH, sx, sy + bodyH * 0.4);
@@ -1513,16 +1175,9 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
             grad.addColorStop(1, '#9f1239');
             ctx.fillStyle = grad;
             ctx.beginPath();
-            if (ctx.roundRect) {
-              ctx.roundRect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH, 12 * sc);
-            } else {
-              ctx.rect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH);
-            }
+            if (ctx.roundRect) ctx.roundRect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH, 12 * sc);
+            else ctx.rect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH);
             ctx.fill();
-            ctx.strokeStyle = '#fecdd3';
-            ctx.lineWidth = Math.max(1, 1.5 * sc);
-            ctx.stroke();
-
             const headY = sy - bodyH * 0.55;
             ctx.beginPath();
             ctx.arc(sx, headY, 16 * sc, 0, Math.PI * 2);
@@ -1530,53 +1185,22 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
             ctx.fill();
             ctx.font = `${Math.max(14, Math.floor(22 * sc))}px sans-serif`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
             ctx.fillText(enemy.emoji, sx, headY);
-
-            ctx.strokeStyle = '#fde68a';
-            ctx.lineWidth = Math.max(1.5, 2.2 * sc);
-            ctx.beginPath();
-            ctx.moveTo(sx + bodyW * 0.35, sy - 4 * sc);
-            ctx.lineTo(sx + bodyW * 0.85, sy - 28 * sc);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.ellipse(sx + bodyW * 0.95, sy - 36 * sc, 10 * sc, 14 * sc, 0.4, 0, Math.PI * 2);
-            ctx.strokeStyle = '#fef3c7';
-            ctx.stroke();
-
             const barW = Math.max(28, 44 * sc);
             const barH = Math.max(4, 5 * sc);
-            const ratio = Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.maxHp)));
-            // 血條在頭頂上方，避免貼地時爆出下緣；並水平夾限
-            let barX = sx - barW / 2;
-            let barY = headY - 20 * sc;
-            barX = Math.max(4, Math.min(w - barW - 4, barX));
-            barY = Math.max(4, Math.min(h - barH - 4, barY));
-            ctx.globalAlpha = Math.min(1, 0.55 + screen.progress * 0.45);
+            const ratio = Math.max(0, enemy.hp / Math.max(1, enemy.maxHp));
+            let barX = Math.max(4, Math.min(w - barW - 4, sx - barW / 2));
+            const barY = Math.max(4, headY - 20 * sc);
             ctx.fillStyle = 'rgba(15,23,42,0.9)';
             ctx.fillRect(barX, barY, barW, barH);
             ctx.fillStyle = ratio > 0.4 ? '#4ade80' : '#f87171';
             ctx.fillRect(barX, barY, barW * ratio, barH);
-            if (screen.progress > 0.35) {
-              ctx.fillStyle = '#e2e8f0';
-              ctx.font = `bold ${Math.max(8, Math.floor(9 * sc))}px sans-serif`;
-              ctx.fillText('防守', sx, Math.min(h - 6, barY + barH + 10 * sc));
-            }
           }
           ctx.restore();
-        } else {
-          const { proj, dist } = item;
-          const screen = worldToScreen(proj.xPct + proj.offsetPct, dist, w, h);
+        } else if (item.proj) {
+          const screen = worldToScreen(item.proj.xPct, item.dist, w, h);
           if (!screen) return;
-          const alpha = Math.min(1, 0.22 + screen.progress * 0.95);
-          drawShuttlecock(
-            ctx,
-            screen.x + shakeX,
-            screen.y + shakeY,
-            screen.scale * (proj.powerShot ? 1.05 : 0.92),
-            !!proj.powerShot,
-            alpha,
-          );
+          drawShuttlecock(ctx, screen.x + shakeX, screen.y + shakeY, screen.scale, item.proj.grade, Math.min(1, 0.22 + screen.progress * 0.95));
         }
       });
 
@@ -1594,27 +1218,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       const playerRenderX = px + shakeX;
       const playerRenderY = playerY + shakeY;
       const squadCount = Math.min(6, Math.floor(feathersRef.current / 12) + 1);
-      ctx.save();
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 4;
       for (let i = 0; i < squadCount; i++) {
-        const row = Math.floor(i / 3) + 1;
         const col = (i % 3) - 1;
+        const row = Math.floor(i / 3) + 1;
         ctx.font = '15px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(
-          '🪶',
-          playerRenderX + col * 16 + Math.sin(ts / 150 + i) * 2,
-          playerRenderY + row * 18 + Math.cos(ts / 200 + i) * 2,
-        );
+        ctx.fillText('🪶', playerRenderX + col * 16 + Math.sin(ts / 150 + i) * 2, playerRenderY + row * 18);
       }
-      ctx.restore();
-
-      ctx.save();
-      ctx.translate(playerRenderX, playerRenderY);
-      ctx.rotate(playerTiltRef.current);
 
       const avatar = avatarImgRef.current;
+      ctx.save();
+      ctx.translate(playerRenderX, playerRenderY);
       if (avatar && avatar.complete) {
         const avSize = 28;
         ctx.save();
@@ -1623,20 +1237,18 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         ctx.clip();
         ctx.drawImage(avatar, -avSize / 2, -8 - avSize / 2, avSize, avSize);
         ctx.restore();
-        ctx.strokeStyle = '#38bdf8';
+        ctx.strokeStyle = feverActive ? '#fde047' : '#38bdf8';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(0, -8, avSize / 2, 0, Math.PI * 2);
         ctx.stroke();
       }
-
       ctx.font = '34px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🏸', 0, 10);
-      ctx.rotate(-playerTiltRef.current);
       ctx.font = 'bold 17px sans-serif';
-      ctx.fillStyle = feathersRef.current >= 100 ? '#fde047' : '#38bdf8';
+      ctx.fillStyle = feverActive ? '#fde047' : '#38bdf8';
       ctx.strokeStyle = 'rgba(15,23,42,0.85)';
       ctx.lineWidth = 3;
       ctx.strokeText(String(feathersRef.current), 0, -34);
@@ -1655,9 +1267,6 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         ctx.globalAlpha = Math.min(1, mf.progress * 3);
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 8;
         ctx.fillText('🪶', mf.x, mf.y);
         ctx.restore();
       });
@@ -1673,7 +1282,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       if (vignetteRef.current > 0.02) {
         const g = ctx.createRadialGradient(w * 0.5, h * 0.5, h * 0.2, w * 0.5, h * 0.5, h * 0.85);
         g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(127, 29, 29, ${Math.min(0.55, vignetteRef.current)})`);
+        g.addColorStop(1, `rgba(127,29,29,${Math.min(0.55, vignetteRef.current)})`);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, w, h);
       }
@@ -1694,23 +1303,18 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     };
   }, [onGameEnd]);
 
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') setDirection('left');
-      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setDirection('right');
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') shiftLane('left');
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') shiftLane('right');
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const applyPointerDir = (clientX: number, target: HTMLElement) => {
-    const rect = target.getBoundingClientRect();
-    setDirection(clientX - rect.left < rect.width / 2 ? 'left' : 'right');
-  };
-
   const currentBossConfig = BOSSES[Math.max(0, segmentIndex - 1)] ?? BOSSES[0];
   const bossVisible = bossScreen.visible && !!bossPet && bossHp > 0;
-  /** 當前段內進度 0~1（由全局 progress 反推） */
   const phaseLocalProgress = Math.max(0, Math.min(1, progress * 4 - (segmentIndex - 1)));
 
   return (
@@ -1718,54 +1322,47 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       ref={containerRef}
       className="relative w-full h-full min-h-[500px] bg-slate-950 touch-none select-none overscroll-none"
       style={{ touchAction: 'none' }}
-      onPointerDown={(e) => applyPointerDir(e.clientX, e.currentTarget)}
+      onPointerDown={(e) => { swipeStartRef.current = { x: e.clientX, y: e.clientY }; }}
+      onPointerUp={(e) => {
+        const start = swipeStartRef.current;
+        swipeStartRef.current = null;
+        if (!start) return;
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+          shiftLane(dx > 0 ? 'right' : 'left');
+        }
+      }}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
       {bossVisible && bossPet && (
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{
-            opacity: subPhase === 'boss' ? 1 : 0.75,
-            scale: Math.max(0.35, Math.min(1.05, bossScreen.scale * 1.05)),
-          }}
+          animate={{ opacity: subPhase === 'boss' ? 1 : 0.75, scale: Math.max(0.35, Math.min(1.05, bossScreen.scale * 1.05)) }}
           transition={{ duration: 0.15 }}
           className="absolute pointer-events-none flex flex-col items-center z-10 select-none max-w-[42%]"
           style={{
             left: `${bossScreen.x}px`,
             top: `${bossScreen.y}px`,
-            // 錨在角色胸口：稱號向上、血條向下，避免整塊 UI 以中心對齊導致血條爆邊
             transform: 'translate(-50%, -42%)',
             width: `${Math.max(104, Math.min(168, 150 * Math.max(0.55, bossScreen.scale)))}px`,
           }}
         >
-          <div
-            className="absolute rounded-full border border-emerald-400/40 bg-emerald-400/10"
-            style={{
-              width: `${Math.max(40, 90 * bossScreen.scale)}px`,
-              height: `${Math.max(12, 28 * bossScreen.scale)}px`,
-              bottom: `${Math.max(2, 4 * bossScreen.scale)}px`,
-              left: '50%',
-              transform: 'translateX(-50%)',
-            }}
-          />
           <div className="bg-slate-950/90 border border-slate-700/60 rounded-full px-2 py-0.5 mb-1 text-[9px] sm:text-[10px] font-black text-white shadow-xl tracking-wider flex items-center gap-1 backdrop-blur-sm z-[1] max-w-full">
             <span className="w-1.5 h-1.5 rounded-full animate-ping shrink-0" style={{ backgroundColor: currentBossConfig.color }} />
             <span className="truncate">
               {subPhase === 'boss' ? currentBossConfig.title : `前方 · ${currentBossConfig.title}`}
             </span>
           </div>
-          <div
-            className="mb-1 filter drop-shadow-[0_0_12px_rgba(255,255,255,0.25)] flex items-center justify-center z-[1]"
-            style={{ width: `${Math.max(48, 96 * bossScreen.scale)}px`, height: `${Math.max(48, 96 * bossScreen.scale)}px` }}
-          >
+          <div className="mb-1 filter drop-shadow-[0_0_12px_rgba(255,255,255,0.25)] flex items-center justify-center z-[1]"
+            style={{ width: `${Math.max(48, 96 * bossScreen.scale)}px`, height: `${Math.max(48, 96 * bossScreen.scale)}px` }}>
             <PetRenderer petId={bossPet.id} tier={bossPet.tier} className="w-full h-full object-contain" />
           </div>
           {subPhase === 'boss' && (
             <>
               <div className="w-full max-w-full bg-slate-950/90 border border-slate-800 rounded-full p-0.5 shadow-lg z-[1]">
-                <div
-                  className="h-2 rounded-full transition-all duration-200"
+                <div className="h-2 rounded-full transition-all duration-200"
                   style={{
                     width: `${Math.max(0, Math.min(100, (bossHp / currentBossConfig.hp) * 100))}%`,
                     backgroundColor: currentBossConfig.color,
@@ -1786,13 +1383,24 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           <div className="text-[8px] sm:text-[9px] text-slate-400 font-bold">羽毛</div>
           <div className="text-base sm:text-lg font-black text-sky-400 tabular-nums leading-tight">{feathers}</div>
         </div>
+        <div className="flex flex-col items-center gap-1">
+          <div className="bg-slate-900/85 border border-amber-500/40 rounded-xl px-3 py-1 backdrop-blur-sm min-w-[72px] text-center">
+            <div className="text-[8px] text-amber-400 font-bold">連擊</div>
+            <div className="text-lg font-black text-amber-300 tabular-nums leading-tight">×{combo}</div>
+          </div>
+          {fever && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gradient-to-r from-amber-500 to-rose-500 text-white text-[10px] font-black px-3 py-0.5 rounded-full shadow-lg animate-pulse"
+            >
+              FEVER!
+            </motion.div>
+          )}
+        </div>
         <div className="bg-slate-900/85 border border-slate-700/60 rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 text-center backdrop-blur-sm min-w-[100px]">
           <div className="text-[8px] sm:text-[9px] text-emerald-400 font-bold truncate max-w-[140px]">{phaseLabel}</div>
           <div className="text-sm font-black text-white tabular-nums leading-tight">{timeLeft}s</div>
-        </div>
-        <div className="bg-slate-900/85 border border-slate-700/60 rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 text-right backdrop-blur-sm">
-          <div className="text-[8px] sm:text-[9px] text-slate-400 font-bold">球員</div>
-          <div className="text-[11px] sm:text-xs font-black text-white max-w-[64px] sm:max-w-[72px] truncate">{playerName}</div>
         </div>
       </div>
 
@@ -1803,72 +1411,41 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
             const completed = segmentIndex > stageNum;
             const active = segmentIndex === stageNum && subPhase !== 'sprint' && subPhase !== 'ended';
             const inBoss = active && subPhase === 'boss';
-            const fill = completed
-              ? 100
-              : active
-                ? Math.round(phaseLocalProgress * 100)
-                : 0;
+            const fill = completed ? 100 : active ? Math.round(phaseLocalProgress * 100) : 0;
             return (
               <div key={name} className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <div
-                  className={cn(
-                    'relative h-2 rounded-full overflow-hidden border',
-                    completed
-                      ? 'border-emerald-400/50 bg-emerald-950/40'
-                      : active
-                        ? inBoss
-                          ? 'border-rose-400/60 bg-rose-950/40'
-                          : 'border-sky-400/50 bg-sky-950/40'
-                        : 'border-slate-700/60 bg-slate-900/60',
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'absolute inset-y-0 left-0 rounded-full transition-[width] duration-200',
-                      completed
-                        ? 'bg-emerald-400'
-                        : inBoss
-                          ? 'bg-gradient-to-r from-rose-500 to-amber-400'
-                          : 'bg-gradient-to-r from-sky-500 to-emerald-400',
-                    )}
-                    style={{ width: `${fill}%` }}
-                  />
+                <div className={cn(
+                  'relative h-2 rounded-full overflow-hidden border',
+                  completed ? 'border-emerald-400/50 bg-emerald-950/40'
+                    : active ? inBoss ? 'border-rose-400/60 bg-rose-950/40' : 'border-sky-400/50 bg-sky-950/40'
+                    : 'border-slate-700/60 bg-slate-900/60',
+                )}>
+                  <div className={cn(
+                    'absolute inset-y-0 left-0 rounded-full transition-[width] duration-200',
+                    completed ? 'bg-emerald-400' : inBoss ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-sky-500 to-emerald-400',
+                  )} style={{ width: `${fill}%` }} />
                 </div>
                 <div className="flex items-center justify-between gap-0.5 px-0.5">
-                  <span
-                    className={cn(
-                      'text-[7px] font-black truncate',
-                      completed ? 'text-emerald-400' : active ? 'text-white' : 'text-slate-600',
-                    )}
-                  >
+                  <span className={cn('text-[7px] font-black truncate', completed ? 'text-emerald-400' : active ? 'text-white' : 'text-slate-600')}>
                     {stageNum}.{COURT_THEMES[i]?.label ?? name}
                   </span>
-                  {inBoss && (
-                    <span className="text-[7px] font-black text-rose-300 shrink-0 animate-pulse">Boss</span>
-                  )}
-                  {completed && (
-                    <span className="text-[7px] font-black text-emerald-400 shrink-0">✓</span>
-                  )}
+                  {inBoss && <span className="text-[7px] font-black text-rose-300 shrink-0 animate-pulse">Boss</span>}
+                  {completed && <span className="text-[7px] font-black text-emerald-400 shrink-0">✓</span>}
                 </div>
               </div>
             );
           })}
         </div>
         <div className="h-1 bg-slate-800/80 rounded-full overflow-hidden border border-slate-700/50">
-          <div
-            className="h-full rounded-full transition-[width] duration-150 bg-gradient-to-r from-emerald-500 via-sky-400 to-violet-400"
-            style={{ width: `${Math.round(Math.min(100, progress * 100))}%` }}
-          />
+          <div className="h-full rounded-full transition-[width] duration-150 bg-gradient-to-r from-emerald-500 via-sky-400 to-violet-400"
+            style={{ width: `${Math.round(Math.min(100, progress * 100))}%` }} />
         </div>
       </div>
 
       {toast && (
         <div className="absolute top-[88px] inset-x-0 z-30 flex justify-center pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-950/90 border border-red-500/50 text-red-100 text-sm font-black px-4 py-2 rounded-xl shadow-xl backdrop-blur-sm"
-          >
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-red-950/90 border border-red-500/50 text-red-100 text-sm font-black px-4 py-2 rounded-xl shadow-xl backdrop-blur-sm">
             {toast}
           </motion.div>
         </div>
@@ -1876,19 +1453,11 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
 
       {bossBanner && (
         <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
+          <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
             className="px-6 py-3 rounded-2xl border-2 text-center shadow-2xl backdrop-blur-md"
-            style={{
-              borderColor: currentBossConfig.color,
-              background: 'rgba(2,6,23,0.82)',
-            }}
-          >
+            style={{ borderColor: currentBossConfig.color, background: 'rgba(2,6,23,0.82)' }}>
             <div className="text-[10px] font-bold text-slate-400 tracking-widest mb-1">對決開始</div>
-            <div className="text-lg sm:text-xl font-black text-white" style={{ color: currentBossConfig.color }}>
-              {bossBanner}
-            </div>
+            <div className="text-lg sm:text-xl font-black" style={{ color: currentBossConfig.color }}>{bossBanner}</div>
           </motion.div>
         </div>
       )}
@@ -1896,48 +1465,28 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       {showTip && (
         <div className="absolute top-[100px] inset-x-0 z-10 flex justify-center pointer-events-none">
           <span className="text-[9px] font-bold text-slate-400 bg-slate-950/70 px-2.5 py-1 rounded-full border border-slate-700/50">
-            <span className="sm:hidden">點左／右半邊持續移動 · 自動殺球</span>
-            <span className="hidden sm:inline">← → 或 A D 移動 · 自動殺球</span>
+            <span className="sm:hidden">滑動切換賽道 · 自動殺球</span>
+            <span className="hidden sm:inline">← → 或 A D 切換左中右賽道 · 連擊 10 進入 FEVER</span>
           </span>
         </div>
       )}
 
-      <div
-        className="absolute bottom-0 inset-x-0 z-30 flex justify-between pointer-events-none"
-        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-      >
-        <button
-          type="button"
-          aria-label="向左移動"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setDirection('left');
-          }}
+      <div className="absolute bottom-0 inset-x-0 z-30 flex justify-between pointer-events-none"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        <button type="button" aria-label="向左切換賽道"
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); shiftLane('left'); }}
           className={cn(
             'pointer-events-auto ml-3 mb-2 w-[72px] h-[72px] sm:w-16 sm:h-16 rounded-full border-2 flex items-center justify-center active:scale-95 transition-all shadow-2xl',
-            moveDir === 'left'
-              ? 'bg-sky-500/40 border-sky-300 text-sky-100 ring-2 ring-sky-400/60'
-              : 'bg-slate-900/85 border-slate-600 text-white',
-          )}
-        >
+            lane === 0 ? 'bg-sky-500/40 border-sky-300 text-sky-100 ring-2 ring-sky-400/60' : 'bg-slate-900/85 border-slate-600 text-white',
+          )}>
           <ChevronLeft className="w-10 h-10 sm:w-8 sm:h-8" />
         </button>
-        <button
-          type="button"
-          aria-label="向右移動"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setDirection('right');
-          }}
+        <button type="button" aria-label="向右切換賽道"
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); shiftLane('right'); }}
           className={cn(
             'pointer-events-auto mr-3 mb-2 w-[72px] h-[72px] sm:w-16 sm:h-16 rounded-full border-2 flex items-center justify-center active:scale-95 transition-all shadow-2xl',
-            moveDir === 'right'
-              ? 'bg-sky-500/40 border-sky-300 text-sky-100 ring-2 ring-sky-400/60'
-              : 'bg-slate-900/85 border-slate-600 text-white',
-          )}
-        >
+            lane === 2 ? 'bg-sky-500/40 border-sky-300 text-sky-100 ring-2 ring-sky-400/60' : 'bg-slate-900/85 border-slate-600 text-white',
+          )}>
           <ChevronRight className="w-10 h-10 sm:w-8 sm:h-8" />
         </button>
       </div>

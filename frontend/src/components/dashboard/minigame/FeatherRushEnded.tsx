@@ -3,6 +3,7 @@ import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
 
 interface FeatherRushEndedProps {
   score: number;
+  maxCombo?: number;
   isSubmitting: boolean;
   submitResult: any;
   isWagerMatch?: boolean;
@@ -15,8 +16,17 @@ interface FeatherRushEndedProps {
   onReturnToLobby: () => void;
 }
 
+function rankFromScore(score: number): string {
+  if (score >= 1200) return 'S';
+  if (score >= 800) return 'A';
+  if (score >= 500) return 'B';
+  if (score >= 300) return 'C';
+  return 'D';
+}
+
 export const FeatherRushEnded: React.FC<FeatherRushEndedProps> = ({
   score,
+  maxCombo = 0,
   isSubmitting,
   submitResult,
   isWagerMatch = false,
@@ -33,18 +43,35 @@ export const FeatherRushEnded: React.FC<FeatherRushEndedProps> = ({
     return `每週三可將本週最高分兌換為羽毛，下一次重置：${nextResetStr}`;
   };
 
+  const rank = rankFromScore(score);
+
   return (
-    <div className="p-6 flex flex-col items-center justify-center space-y-6 text-center max-w-md mx-auto">
-      <div className="text-4xl">🚀</div>
+    <div className="p-6 flex flex-col items-center justify-center space-y-5 text-center max-w-md mx-auto">
+      <div className="text-4xl">🏸</div>
       <div>
         <h4 className="text-xl font-black mb-1">衝鋒結束！</h4>
-        <p className="text-xs text-slate-400 font-semibold">你本局共累積剩餘羽毛</p>
-        <div className="text-4xl font-black text-amber-400 tracking-wider my-3 tabular-nums">
+        <p className="text-xs text-slate-400 font-semibold">FINAL SCORE</p>
+        <div className="text-4xl font-black text-amber-400 tracking-wider my-2 tabular-nums">
           {score} <span className="text-sm text-slate-400 font-bold">分</span>
+        </div>
+        <div className="inline-flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 mt-1">
+          <span className="text-[10px] font-bold text-slate-400">RANK</span>
+          <span className="text-lg font-black text-violet-300">{rank}</span>
         </div>
       </div>
 
-      <div className="w-full pt-2">
+      <div className="w-full grid grid-cols-2 gap-2 text-left">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2">
+          <div className="text-[9px] text-slate-500 font-bold">最高連擊</div>
+          <div className="text-sm font-black text-sky-300 tabular-nums">×{maxCombo}</div>
+        </div>
+        <div className="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2">
+          <div className="text-[9px] text-slate-500 font-bold">剩餘羽毛</div>
+          <div className="text-sm font-black text-amber-300 tabular-nums">{score}</div>
+        </div>
+      </div>
+
+      <div className="w-full pt-1">
         {isWagerMatch ? (
           !submitResult ? (
             <div className="flex flex-col items-center justify-center py-4 space-y-2 text-slate-400">

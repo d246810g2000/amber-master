@@ -4,12 +4,21 @@ export interface GateOperation {
   type: GateOpType;
   value: number;
   label: string;
+  riskLabel?: string;
+  riskDamage?: number;
+  isRecovery?: boolean;
 }
 
 export interface GatePair {
   left: GateOperation;
   right: GateOperation;
-  category: 'mixed' | 'both_good' | 'both_bad' | 'trap';
+  category: 'mixed' | 'both_good' | 'both_bad' | 'trap' | 'recovery';
+}
+
+/** Triple gate aligned to LEFT / CENTER / RIGHT lanes */
+export interface GateTriplet {
+  ops: [GateOperation, GateOperation, GateOperation];
+  category: GatePair['category'];
 }
 
 export type GamePhase =
@@ -20,56 +29,71 @@ export type GamePhase =
   | 'ended';
 
 export type BossTier = 'classic' | 'epic' | 'legendary' | 'ultimate';
-
-/** How each rival behaves while standing on court. */
 export type BossBehavior = 'wall' | 'sidestep' | 'clear_lob' | 'jump_smash';
+export type BossPhase = 1 | 2 | 3 | 4;
 
 export interface BossConfig {
   tier: BossTier;
-  /** Short display name */
   name: string;
-  /** Badminton-flavored title */
   title: string;
   hp: number;
   reward: number;
   emoji: string;
   color: string;
   behavior: BossBehavior;
-  /** Flavor line shown when fight starts */
   taunt: string;
 }
 
 export type SkillLevel = 'casual' | 'skilled' | 'strong';
 
+export type LaneIndex = 0 | 1 | 2;
+export const LANE_X: [number, number, number] = [22, 50, 78];
+export const LANE_LABELS = ['左', '中', '右'] as const;
+
+export type EnemyState =
+  | 'far'
+  | 'approaching'
+  | 'warning'
+  | 'attacking'
+  | 'hit'
+  | 'dead';
+
+export type EnemyKind = 'runner' | 'tank' | 'dodger' | 'shield' | 'bomber';
+
+export type ShotGrade = 'perfect' | 'great' | 'good' | 'miss';
+
 export const BALANCE = {
   initialFeathers: 80,
-  gameDurationSec: 60,
+  gameDurationSec: 90,
   feathersPerSegment: { min: 16, max: 20 },
   segmentCount: 4,
-  gateScaleFactor: 0.12,
-  gateMinBase: 18,
+  gateScaleFactor: 0.14,
+  gateMinBase: 22,
   gateScaleSoftCap: 500,
-  enemyRewardFactor: 0.3,
-  bossFailLossPct: 0.2,
+  enemyRewardFactor: 0.42,
+  bossFailLossPct: 0.18,
   collectionRates: { casual: 0.55, skilled: 0.8, strong: 0.96 } as Record<SkillLevel, number>,
   gateAccuracy: { casual: 0.42, skilled: 0.72, strong: 0.93 } as Record<SkillLevel, number>,
-  bossClearRate: { casual: 0.45, skilled: 0.78, strong: 0.96 } as Record<SkillLevel, number>,
-  gateWeights: { mixed: 0.45, both_good: 0.28, both_bad: 0.12, trap: 0.15 },
+  bossClearRate: { casual: 0.55, skilled: 0.85, strong: 0.97 } as Record<SkillLevel, number>,
+  gateWeights: { mixed: 0.4, both_good: 0.28, both_bad: 0.1, trap: 0.12, recovery: 0.1 },
   featherTargets: {
     casual: { min: 350, max: 550 },
     skilled: { min: 750, max: 1100 },
     strong: { min: 1150, max: 1500 },
   } as Record<SkillLevel, { min: number; max: number }>,
+  shotMult: { perfect: 2, great: 1.5, good: 1, miss: 0 } as Record<ShotGrade, number>,
+  feverComboThreshold: 10,
+  feverDurationMs: 6000,
+  recoveryFeatherThreshold: 100,
 };
 
-/** Four court rivals — you run toward them; they hold the far baseline. */
 export const BOSSES: BossConfig[] = [
   {
     tier: 'classic',
     name: '新手牆',
     title: '接發練習牆',
-    hp: 18,
-    reward: 42,
+    hp: 28,
+    reward: 55,
     emoji: '🧱',
     color: '#38bdf8',
     behavior: 'wall',
@@ -79,8 +103,8 @@ export const BOSSES: BossConfig[] = [
     tier: 'epic',
     name: '羽翼手',
     title: '網前滑步手',
-    hp: 40,
-    reward: 70,
+    hp: 52,
+    reward: 90,
     emoji: '🏸',
     color: '#a78bfa',
     behavior: 'sidestep',
@@ -90,8 +114,8 @@ export const BOSSES: BossConfig[] = [
     tier: 'legendary',
     name: '高遠砲',
     title: '後場高遠砲',
-    hp: 70,
-    reward: 108,
+    hp: 85,
+    reward: 130,
     emoji: '🦅',
     color: '#f59e0b',
     behavior: 'clear_lob',
@@ -101,8 +125,8 @@ export const BOSSES: BossConfig[] = [
     tier: 'ultimate',
     name: '殺球王',
     title: '決勝殺球王',
-    hp: 110,
-    reward: 165,
+    hp: 130,
+    reward: 200,
     emoji: '💥',
     color: '#f43f5e',
     behavior: 'jump_smash',
@@ -110,7 +134,22 @@ export const BOSSES: BossConfig[] = [
   },
 ];
 
-/** Track length per segment (shorter = snappier court rallies). */
 export const PHASE_SCROLL_LENGTHS = [1000, 1050, 1100, 1100];
 export const BOSS_FIGHT_SCROLL = 550;
 export const GATE_SCROLL = 320;
+
+export function bossPhaseFromHp(hp: number, maxHp: number): BossPhase {
+  const r = hp / Math.max(1, maxHp);
+  if (r > 0.7) return 1;
+  if (r > 0.4) return 2;
+  if (r > 0.15) return 3;
+  return 4;
+}
+
+export function gradeShot(dist: number, combatRange: number): ShotGrade {
+  const t = dist / combatRange;
+  if (t <= 0.22) return 'perfect';
+  if (t <= 0.4) return 'great';
+  if (t <= 0.7) return 'good';
+  return 'miss';
+}

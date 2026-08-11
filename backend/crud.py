@@ -7,14 +7,38 @@ import time
 import trueskill_logic
 from typing import List, Dict, Any, Optional, Union
 
-MINIGAME_CONFIG: Dict[str, Dict[str, str]] = {
-    "feather": {"reward_type": "minigame_reward", "display_name": "接羽毛"},
-    "trivia": {"reward_type": "trivia_reward", "display_name": "知識問答"},
-    "feather_rush": {"reward_type": "feather_rush_reward", "display_name": "飛羽衝鋒"},
+MINIGAME_CONFIG: Dict[str, Dict[str, Any]] = {
+    "feather": {
+        "reward_type": "minigame_reward",
+        "display_name": "接羽毛",
+        "max_score": 3000,
+        "max_combo": 999,
+    },
+    "trivia": {
+        "reward_type": "trivia_reward",
+        "display_name": "知識問答",
+        "max_score": 5000,
+        "max_combo": 999,
+    },
+    "feather_rush": {
+        "reward_type": "feather_rush_reward",
+        "display_name": "飛羽衝鋒",
+        "max_score": 5000,
+        "max_combo": 999,
+    },
 }
+
+ALLOWED_MINIGAME_TYPES = frozenset(MINIGAME_CONFIG.keys())
+# Duplicate submit window (seconds)
+MINIGAME_SUBMIT_DEDUP_SECONDS = 8
 
 def get_minigame_display_name(game_type: str) -> str:
     return MINIGAME_CONFIG.get(game_type, {}).get("display_name", game_type)
+
+def validate_minigame_type(game_type: str) -> Optional[str]:
+    if game_type not in ALLOWED_MINIGAME_TYPES:
+        return None
+    return game_type
 
 def parse_claimed_game_type_from_description(description: str) -> Optional[str]:
     if not description:
@@ -1254,11 +1278,20 @@ def check_minigame_eligibility(db: Session, player_id: str, game_type: str = "fe
     next_wed = last_wed + timedelta(days=7)
     
     last_wed_utc = last_wed - timedelta(hours=8)
-    
-    # Each game type gets its own weekly reward transaction, so we differentiate by note or type
-    # For feather game: type = "minigame_reward"
-    # For trivia game: type = "trivia_reward"
-    reward_type = "trivia_reward" if game_type == "trivia" else "minigame_reward"
+
+    cfg = MINIGAME_CONFIG.get(game_type)
+    if not cfg:
+        return {
+            "canPlay": False,
+            "canEarnReward": False,
+            "isWednesday": is_wednesday,
+            "alreadyClaimed": False,
+            "lastPlayedAt": None,
+            "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S"),
+            "error": "不支援的遊戲類型",
+        }
+
+    reward_type = cfg["reward_type"]
     
     existing_play = db.query(models.FeatherTransaction).filter(
         models.FeatherTransaction.player_id == player_id,
@@ -1278,14 +1311,65 @@ def check_minigame_eligibility(db: Session, player_id: str, game_type: str = "fe
     }
 
 def submit_minigame_score(db: Session, player_id: str, game_type: str, score: int, max_combo: int = 0) -> dict:
-    if score < 0:
+    import logging
+    logger = logging.getLogger("amber.minigame")
+
+    if game_type not in ALLOWED_MINIGAME_TYPES:
+        return {"status": "error", "message": "不支援的遊戲類型"}
+
+    cfg = MINIGAME_CONFIG[game_type]
+
+    try:
+        score = int(score)
+        max_combo = int(max_combo or 0)
+    except (TypeError, ValueError):
+        return {"status": "error", "message": "分數格式錯誤"}
+
+    if score < 0 or max_combo < 0:
         return {"status": "error", "message": "分數不能小於 0"}
-        
+
+    max_score = int(cfg.get("max_score", 5000))
+    max_combo_cap = int(cfg.get("max_combo", 999))
+    if score > max_score:
+        logger.warning(
+            "minigame score rejected over cap player=%s game=%s score=%s cap=%s",
+            player_id, game_type, score, max_score,
+        )
+        return {"status": "error", "message": f"分數超過上限（{max_score}）"}
+    if max_combo > max_combo_cap:
+        logger.warning(
+            "minigame combo rejected over cap player=%s game=%s combo=%s cap=%s",
+            player_id, game_type, max_combo, max_combo_cap,
+        )
+        return {"status": "error", "message": f"連擊超過上限（{max_combo_cap}）"}
+
+    # Soft anomaly flag (near-cap scores)
+    if score >= int(max_score * 0.9):
+        logger.warning(
+            "minigame high score audit player=%s game=%s score=%s combo=%s",
+            player_id, game_type, score, max_combo,
+        )
+
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
         return {"status": "error", "message": "找不到該球員"}
-        
-    # Save the score history entry to MiniGameRecord
+
+    # Dedup: same player + game + score within short window
+    from datetime import timedelta
+    since = datetime.utcnow() - timedelta(seconds=MINIGAME_SUBMIT_DEDUP_SECONDS)
+    dup = db.query(models.MiniGameRecord).filter(
+        models.MiniGameRecord.player_id == player_id,
+        models.MiniGameRecord.game_type == game_type,
+        models.MiniGameRecord.score == score,
+        models.MiniGameRecord.created_at >= since,
+    ).first()
+    if dup:
+        logger.warning(
+            "minigame duplicate submit blocked player=%s game=%s score=%s",
+            player_id, game_type, score,
+        )
+        return {"status": "error", "message": "請勿重複提交同一分數"}
+
     db_record = models.MiniGameRecord(
         player_id=player_id,
         game_type=game_type,
@@ -3582,6 +3666,9 @@ def get_minigame_weekly_claim_status(db: Session, player_id: str) -> dict:
 def claim_minigame_weekly_score(db: Session, player_id: str, game_type: str) -> dict:
     # 先清理過期借貸，退還金額
     check_and_expire_loans(db)
+
+    if game_type not in ALLOWED_MINIGAME_TYPES:
+        return {"status": "error", "message": "不支援的遊戲類型"}
     
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
@@ -3614,7 +3701,16 @@ def claim_minigame_weekly_score(db: Session, player_id: str, game_type: str) -> 
     
     if highest_score <= 0:
         return {"status": "error", "message": "本週沒有該遊戲的得分紀錄，無法兌換"}
-        
+
+    max_score_cap = int(MINIGAME_CONFIG[game_type].get("max_score", 5000))
+    if highest_score > max_score_cap:
+        import logging
+        logging.getLogger("amber.minigame").warning(
+            "weekly claim capped player=%s game=%s raw=%s cap=%s",
+            player_id, game_type, highest_score, max_score_cap,
+        )
+        highest_score = max_score_cap
+
     # Calculate pet daily bonus
     daily_bonus = get_player_daily_bonus_rate(db_player)
     bonus_amount = int(highest_score * daily_bonus)

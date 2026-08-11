@@ -498,6 +498,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                   {!isWagerMatch && gameType === 'feather_rush' && (
                     <FeatherRushEnded
                       score={score}
+                      maxCombo={maxComboRef.current}
                       isSubmitting={isSubmitting}
                       submitResult={submitResult}
                       nextReset={eligibility?.nextReset}
@@ -513,6 +514,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                   {isWagerMatch && gameType === 'feather_rush' && (
                     <FeatherRushEnded
                       score={score}
+                      maxCombo={maxComboRef.current}
                       isSubmitting={isSubmitting}
                       submitResult={submitResult}
                       isWagerMatch={true}
