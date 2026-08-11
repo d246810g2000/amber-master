@@ -101,6 +101,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
 
   // Trivia States
   const [triviaQuestions, setTriviaQuestions] = useState<any[]>([]);
+  const [minigameSessionId, setMinigameSessionId] = useState<string | null>(null);
 
   // Reset states when modal opens/closes
   useEffect(() => {
@@ -118,14 +119,24 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       setIsRoomLobbyOpen(false);
       setTriviaQuestions([]);
       setClaimResult(null);
+      setMinigameSessionId(null);
     }
   }, [isOpen]);
 
-  const startFeatherRushGame = () => {
+  const startFeatherRushGame = async () => {
     setScore(0);
     maxComboRef.current = 0;
-    setGameState('playing');
     setSubmitResult(null);
+    setMinigameSessionId(null);
+    try {
+      if (currentUser?.email) {
+        const res = await gasApi.startMiniGameSession(currentUser.email, 'feather_rush');
+        if (res?.sessionId) setMinigameSessionId(res.sessionId);
+      }
+    } catch (err) {
+      console.error('Failed to start feather rush session', err);
+    }
+    setGameState('playing');
   };
 
   const startGame = () => {
@@ -220,7 +231,13 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
         }
       } else {
         // Standard single-player weekly submission
-        res = await gasApi.submitMiniGameScore(currentUser.email, score, maxComboRef.current, gameType);
+        res = await gasApi.submitMiniGameScore(
+          currentUser.email,
+          score,
+          maxComboRef.current,
+          gameType,
+          gameType === 'feather_rush' ? minigameSessionId : null,
+        );
       }
       
       setSubmitResult(res);

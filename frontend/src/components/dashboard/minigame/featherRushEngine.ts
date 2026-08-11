@@ -220,20 +220,27 @@ export function generateGatePair(phaseIndex: number, feathers: number): GatePair
   return { left, right, category };
 }
 
-export function generateGateTriplet(phaseIndex: number, feathers: number): GateTriplet {
-  const phase = Math.min(3, Math.max(0, phaseIndex));
-  const base = gateBase(feathers);
-  const tmpl = PHASE_TEMPLATES[phase];
-  const goodPool = scaleOps(tmpl.good, base, phase);
-  const badPool = scaleOps(tmpl.bad, base, phase);
-  const recoveryPool = scaleOps(tmpl.recovery, base, phase);
-  const riskPool = scaleOps(tmpl.risk, base, phase);
+/** v0.1: only +N / -N / ×1.2 / ÷2；feathers<30 強制含 +30 */
+export function generateGateTriplet(_phaseIndex: number, feathers: number): GateTriplet {
+  const goodPool = [
+    makeOp('add', 20),
+    makeOp('add', 30),
+    makeOp('add', 40),
+    makeOp('mul', 1.2),
+  ];
+  const badPool = [
+    makeOp('sub', 10),
+    makeOp('sub', 15),
+    makeOp('sub', 20),
+    makeOp('div', 2),
+  ];
+  const recovery = makeOp('add', 30, { isRecovery: true });
   const forceRecovery = feathers < BALANCE.recoveryFeatherThreshold;
 
   const ops: GateOperation[] = [
-    pickRandom(Math.random() < 0.3 ? riskPool : goodPool),
+    pickRandom(goodPool),
     pickRandom(badPool),
-    pickRandom(forceRecovery || Math.random() < 0.25 ? recoveryPool : goodPool),
+    forceRecovery ? recovery : pickRandom(goodPool),
   ];
 
   for (let i = ops.length - 1; i > 0; i--) {
@@ -241,8 +248,8 @@ export function generateGateTriplet(phaseIndex: number, feathers: number): GateT
     [ops[i], ops[j]] = [ops[j], ops[i]];
   }
 
-  if (forceRecovery && !ops.some((o) => o.isRecovery || isGoodOp(o))) {
-    ops[1] = pickRandom(recoveryPool);
+  if (forceRecovery && !ops.some((o) => o.isRecovery || (o.type === 'add' && o.value === 30))) {
+    ops[1] = recovery;
   }
 
   return {
@@ -305,9 +312,11 @@ export function xToNearestLane(xPct: number): LaneIndex {
   return best;
 }
 
-export function shotDamage(base: number, grade: ShotGrade, fever: boolean): number {
-  const mult = BALANCE.shotMult[grade] * (fever ? 1.35 : 1);
-  return Math.max(0, Math.round(base * mult));
+/** v0.1 fixed damage table; fever applies ×1.35 (miss stays 0) */
+export function shotDamage(_base: number, grade: ShotGrade, fever: boolean): number {
+  const dmg = BALANCE.gradeDamage[grade] ?? 0;
+  if (dmg <= 0) return 0;
+  return Math.max(1, Math.round(dmg * (fever ? BALANCE.feverDamageMult : 1)));
 }
 
 function simulatePhaseTrack(phase: number, feathers: number, skill: SkillLevel): number {
@@ -377,7 +386,7 @@ export function simulateFeatherRush(skill: SkillLevel, runs = 1000): {
       feathers = simulatePhaseTrack(phase, feathers, skill);
       if (feathers <= 0) break;
       gatesPassed += 2;
-      const boss = BOSSES[phase];
+      const boss = BOSSES[Math.min(phase, BOSSES.length - 1)];
       if (Math.random() < BALANCE.bossClearRate[skill]) {
         feathers += boss.reward;
         bossesDefeated += 1;

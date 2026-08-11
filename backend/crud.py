@@ -31,6 +31,13 @@ MINIGAME_CONFIG: Dict[str, Dict[str, Any]] = {
 ALLOWED_MINIGAME_TYPES = frozenset(MINIGAME_CONFIG.keys())
 # Duplicate submit window (seconds)
 MINIGAME_SUBMIT_DEDUP_SECONDS = 8
+# In-memory minigame sessions (minimal session validation for v0.1)
+_MINIGAME_SESSIONS: Dict[str, Dict[str, Any]] = {}
+MINIGAME_SESSION_TTL_SECONDS = 600
+MINIGAME_SESSION_MIN_DURATION_SEC = 50
+MINIGAME_SESSION_MAX_DURATION_SEC = 90
+# Games that require a started session on submit
+MINIGAME_SESSION_REQUIRED_TYPES = frozenset({"feather_rush"})
 
 def get_minigame_display_name(game_type: str) -> str:
     return MINIGAME_CONFIG.get(game_type, {}).get("display_name", game_type)
@@ -1310,7 +1317,91 @@ def check_minigame_eligibility(db: Session, player_id: str, game_type: str = "fe
         "nextReset": next_wed.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-def submit_minigame_score(db: Session, player_id: str, game_type: str, score: int, max_combo: int = 0) -> dict:
+def _purge_expired_minigame_sessions() -> None:
+    now = datetime.utcnow()
+    expired = [
+        sid for sid, s in _MINIGAME_SESSIONS.items()
+        if (now - s["start_at"]).total_seconds() > MINIGAME_SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        _MINIGAME_SESSIONS.pop(sid, None)
+
+
+def start_minigame_session(player_id: str, game_type: str) -> dict:
+    import uuid
+    import logging
+    logger = logging.getLogger("amber.minigame")
+
+    if game_type not in ALLOWED_MINIGAME_TYPES:
+        return {"status": "error", "message": "不支援的遊戲類型"}
+
+    _purge_expired_minigame_sessions()
+    session_id = str(uuid.uuid4())
+    _MINIGAME_SESSIONS[session_id] = {
+        "player_id": player_id,
+        "game_type": game_type,
+        "start_at": datetime.utcnow(),
+        "consumed": False,
+    }
+    logger.info("minigame session started player=%s game=%s session=%s", player_id, game_type, session_id)
+    return {
+        "status": "success",
+        "sessionId": session_id,
+        "gameType": game_type,
+        "startAt": _MINIGAME_SESSIONS[session_id]["start_at"].isoformat() + "Z",
+    }
+
+
+def consume_minigame_session(
+    session_id: Optional[str],
+    player_id: str,
+    game_type: str,
+) -> Optional[str]:
+    """Validate and consume a session. Returns error message or None on success."""
+    import logging
+    logger = logging.getLogger("amber.minigame")
+
+    requires = game_type in MINIGAME_SESSION_REQUIRED_TYPES
+    if not session_id:
+        if requires:
+            return "缺少遊戲 session，請重新開局"
+        return None
+
+    _purge_expired_minigame_sessions()
+    session = _MINIGAME_SESSIONS.get(session_id)
+    if not session:
+        return "遊戲 session 無效或已過期，請重新開局"
+    if session["player_id"] != player_id:
+        logger.warning(
+            "minigame session player mismatch session=%s expected=%s got=%s",
+            session_id, session["player_id"], player_id,
+        )
+        return "遊戲 session 不屬於此球員"
+    if session["game_type"] != game_type:
+        return "遊戲類型與 session 不符"
+    if session["consumed"]:
+        return "此局分數已提交過"
+
+    duration = (datetime.utcnow() - session["start_at"]).total_seconds()
+    if duration < MINIGAME_SESSION_MIN_DURATION_SEC or duration > MINIGAME_SESSION_MAX_DURATION_SEC:
+        logger.warning(
+            "minigame session duration rejected player=%s game=%s duration=%.1f",
+            player_id, game_type, duration,
+        )
+        return f"遊戲時長不合理（需約 {MINIGAME_SESSION_MIN_DURATION_SEC}–{MINIGAME_SESSION_MAX_DURATION_SEC} 秒）"
+
+    session["consumed"] = True
+    return None
+
+
+def submit_minigame_score(
+    db: Session,
+    player_id: str,
+    game_type: str,
+    score: int,
+    max_combo: int = 0,
+    session_id: Optional[str] = None,
+) -> dict:
     import logging
     logger = logging.getLogger("amber.minigame")
 
@@ -1353,6 +1444,10 @@ def submit_minigame_score(db: Session, player_id: str, game_type: str, score: in
     db_player = db.query(models.Player).filter(models.Player.id == player_id).first()
     if not db_player:
         return {"status": "error", "message": "找不到該球員"}
+
+    session_err = consume_minigame_session(session_id, player_id, game_type)
+    if session_err:
+        return {"status": "error", "message": session_err}
 
     # Dedup: same player + game + score within short window
     from datetime import timedelta

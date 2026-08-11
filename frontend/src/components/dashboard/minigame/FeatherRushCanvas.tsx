@@ -4,8 +4,8 @@ import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
 import { cn, getAvatarUrl } from '../../../lib/utils';
 import {
-  BALANCE, BOSSES, PHASE_SCROLL_LENGTHS, LANE_X, LaneIndex, EnemyState, EnemyKind,
-  ShotGrade, BossBehavior, BossPhase, GateOperation, bossPhaseFromHp, gradeShot,
+  BALANCE, BOSSES, LANE_X, LaneIndex, EnemyState, EnemyKind,
+  ShotGrade, GateOperation, gradeShot,
 } from './featherRushTypes';
 import {
   applyGate, computeFinalScore, generateGateTriplet, isGoodOp, isBadOp,
@@ -20,7 +20,7 @@ interface FeatherRushCanvasProps {
   onGameEnd: (score: number, maxCombo: number, remainingFeathers: number) => void;
 }
 
-type SubPhase = 'run' | 'boss' | 'sprint' | 'ended';
+type SubPhase = 'run' | 'boss' | 'ended';
 
 interface MathGate {
   id: number;
@@ -82,21 +82,18 @@ const GATE_PASS_DEPTH = -18;
 const COMBAT_RANGE = Math.round(VIEW_DEPTH * 0.5);
 const SCROLL_SPEED = 3.0;
 const BULLET_SPEED = 3.2;
-const HAZARD_SPEED = 4.0;
 const LANE_LERP = 0.18;
-const RUN_PHASE_SEC = 11;
-const TOTAL_GAME_SEC = 90;
+const TOTAL_GAME_SEC = BALANCE.gameDurationSec;
 const BOSS_SPAWN_DIST = Math.round(VIEW_DEPTH * 0.92);
 const BOSS_APPROACH_SPEED = 2.35;
-const BOSS_PASS_LOSS_PCT = BALANCE.bossFailLossPct;
 const ROAD_HALF_FAR = 0.20;
 const ROAD_HALF_NEAR = 0.46;
-const GATE_BREATH_GAP = 220;
-const ENEMY_BREATH_GAP = 260;
 const MAX_PROJECTILES = 8;
 const HIT_STOP_MS = 90;
 const BOSS_INTRO_MS = 750;
 const MAX_PARTICLES = 80;
+const HIT_COOLDOWN_MS = 180;
+const STAGE_BOUNDARIES = [0, 12, 27, 42, 57, TOTAL_GAME_SEC] as const;
 
 const GRADE_LABELS: Record<ShotGrade, string> = {
   perfect: '完美!', great: '精準!', good: '好球', miss: '揮空',
@@ -107,15 +104,33 @@ const GRADE_COLORS: Record<ShotGrade, string> = {
 
 const SEGMENT_NAMES = ['練習場衝刺', '網前纏鬥', '後場對轟', '決勝殺球'] as const;
 
-const ENEMY_DEFS: Record<EnemyKind, { emoji: string; hpMul: number; speedMul: number }> = {
-  runner: { emoji: '😤', hpMul: 0.85, speedMul: 1.15 },
-  tank: { emoji: '💪', hpMul: 1.45, speedMul: 0.75 },
-  dodger: { emoji: '🏸', hpMul: 0.9, speedMul: 1.1 },
-  shield: { emoji: '🧤', hpMul: 1.25, speedMul: 0.85 },
-  bomber: { emoji: '💥', hpMul: 0.7, speedMul: 1.0 },
-};
+function elapsedSecFromRefs(timeLeft: number, msIntoSec: number): number {
+  return TOTAL_GAME_SEC - timeLeft - (1000 - msIntoSec) / 1000;
+}
 
-const ENEMY_KINDS: EnemyKind[] = ['runner', 'tank', 'dodger', 'shield', 'bomber'];
+function stageIndexFromElapsed(elapsed: number): number {
+  if (elapsed < 12) return 0;
+  if (elapsed < 27) return 1;
+  if (elapsed < 42) return 2;
+  return 3;
+}
+
+function spawnIntervals(elapsed: number): { enemyMs: number; gateMs: number } | null {
+  if (elapsed >= BALANCE.bossAppearElapsedSec) return null;
+  if (elapsed < 10) return { enemyMs: 2500, gateMs: 4500 };
+  if (elapsed < 20) return { enemyMs: 2400, gateMs: 4400 };
+  if (elapsed < 30) return { enemyMs: 2300, gateMs: 4200 };
+  if (elapsed < 40) return { enemyMs: 2200, gateMs: 4000 };
+  if (elapsed < 50) return { enemyMs: 2200, gateMs: 4000 };
+  return { enemyMs: 2500, gateMs: 4500 };
+}
+
+function stageLocalProgress(elapsed: number, stageIdx: number, inBoss: boolean): number {
+  if (inBoss) return Math.min(1, (elapsed - 57) / 3);
+  const start = STAGE_BOUNDARIES[stageIdx];
+  const end = STAGE_BOUNDARIES[stageIdx + 1];
+  return Math.min(1, Math.max(0, (elapsed - start) / (end - start)));
+}
 
 interface CourtTheme {
   label: string;
@@ -160,58 +175,24 @@ function enemyStateFromDist(dist: number): EnemyState {
   return 'attacking';
 }
 
-function pickEnemyKind(phase: number): EnemyKind {
-  const pool = ENEMY_KINDS.slice(0, Math.min(ENEMY_KINDS.length, 2 + phase));
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function makeEnemy(id: number, lane: LaneIndex, z: number, phase: number, kind?: EnemyKind): Enemy {
-  const k = kind ?? pickEnemyKind(phase);
-  const def = ENEMY_DEFS[k];
-  const baseHp = Math.max(8, 10 + phase * 7 + Math.floor(Math.random() * 5));
-  const hp = Math.round(baseHp * def.hpMul);
+function makeEnemy(id: number, lane: LaneIndex, z: number): Enemy {
   const dist = z;
   return {
-    id, lane, z, hp, maxHp: hp, kind: k, state: enemyStateFromDist(dist),
-    emoji: def.emoji, reward: Math.max(2, Math.floor(hp * BALANCE.enemyRewardFactor * 0.55)),
-    speed: def.speedMul,
+    id, lane, z,
+    hp: BALANCE.enemyHp, maxHp: BALANCE.enemyHp,
+    kind: 'runner', state: enemyStateFromDist(dist),
+    emoji: '😤', reward: BALANCE.enemyReward, speed: 1,
   };
 }
 
-function spawnEnemyPack(z: number, phase: number, nextId: () => number): { enemies: Enemy[]; span: number } {
-  const count = 1 + Math.floor(Math.random() * 2);
-  const lanes: LaneIndex[] = [];
-  while (lanes.length < count) {
-    const l = Math.floor(Math.random() * 3) as LaneIndex;
-    if (!lanes.includes(l)) lanes.push(l);
-  }
-  const enemies = lanes.map((lane, i) => makeEnemy(nextId(), lane, z + i * 32, phase));
-  return { enemies, span: 300 + count * 40 };
+function spawnEnemyAt(z: number, nextId: () => number): Enemy {
+  const lane = Math.floor(Math.random() * 3) as LaneIndex;
+  return makeEnemy(nextId(), lane, z);
 }
 
-function spawnTrackEvents(phase: number, startId: number, feathers: number): { gates: MathGate[]; enemies: Enemy[] } {
-  const gates: MathGate[] = [];
-  const enemies: Enemy[] = [];
-  const trackLen = Math.min(PHASE_SCROLL_LENGTHS[phase] ?? 1100, 1100);
-  let z = VIEW_DEPTH + 40;
-  const endZ = VIEW_DEPTH + trackLen;
-  let counter = startId;
-  const nextId = () => { counter += 1; return counter; };
-  let expectGate = true;
-  while (z < endZ - 80) {
-    if (expectGate) {
-      const triplet = generateGateTriplet(phase, feathers);
-      gates.push({ id: nextId(), z, ops: triplet.ops, category: triplet.category, resolved: false });
-      z += GATE_BREATH_GAP;
-      expectGate = false;
-    } else {
-      const pack = spawnEnemyPack(z, phase, nextId);
-      enemies.push(...pack.enemies);
-      z += pack.span + ENEMY_BREATH_GAP;
-      expectGate = true;
-    }
-  }
-  return { gates, enemies };
+function spawnGateAt(z: number, stageIdx: number, feathers: number, nextId: () => number): MathGate {
+  const triplet = generateGateTriplet(stageIdx, feathers);
+  return { id: nextId(), z, ops: triplet.ops, category: triplet.category, resolved: false };
 }
 
 function drawParallax(ctx: CanvasRenderingContext2D, w: number, horizonY: number, scroll: number, theme: CourtTheme) {
@@ -315,26 +296,6 @@ function drawShuttlecock(ctx: CanvasRenderingContext2D, x: number, y: number, sc
   ctx.restore();
 }
 
-function bossActionInterval(behavior: BossBehavior): number {
-  if (behavior === 'clear_lob') return 1500;
-  if (behavior === 'jump_smash') return 1100;
-  return 999999;
-}
-
-function baseShotDamage(feathers: number): number {
-  if (feathers >= 100) return 3;
-  if (feathers >= 50) return 2;
-  return 1;
-}
-
-function fireIntervalMs(feathers: number, fever: boolean): number {
-  let ms = 240;
-  if (feathers >= 50) ms = 170;
-  if (feathers >= 100) ms = 140;
-  if (fever) ms *= 0.75;
-  return ms;
-}
-
 
 export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   playerName, playerAvatar, onGameEnd,
@@ -348,7 +309,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const avatarImgRef = useRef<HTMLImageElement | null>(null);
 
   const feathersRef = useRef(BALANCE.initialFeathers);
-  const phaseRef = useRef(0);
+  const stageRef = useRef(0);
   const subPhaseRef = useRef<SubPhase>('run');
   const scrollRef = useRef(0);
   const playerLaneRef = useRef<LaneIndex>(1);
@@ -360,22 +321,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const mathGatesRef = useRef<MathGate[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
-  const fireCooldownRef = useRef(0);
-  const phaseTimerRef = useRef(0);
-  const lastBossActionTimeRef = useRef(0);
+  const hitCooldownRef = useRef(0);
+  const enemySpawnTimerRef = useRef(2200);
+  const gateSpawnTimerRef = useRef(4200);
+  const bossSpawnedRef = useRef(false);
   const particlesRef = useRef<Particle[]>([]);
   const floatTextsRef = useRef<FloatingText[]>([]);
   const magnetFeathersRef = useRef<MagnetFeather[]>([]);
   const shakeRef = useRef(0);
-  const sprintRef = useRef(0);
   const endedRef = useRef(false);
   const secondsTimerRef = useRef(0);
-  const advanceBossTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trackEndZRef = useRef(VIEW_DEPTH + (PHASE_SCROLL_LENGTHS[0] ?? 1100));
-  const runClosingRef = useRef(false);
-  const progressRef = useRef(0);
   const toastUntilRef = useRef(0);
-  const tauntShownRef = useRef(false);
   const hitStopRef = useRef(0);
   const bossIntroRef = useRef(0);
   const vignetteRef = useRef(0);
@@ -385,8 +341,10 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const maxComboRef = useRef(0);
   const feverUntilRef = useRef(0);
   const feverActiveRef = useRef(false);
-  const bossHopTimerRef = useRef(0);
+  const bossHopTimerRef = useRef(900);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hitReadyRef = useRef(false);
+  const lastSegmentUiRef = useRef(0);
 
   const [feathers, setFeathers] = useState(BALANCE.initialFeathers);
   const [timeLeft, setTimeLeft] = useState(TOTAL_GAME_SEC);
@@ -403,6 +361,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   const [bossBanner, setBossBanner] = useState<string | null>(null);
   const [lane, setLane] = useState<LaneIndex>(1);
   const [subPhase, setSubPhase] = useState<SubPhase>('run');
+  const [hitReady, setHitReady] = useState(false);
 
   const nextId = () => { idCounterRef.current += 1; return idCounterRef.current; };
 
@@ -487,53 +446,39 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     });
   };
 
-  const loadPhaseTrack = (phase: number) => {
-    const track = spawnTrackEvents(phase, nextId(), feathersRef.current);
-    mathGatesRef.current = track.gates;
-    enemiesRef.current = track.enemies;
-    const endZ = VIEW_DEPTH + Math.min(PHASE_SCROLL_LENGTHS[phase] ?? 1100, 1100);
-    trackEndZRef.current = endZ;
-    bossAnchorZRef.current = endZ + 80;
+  const initGame = () => {
+    mathGatesRef.current = [];
+    enemiesRef.current = [];
+    projectilesRef.current = [];
+    scrollRef.current = 0;
+    stageRef.current = 0;
+    subPhaseRef.current = 'run';
+    bossSpawnedRef.current = false;
+    bossAnchorZRef.current = VIEW_DEPTH + 1000;
     bossLaneRef.current = 1;
-    const boss = BOSSES[phase];
-    bossHpRef.current = boss.hp;
-    setBossHp(boss.hp);
+    bossHpRef.current = 0;
+    enemySpawnTimerRef.current = 1800;
+    gateSpawnTimerRef.current = 3500;
+    setBossHp(0);
+    setSegmentIndex(1);
+    setPhaseLabel(SEGMENT_NAMES[0]);
+    setBossBanner(null);
+    const boss = BOSSES[0];
     const candidates = PETS_CATALOG.filter((p) => p.tier === boss.tier);
     setBossPet(candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null);
-    scrollRef.current = 0;
-    runClosingRef.current = false;
-    tauntShownRef.current = false;
-    setSegmentIndex(phase + 1);
-    setPhaseLabel(SEGMENT_NAMES[phase] ?? `賽道 ${phase + 1}`);
-    setBossBanner(null);
-  };
-
-  const screenIsClearForBoss = () => {
-    const cam = scrollRef.current;
-    const gateBlocking = mathGatesRef.current.some((g) => {
-      if (g.resolved && (g.fade ?? 0) <= 0) return false;
-      return g.z - cam > GATE_PASS_DEPTH;
-    });
-    if (gateBlocking) return false;
-    return !enemiesRef.current.some((e) => {
-      if (e.hp <= 0) return false;
-      const dist = e.z - cam;
-      return dist > HIT_DEPTH && dist < VIEW_DEPTH + 100;
-    });
   };
 
   const beginBossFight = () => {
-    if (subPhaseRef.current === 'boss' || !screenIsClearForBoss()) return;
+    if (bossSpawnedRef.current) return;
+    bossSpawnedRef.current = true;
     subPhaseRef.current = 'boss';
-    runClosingRef.current = false;
-    const boss = BOSSES[phaseRef.current];
+    const boss = BOSSES[0];
     bossHpRef.current = boss.hp;
     setBossHp(boss.hp);
     bossLaneRef.current = 1;
     setPhaseLabel(boss.title);
     setSubPhase('boss');
-    lastBossActionTimeRef.current = 0;
-    phaseTimerRef.current = 0;
+    bossHopTimerRef.current = 900;
     enemiesRef.current = [];
     projectilesRef.current = [];
     mathGatesRef.current = mathGatesRef.current.filter((g) => g.resolved && (g.fade ?? 0) > 0);
@@ -542,30 +487,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     flashWhiteRef.current = 0.55;
     shakeRef.current = Math.max(shakeRef.current, 10);
     setBossBanner(boss.title);
-    if (!tauntShownRef.current) {
-      tauntShownRef.current = true;
-      addFloatText(boss.taunt, canvasWidthRef.current * 0.5, canvasHeightRef.current * 0.32, boss.color);
-    }
-  };
-
-  const scheduleAdvance = () => {
-    if (advanceBossTimeoutRef.current) clearTimeout(advanceBossTimeoutRef.current);
-    advanceBossTimeoutRef.current = setTimeout(() => advanceAfterBoss(), 900);
-  };
-
-  const advanceAfterBoss = () => {
-    if (phaseRef.current >= 3) {
-      subPhaseRef.current = 'sprint';
-      sprintRef.current = 0;
-      setPhaseLabel('決勝局 · 結算衝刺');
-      setSubPhase('sprint');
-      return;
-    }
-    phaseRef.current += 1;
-    subPhaseRef.current = 'run';
-    phaseTimerRef.current = 0;
-    loadPhaseTrack(phaseRef.current);
-    setSubPhase('run');
+    addFloatText(boss.taunt, canvasWidthRef.current * 0.5, canvasHeightRef.current * 0.32, boss.color);
   };
 
   const finishGame = () => {
@@ -577,84 +499,69 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     onGameEnd(score, maxComboRef.current, feathersRef.current);
   };
 
-  const updateBossLane = (bossPhase: BossPhase, behavior: BossBehavior, delta: number) => {
-    if (bossPhase === 1) {
-      bossLaneRef.current = 1;
-      return;
-    }
-    if (bossPhase === 2) {
-      bossLaneRef.current = Math.sin(phaseTimerRef.current / 240) > 0 ? 2 : 0;
-      return;
-    }
+  const updateBossSidestep = (delta: number) => {
     bossHopTimerRef.current -= delta;
     if (bossHopTimerRef.current <= 0) {
-      bossHopTimerRef.current = bossPhase >= 4 ? 680 : 920;
-      bossLaneRef.current = Math.floor(Math.random() * 3) as LaneIndex;
-    }
-    if (behavior === 'clear_lob') {
-      bossLaneRef.current = (Math.round(phaseTimerRef.current / 900) % 3) as LaneIndex;
-    }
-  };
-
-  const spawnBossHazard = (behavior: BossBehavior) => {
-    const lane = Math.floor(Math.random() * 3) as LaneIndex;
-    if (behavior === 'clear_lob') {
-      enemiesRef.current.push({
-        id: nextId(), lane, z: bossAnchorZRef.current - 12,
-        maxHp: 3, hp: 3, kind: 'bomber', state: 'approaching',
-        emoji: Math.random() < 0.5 ? '📦' : '🏐', reward: 1, speed: 1, isHazard: true,
-      });
-    } else if (behavior === 'jump_smash') {
-      enemiesRef.current.push({
-        id: nextId(), lane, z: bossAnchorZRef.current - 12,
-        maxHp: 1, hp: 1, kind: 'bomber', state: 'approaching',
-        emoji: '🔥', reward: 0, speed: 1.2, isHazard: true,
-      });
+      bossHopTimerRef.current = 880 + Math.random() * 320;
+      let next = Math.floor(Math.random() * 3) as LaneIndex;
+      if (next === bossLaneRef.current) next = ((next + 1) % 3) as LaneIndex;
+      bossLaneRef.current = next;
     }
   };
 
-  const tryAutoFire = (w: number, h: number, px: number, playerY: number, frame: number) => {
-    if (fireCooldownRef.current > 0 || bossIntroRef.current > 0) return;
+  const findCombatTarget = (): { type: 'boss' | 'enemy'; dist: number; enemy?: Enemy } | null => {
     const cam = scrollRef.current;
-    const feverActive = isFeverActive();
-    const alive = projectilesRef.current.filter((p) => !p.dead).length;
-    if (alive >= MAX_PROJECTILES) return;
-
-    let target: Enemy | null = null;
-    let targetDist = Infinity;
+    const lane = playerLaneRef.current;
 
     if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
       const bossDist = bossAnchorZRef.current - cam;
-      if (bossDist <= COMBAT_RANGE && bossDist > HIT_DEPTH) {
-        const grade = gradeShot(bossDist, COMBAT_RANGE);
-        const dmg = shotDamage(baseShotDamage(feathersRef.current), grade, feverActive);
-        projectilesRef.current.push({
-          id: nextId(), lane: playerLaneRef.current, xPct: playerXRef.current,
-          z: cam + HIT_DEPTH + 40, damage: dmg, grade,
-        });
-        fireCooldownRef.current = fireIntervalMs(feathersRef.current, feverActive);
-        addParticles(px, playerY - 36, grade === 'perfect' ? '#fde047' : '#38bdf8', 4);
-        return;
+      if (bossDist <= COMBAT_RANGE && bossDist > HIT_DEPTH && lane === bossLaneRef.current) {
+        return { type: 'boss', dist: bossDist };
       }
     }
 
+    let target: Enemy | null = null;
+    let targetDist = Infinity;
     enemiesRef.current.forEach((e) => {
-      if (e.hp <= 0 || e.isHazard) return;
+      if (e.hp <= 0) return;
       const dist = e.z - cam;
       if (dist > COMBAT_RANGE || dist <= HIT_DEPTH) return;
-      if (e.lane !== playerLaneRef.current) return;
+      if (e.lane !== lane) return;
       if (dist < targetDist) { targetDist = dist; target = e; }
     });
+    if (target) return { type: 'enemy', dist: targetDist, enemy: target };
+    return null;
+  };
 
-    if (!target) return;
-    const grade = gradeShot(targetDist, COMBAT_RANGE);
-    const dmg = shotDamage(baseShotDamage(feathersRef.current), grade, feverActive);
+  const tryManualHit = () => {
+    if (hitCooldownRef.current > 0 || bossIntroRef.current > 0 || endedRef.current) return;
+    const w = canvasWidthRef.current;
+    const h = canvasHeightRef.current;
+    const playerY = h * PLAYER_Y_RATIO;
+    const playerScreen = worldToScreen(playerXRef.current, 0, w, h);
+    const px = playerScreen?.x ?? w * 0.5;
+
+    const target = findCombatTarget();
+    if (!target) {
+      resetCombo();
+      addFloatText(GRADE_LABELS.miss, px, playerY - 36, GRADE_COLORS.miss);
+      hitCooldownRef.current = HIT_COOLDOWN_MS;
+      return;
+    }
+
+    const feverActive = isFeverActive();
+    const grade = gradeShot(target.dist, COMBAT_RANGE);
+    const dmg = shotDamage(0, grade, feverActive);
+    const cam = scrollRef.current;
+    const alive = projectilesRef.current.filter((p) => !p.dead).length;
+    if (alive >= MAX_PROJECTILES) return;
+
     projectilesRef.current.push({
       id: nextId(), lane: playerLaneRef.current, xPct: playerXRef.current,
       z: cam + HIT_DEPTH + 40, damage: dmg, grade,
     });
-    fireCooldownRef.current = fireIntervalMs(feathersRef.current, feverActive);
-    addParticles(px, playerY - 36, grade === 'perfect' ? '#fde047' : '#38bdf8', grade === 'perfect' ? 6 : 3);
+    hitCooldownRef.current = HIT_COOLDOWN_MS;
+    addParticles(px, playerY - 36, grade === 'perfect' ? '#fde047' : '#38bdf8', grade === 'perfect' ? 6 : 4);
   };
 
   const resolveProjectileHits = (w: number, h: number, frame: number) => {
@@ -683,7 +590,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         addFloatText(GRADE_LABELS[grade], pScreen.x, pScreen.y - 18, GRADE_COLORS[grade]);
         addFloatText(`-${proj.damage}`, pScreen.x, pScreen.y - 4, '#f87171');
         if (bossHpRef.current <= 0) {
-          const boss = BOSSES[phaseRef.current];
+          const boss = BOSSES[0];
           feathersRef.current += boss.reward;
           setFeathers(feathersRef.current);
           triggerImpact('hard');
@@ -691,8 +598,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           addFloatText(`+${boss.reward} 羽毛！`, w * 0.5, h * 0.38, '#fbbf24');
           addFloatText('擊破對手 · 勝利！', w * 0.5, h * 0.44, '#7dd3fc');
           if (bScreen) { addParticles(bScreen.x, bScreen.y, '#fbbf24', 40); spawnMagnetFeather(bScreen.x, bScreen.y, boss.reward); }
-          if (phaseRef.current >= 3) setTimeout(() => finishGame(), 1200);
-          else { progressRef.current = (phaseRef.current + 1) / 4; scheduleAdvance(); }
+          setTimeout(() => finishGame(), 800);
         }
         return;
       }
@@ -749,8 +655,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
   }, [playerAvatar, playerName]);
 
   useEffect(() => {
-    loadPhaseTrack(0);
-    setPhaseLabel(SEGMENT_NAMES[0]);
+    initGame();
 
     const resize = () => {
       const container = containerRef.current;
@@ -823,54 +728,64 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         secondsTimerRef.current -= 1000;
         timeLeftRef.current = Math.max(0, timeLeftRef.current - 1);
         setTimeLeft(timeLeftRef.current);
-        if (timeLeftRef.current <= 0 && subPhaseRef.current !== 'sprint') { finishGame(); return; }
+        if (timeLeftRef.current <= 0) { finishGame(); return; }
       }
+
+      const elapsed = elapsedSecFromRefs(timeLeftRef.current, secondsTimerRef.current);
+      const stageIdx = stageIndexFromElapsed(elapsed);
+      const inBoss = elapsed >= BALANCE.bossAppearElapsedSec;
+      stageRef.current = stageIdx;
+
+      if (stageIdx !== lastSegmentUiRef.current && !inBoss) {
+        lastSegmentUiRef.current = stageIdx;
+        setSegmentIndex(stageIdx + 1);
+        setPhaseLabel(SEGMENT_NAMES[stageIdx] ?? SEGMENT_NAMES[0]);
+      }
+
+      const overallProgress = Math.min(1, elapsed / TOTAL_GAME_SEC);
+      setProgress((prev) => Math.abs(prev - overallProgress) > 0.008 ? overallProgress : prev);
 
       const targetX = laneToX(playerLaneRef.current);
       playerXRef.current += (targetX - playerXRef.current) * LANE_LERP * frame;
       const playerScreen = worldToScreen(playerXRef.current, 0, w, h);
       const px = playerScreen?.x ?? w * 0.5;
 
-      if (subPhaseRef.current === 'sprint') {
-        sprintRef.current += frame;
-        progressRef.current = Math.min(1, 0.97 + (sprintRef.current / 90) * 0.03);
-        if (sprintRef.current > 90) { finishGame(); return; }
-      } else if (subPhaseRef.current === 'run') {
-        phaseTimerRef.current += delta;
-        scrollRef.current += SCROLL_SPEED * frame;
-        const runTarget = trackEndZRef.current - VIEW_DEPTH * 0.35;
-        const runPct = Math.min(1, scrollRef.current / Math.max(1, runTarget));
-        progressRef.current = (phaseRef.current + runPct * 0.55) / 4;
-        if (!runClosingRef.current && (phaseTimerRef.current / 1000 >= RUN_PHASE_SEC || scrollRef.current >= runTarget)) {
-          runClosingRef.current = true;
-          setPhaseLabel('即將對決…');
-        }
-        if (runClosingRef.current && screenIsClearForBoss()) beginBossFight();
-      } else if (subPhaseRef.current === 'boss') {
-        phaseTimerRef.current += delta;
-        const boss = BOSSES[phaseRef.current];
-        const bPhase = bossPhaseFromHp(bossHpRef.current, boss.hp);
-        let speed = BOSS_APPROACH_SPEED;
-        if (bPhase >= 3) speed *= 1.25;
-        if (bPhase >= 4) speed *= 1.2;
-        if (bossIntroRef.current <= 0 && bossHpRef.current > 0) {
-          bossAnchorZRef.current -= speed * frame;
-        }
-        updateBossLane(bPhase, boss.behavior, delta);
-        const hpPct = 1 - bossHpRef.current / Math.max(1, boss.hp);
-        progressRef.current = (phaseRef.current + 0.55 + hpPct * 0.45) / 4;
+      scrollRef.current += SCROLL_SPEED * frame;
+      hitCooldownRef.current = Math.max(0, hitCooldownRef.current - delta);
+
+      if (!bossSpawnedRef.current && elapsed >= BALANCE.bossAppearElapsedSec) {
+        beginBossFight();
       }
 
-      setProgress((prev) => {
-        const next = progressRef.current;
-        return Math.abs(prev - next) > 0.008 ? next : prev;
-      });
-
-      if (subPhaseRef.current === 'run' || subPhaseRef.current === 'boss') {
-        fireCooldownRef.current -= delta;
-        tryAutoFire(w, h, px, playerY, frame);
-        resolveProjectileHits(w, h, frame);
+      if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
+        if (bossIntroRef.current <= 0) {
+          bossAnchorZRef.current -= BOSS_APPROACH_SPEED * frame;
+        }
+        updateBossSidestep(delta);
       }
+
+      const spawnCfg = spawnIntervals(elapsed);
+      if (spawnCfg && subPhaseRef.current === 'run') {
+        enemySpawnTimerRef.current -= delta;
+        gateSpawnTimerRef.current -= delta;
+        if (enemySpawnTimerRef.current <= 0) {
+          enemiesRef.current.push(spawnEnemyAt(cam + VIEW_DEPTH + 40, nextId));
+          enemySpawnTimerRef.current = spawnCfg.enemyMs;
+        }
+        if (gateSpawnTimerRef.current <= 0) {
+          mathGatesRef.current.push(spawnGateAt(cam + VIEW_DEPTH + 60, stageIdx, feathersRef.current, nextId));
+          gateSpawnTimerRef.current = spawnCfg.gateMs;
+        }
+      }
+
+      const combatTarget = findCombatTarget();
+      const ready = combatTarget !== null;
+      if (ready !== hitReadyRef.current) {
+        hitReadyRef.current = ready;
+        setHitReady(ready);
+      }
+
+      resolveProjectileHits(w, h, frame);
 
       const warningLanes = new Set<LaneIndex>();
       if (subPhaseRef.current === 'run') {
@@ -881,7 +796,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           if (e.state === 'warning' || e.state === 'attacking') warningLanes.add(e.lane);
           if (dist <= HIT_DEPTH) {
             if (e.lane === playerLaneRef.current || Math.abs(playerXRef.current - laneToX(e.lane)) < 14) {
-              const loss = Math.min(feathersRef.current, e.maxHp);
+              const loss = Math.min(feathersRef.current, BALANCE.collisionLoss);
               feathersRef.current = Math.max(0, feathersRef.current - loss);
               setFeathers(feathersRef.current);
               e.hp = 0;
@@ -924,68 +839,11 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         mathGatesRef.current = mathGatesRef.current.filter((g) => !g.resolved || (g.fade != null && g.fade > 0.02));
       }
 
-      if (subPhaseRef.current === 'boss' && bossHpRef.current > 0) {
-        const boss = BOSSES[phaseRef.current];
-        const bPhase = bossPhaseFromHp(bossHpRef.current, boss.hp);
-        const interval = bossActionInterval(boss.behavior);
-        if ((boss.behavior === 'clear_lob' || boss.behavior === 'jump_smash')
-          && phaseTimerRef.current - lastBossActionTimeRef.current >= interval
-          && bossIntroRef.current <= 0) {
-          lastBossActionTimeRef.current = phaseTimerRef.current;
-          spawnBossHazard(boss.behavior);
-        }
-
-        enemiesRef.current.forEach((e) => {
-          if (e.isHazard) e.z -= HAZARD_SPEED * frame;
-          const dist = e.z - cam;
-          e.state = enemyStateFromDist(dist);
-          if (e.state === 'warning' || e.state === 'attacking') warningLanes.add(e.lane);
-          if (dist <= HIT_DEPTH) {
-            if (e.lane === playerLaneRef.current) {
-              const loss = e.emoji === '🔥' ? Math.min(feathersRef.current, 8)
-                : Math.min(feathersRef.current, Math.max(3, e.hp));
-              feathersRef.current = Math.max(0, feathersRef.current - loss);
-              setFeathers(feathersRef.current);
-              e.hp = 0;
-              resetCombo();
-              triggerImpact('fail');
-              addParticles(px, playerY, '#ef4444', 22);
-              addFloatText(`-${loss}`, px, playerY - 28, '#ef4444');
-              showToast(e.emoji === '🔥' ? '被殺球擊中' : '撞到障礙');
-              if (feathersRef.current <= 0) finishGame();
-            } else if (dist < -50) e.hp = 0;
-          }
-        });
-        enemiesRef.current = enemiesRef.current.filter((e) => e.hp > 0 && e.z > cam - 80);
-
-        const bossDist = bossAnchorZRef.current - cam;
-        if (bossHpRef.current > 0 && bossDist <= HIT_DEPTH) {
-          const sameLane = playerLaneRef.current === bossLaneRef.current;
-          if (sameLane) {
-            const lossPct = bPhase >= 4 ? BOSS_PASS_LOSS_PCT * 1.25 : BOSS_PASS_LOSS_PCT;
-            const loss = Math.min(feathersRef.current, Math.max(10, Math.floor(feathersRef.current * lossPct)));
-            feathersRef.current = Math.max(0, feathersRef.current - loss);
-            setFeathers(feathersRef.current);
-            resetCombo();
-            triggerImpact('fail');
-            addParticles(px, playerY, '#ef4444', 30);
-            addFloatText(`-${loss}`, px, playerY - 28, '#ef4444');
-            showToast('被對手穿過！');
-            if (feathersRef.current <= 0) { finishGame(); return; }
-          } else {
-            addFloatText('閃過！', px, playerY - 36, '#7dd3fc');
-          }
-          bossAnchorZRef.current = cam + BOSS_SPAWN_DIST;
-          bossLaneRef.current = 1;
-          addFloatText('對手再次從底線壓上！', w * 0.5, h * 0.3, boss.color);
-        }
-      }
-
       {
         const bossDist = bossAnchorZRef.current - cam;
         const bScreen = worldToScreen(laneToX(bossLaneRef.current), bossDist, w, h);
         if (bScreen && bossDist > -60 && bossDist < VIEW_DEPTH + 120 && bossHpRef.current > 0
-          && subPhaseRef.current !== 'sprint' && subPhaseRef.current !== 'ended') {
+          && subPhaseRef.current !== 'ended') {
           setBossScreen({ x: Math.max(36, Math.min(w - 36, bScreen.x)), y: Math.max(36, Math.min(h - 30, bScreen.y)), scale: bScreen.scale, visible: true });
         } else {
           setBossScreen((s) => (s.visible ? { ...s, visible: false } : s));
@@ -1013,7 +871,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       const shakeX = shakeRef.current > 0 ? (Math.random() - 0.5) * shakeRef.current : 0;
       const shakeY = shakeRef.current > 0 ? (Math.random() - 0.5) * shakeRef.current * 0.5 : 0;
       ctx.clearRect(0, 0, w, h);
-      const theme = COURT_THEMES[Math.min(COURT_THEMES.length - 1, phaseRef.current)] ?? COURT_THEMES[0];
+      const theme = COURT_THEMES[Math.min(COURT_THEMES.length - 1, stageRef.current)] ?? COURT_THEMES[0];
 
       const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
       skyGrad.addColorStop(0, theme.sky[0]);
@@ -1021,7 +879,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       skyGrad.addColorStop(1, theme.sky[2]);
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, w, horizonY);
-      drawParallax(ctx, w, horizonY, scrollRef.current + (subPhaseRef.current === 'boss' ? phaseTimerRef.current * 0.08 : 0), theme);
+      drawParallax(ctx, w, horizonY, scrollRef.current + (subPhaseRef.current === 'boss' ? delta * 0.08 : 0), theme);
 
       ctx.fillStyle = theme.haze;
       ctx.beginPath();
@@ -1161,41 +1019,33 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           ctx.ellipse(sx, sy + 22 * sc, 28 * sc, 8 * sc, 0, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(15,23,42,0.35)';
           ctx.fill();
-          if (enemy.isHazard) {
-            ctx.fillStyle = enemy.emoji === '🔥' ? '#ea580c' : '#0284c7';
-            ctx.fillRect(sx - 24 * sc, sy - 20 * sc, 48 * sc, 40 * sc);
-            ctx.font = `${Math.max(14, Math.floor(22 * sc))}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText(enemy.emoji, sx, sy);
-          } else {
-            const bodyW = 36 * sc;
-            const bodyH = 40 * sc;
-            const grad = ctx.createLinearGradient(sx, sy - bodyH, sx, sy + bodyH * 0.4);
-            grad.addColorStop(0, '#fb7185');
-            grad.addColorStop(1, '#9f1239');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH, 12 * sc);
-            else ctx.rect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH);
-            ctx.fill();
-            const headY = sy - bodyH * 0.55;
-            ctx.beginPath();
-            ctx.arc(sx, headY, 16 * sc, 0, Math.PI * 2);
-            ctx.fillStyle = '#1e293b';
-            ctx.fill();
-            ctx.font = `${Math.max(14, Math.floor(22 * sc))}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText(enemy.emoji, sx, headY);
-            const barW = Math.max(28, 44 * sc);
-            const barH = Math.max(4, 5 * sc);
-            const ratio = Math.max(0, enemy.hp / Math.max(1, enemy.maxHp));
-            let barX = Math.max(4, Math.min(w - barW - 4, sx - barW / 2));
-            const barY = Math.max(4, headY - 20 * sc);
-            ctx.fillStyle = 'rgba(15,23,42,0.9)';
-            ctx.fillRect(barX, barY, barW, barH);
-            ctx.fillStyle = ratio > 0.4 ? '#4ade80' : '#f87171';
-            ctx.fillRect(barX, barY, barW * ratio, barH);
-          }
+          const bodyW = 36 * sc;
+          const bodyH = 40 * sc;
+          const grad = ctx.createLinearGradient(sx, sy - bodyH, sx, sy + bodyH * 0.4);
+          grad.addColorStop(0, '#fb7185');
+          grad.addColorStop(1, '#9f1239');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH, 12 * sc);
+          else ctx.rect(sx - bodyW / 2, sy - bodyH * 0.35, bodyW, bodyH);
+          ctx.fill();
+          const headY = sy - bodyH * 0.55;
+          ctx.beginPath();
+          ctx.arc(sx, headY, 16 * sc, 0, Math.PI * 2);
+          ctx.fillStyle = '#1e293b';
+          ctx.fill();
+          ctx.font = `${Math.max(14, Math.floor(22 * sc))}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(enemy.emoji, sx, headY);
+          const barW = Math.max(28, 44 * sc);
+          const barH = Math.max(4, 5 * sc);
+          const ratio = Math.max(0, enemy.hp / Math.max(1, enemy.maxHp));
+          const barX = Math.max(4, Math.min(w - barW - 4, sx - barW / 2));
+          const barY = Math.max(4, headY - 20 * sc);
+          ctx.fillStyle = 'rgba(15,23,42,0.9)';
+          ctx.fillRect(barX, barY, barW, barH);
+          ctx.fillStyle = ratio > 0.4 ? '#4ade80' : '#f87171';
+          ctx.fillRect(barX, barY, barW * ratio, barH);
           ctx.restore();
         } else if (item.proj) {
           const screen = worldToScreen(item.proj.xPct, item.dist, w, h);
@@ -1204,19 +1054,20 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         }
       });
 
-      if (subPhaseRef.current === 'sprint') {
-        const { score } = computeFinalScore(feathersRef.current);
-        ctx.fillStyle = '#e2e8f0';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('決勝局 · 結算衝刺', w / 2, h * 0.36);
-        ctx.font = 'bold 34px sans-serif';
-        ctx.fillStyle = '#c4b5fd';
-        ctx.fillText(`${score} 分`, w / 2, h * 0.46);
-      }
-
       const playerRenderX = px + shakeX;
       const playerRenderY = playerY + shakeY;
+
+      if (hitReadyRef.current) {
+        ctx.save();
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fde047';
+        ctx.strokeStyle = 'rgba(15,23,42,0.85)';
+        ctx.lineWidth = 3;
+        ctx.strokeText('READY', playerRenderX, playerRenderY - 52);
+        ctx.fillText('READY', playerRenderX, playerRenderY - 52);
+        ctx.restore();
+      }
       const squadCount = Math.min(6, Math.floor(feathersRef.current / 12) + 1);
       for (let i = 0; i < squadCount; i++) {
         const col = (i % 3) - 1;
@@ -1299,7 +1150,6 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(requestRef.current);
       el?.removeEventListener('touchmove', blockTouch);
-      if (advanceBossTimeoutRef.current) clearTimeout(advanceBossTimeoutRef.current);
     };
   }, [onGameEnd]);
 
@@ -1308,14 +1158,18 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') shiftLane('left');
       else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') shiftLane('right');
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); tryManualHit(); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const currentBossConfig = BOSSES[Math.max(0, segmentIndex - 1)] ?? BOSSES[0];
+  const currentBossConfig = BOSSES[0];
   const bossVisible = bossScreen.visible && !!bossPet && bossHp > 0;
-  const phaseLocalProgress = Math.max(0, Math.min(1, progress * 4 - (segmentIndex - 1)));
+  const elapsed = progress * TOTAL_GAME_SEC;
+  const uiStageIdx = stageIndexFromElapsed(elapsed);
+  const inBoss = elapsed >= BALANCE.bossAppearElapsedSec || subPhase === 'boss';
+  const phaseLocalProgress = stageLocalProgress(elapsed, uiStageIdx, inBoss);
 
   return (
     <div
@@ -1331,6 +1185,9 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         const dy = e.clientY - start.y;
         if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
           shiftLane(dx > 0 ? 'right' : 'left');
+        } else if (Math.hypot(dx, dy) < 28) {
+          // 短按 HIT；中等位移忽略，避免與換道誤觸
+          tryManualHit();
         }
       }}
     >
@@ -1408,28 +1265,28 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         <div className="flex items-stretch gap-1 mb-1">
           {SEGMENT_NAMES.map((name, i) => {
             const stageNum = i + 1;
-            const completed = segmentIndex > stageNum;
-            const active = segmentIndex === stageNum && subPhase !== 'sprint' && subPhase !== 'ended';
-            const inBoss = active && subPhase === 'boss';
+            const completed = inBoss ? i < 3 : segmentIndex > stageNum;
+            const active = inBoss ? i === 3 : segmentIndex === stageNum;
+            const inBossSeg = active && inBoss;
             const fill = completed ? 100 : active ? Math.round(phaseLocalProgress * 100) : 0;
             return (
               <div key={name} className="flex-1 min-w-0 flex flex-col gap-0.5">
                 <div className={cn(
                   'relative h-2 rounded-full overflow-hidden border',
                   completed ? 'border-emerald-400/50 bg-emerald-950/40'
-                    : active ? inBoss ? 'border-rose-400/60 bg-rose-950/40' : 'border-sky-400/50 bg-sky-950/40'
+                    : active ? inBossSeg ? 'border-rose-400/60 bg-rose-950/40' : 'border-sky-400/50 bg-sky-950/40'
                     : 'border-slate-700/60 bg-slate-900/60',
                 )}>
                   <div className={cn(
                     'absolute inset-y-0 left-0 rounded-full transition-[width] duration-200',
-                    completed ? 'bg-emerald-400' : inBoss ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-sky-500 to-emerald-400',
+                    completed ? 'bg-emerald-400' : inBossSeg ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-sky-500 to-emerald-400',
                   )} style={{ width: `${fill}%` }} />
                 </div>
                 <div className="flex items-center justify-between gap-0.5 px-0.5">
                   <span className={cn('text-[7px] font-black truncate', completed ? 'text-emerald-400' : active ? 'text-white' : 'text-slate-600')}>
                     {stageNum}.{COURT_THEMES[i]?.label ?? name}
                   </span>
-                  {inBoss && <span className="text-[7px] font-black text-rose-300 shrink-0 animate-pulse">Boss</span>}
+                  {inBossSeg && <span className="text-[7px] font-black text-rose-300 shrink-0 animate-pulse">Boss</span>}
                   {completed && <span className="text-[7px] font-black text-emerald-400 shrink-0">✓</span>}
                 </div>
               </div>
@@ -1465,13 +1322,12 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       {showTip && (
         <div className="absolute top-[100px] inset-x-0 z-10 flex justify-center pointer-events-none">
           <span className="text-[9px] font-bold text-slate-400 bg-slate-950/70 px-2.5 py-1 rounded-full border border-slate-700/50">
-            <span className="sm:hidden">滑動切換賽道 · 自動殺球</span>
-            <span className="hidden sm:inline">← → 或 A D 切換左中右賽道 · 連擊 10 進入 FEVER</span>
+            滑動換道 · 點擊或空白鍵 HIT
           </span>
         </div>
       )}
 
-      <div className="absolute bottom-0 inset-x-0 z-30 flex justify-between pointer-events-none"
+      <div className="absolute bottom-0 inset-x-0 z-30 flex justify-between items-end pointer-events-none"
         style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <button type="button" aria-label="向左切換賽道"
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); shiftLane('left'); }}
@@ -1480,6 +1336,17 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
             lane === 0 ? 'bg-sky-500/40 border-sky-300 text-sky-100 ring-2 ring-sky-400/60' : 'bg-slate-900/85 border-slate-600 text-white',
           )}>
           <ChevronLeft className="w-10 h-10 sm:w-8 sm:h-8" />
+        </button>
+        <button type="button" aria-label="手動 HIT"
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); tryManualHit(); }}
+          className={cn(
+            'pointer-events-auto mb-2 w-[80px] h-[80px] sm:w-[72px] sm:h-[72px] rounded-full border-2 flex flex-col items-center justify-center active:scale-95 transition-all shadow-2xl',
+            hitReady
+              ? 'bg-amber-500/50 border-amber-300 text-amber-100 ring-2 ring-amber-400/70 animate-pulse'
+              : 'bg-slate-900/90 border-slate-500 text-white',
+          )}>
+          <span className="text-2xl sm:text-xl leading-none">🏸</span>
+          <span className="text-[10px] font-black mt-0.5">HIT</span>
         </button>
         <button type="button" aria-label="向右切換賽道"
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); shiftLane('right'); }}

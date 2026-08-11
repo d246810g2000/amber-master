@@ -410,7 +410,13 @@ class TestBettingV2(unittest.TestCase):
 
         crud.datetime = MockedDatetime
         try:
-            res = crud.submit_minigame_score(db, "b1", "feather_rush", 850, 0)
+            started = crud.start_minigame_session("b1", "feather_rush")
+            self.assertEqual(started["status"], "success")
+            sid = started["sessionId"]
+            # Mocked now is 12:00:00; backdate start so duration ≈ 60s
+            crud._MINIGAME_SESSIONS[sid]["start_at"] = real_datetime(2026, 6, 24, 11, 59, 0)
+
+            res = crud.submit_minigame_score(db, "b1", "feather_rush", 850, 0, sid)
             self.assertEqual(res["status"], "success")
             self.assertEqual(res["reward"], 0)
 

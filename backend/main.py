@@ -503,12 +503,24 @@ def get_minigame_status(playerEmail: str = Query(...), db: Session = Depends(get
     status_info = crud.check_minigame_eligibility(db, player.id)
     return success(status_info)
 
+@app.post("/minigame/start")
+async def start_minigame_session(req: schemas.MiniGameStartRequest, db: Session = Depends(get_db)):
+    player = crud.get_player_by_email(db, req.playerEmail)
+    if not player:
+        return error("找不到球員資料，請確認是否已綁定帳號")
+    res = crud.start_minigame_session(player.id, req.gameType)
+    if res.get("status") == "error":
+        return error(res.get("message"))
+    return success(res)
+
 @app.post("/minigame/submit")
 async def submit_minigame_score(req: schemas.MiniGameSubmitRequest, db: Session = Depends(get_db)):
     player = crud.get_player_by_email(db, req.playerEmail)
     if not player:
         return error("找不到球員資料，請確認是否已綁定帳號")
-    res = crud.submit_minigame_score(db, player.id, req.gameType, req.score, req.maxCombo)
+    res = crud.submit_minigame_score(
+        db, player.id, req.gameType, req.score, req.maxCombo, req.sessionId,
+    )
     if res.get("status") == "error":
         return error(res.get("message"))
     return success(res)

@@ -70,7 +70,7 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
 
             <div className="w-full grid grid-cols-2 gap-2 text-left bg-slate-900 border border-slate-800/60 p-3 rounded-xl text-[10px] font-semibold text-slate-300">
               <div>🪶 開局 80 羽毛（戰力）</div>
-              <div>⏱️ 約 90 秒一場</div>
+              <div>⏱️ 約 60 秒一場</div>
               <div>⬅️➡️ 三線道切換／滑動</div>
               <div>🏸 時機殺球 Perfect～Miss</div>
               <div>🚪 三線數字門策略選擇</div>

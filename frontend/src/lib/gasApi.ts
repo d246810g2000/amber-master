@@ -215,8 +215,18 @@ export async function fetchMiniGameStatus(playerEmail: string) {
   return apiGet('/minigame/status', { playerEmail }, z.any());
 }
 
-export async function submitMiniGameScore(playerEmail: string, score: number, maxCombo?: number, gameType: string = 'feather') {
-  return apiPost('/minigame/submit', { playerEmail, score, maxCombo, gameType }, z.any());
+export async function startMiniGameSession(playerEmail: string, gameType: string = 'feather_rush') {
+  return apiPost('/minigame/start', { playerEmail, gameType }, z.any());
+}
+
+export async function submitMiniGameScore(
+  playerEmail: string,
+  score: number,
+  maxCombo?: number,
+  gameType: string = 'feather',
+  sessionId?: string | null,
+) {
+  return apiPost('/minigame/submit', { playerEmail, score, maxCombo, gameType, sessionId: sessionId || undefined }, z.any());
 }
 
 export async function fetchMiniGameWeeklyClaimStatus(playerEmail: string) {
