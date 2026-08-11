@@ -415,3 +415,82 @@ export function getTitleStyle(titleName: string | undefined): { bg: string; text
   // '球場邊緣人', '撿球大師', '職業請假選手'
   return defaultStyle;
 }
+
+/** Light backgrounds need dark text; dark/saturated backgrounds need light text. */
+export type CardTextTone = 'on-dark' | 'on-light' | 'default';
+
+export function getBackgroundTextTone(backgroundName: string | undefined): CardTextTone {
+  if (!backgroundName) return 'default';
+  switch (backgroundName) {
+    case '白銀：微光銀河':
+    case '黃金：金光閃耀':
+      return 'on-light';
+    default:
+      // Most cosmetic BGs are mid/dark saturated — prefer light text + shadow
+      return 'on-dark';
+  }
+}
+
+export function getCardForegroundClasses(
+  backgroundName: string | undefined,
+  opts?: { isFallingFeathers?: boolean },
+): {
+  tone: CardTextTone;
+  name: string;
+  meta: string;
+  divider: string;
+  score: string;
+  feathers: string;
+  featherIcon: string;
+  scrim: string;
+} {
+  if (opts?.isFallingFeathers) {
+    return {
+      tone: 'on-light',
+      name: 'text-slate-950 dark:text-white drop-shadow-[0_1px_2px_rgba(255,255,255,0.85)] dark:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]',
+      meta: 'text-slate-800 dark:text-slate-100 font-extrabold drop-shadow-sm',
+      divider: 'text-slate-500/80 dark:text-slate-400',
+      score: 'text-emerald-800 dark:text-emerald-300 font-black drop-shadow-sm',
+      feathers: 'text-sky-800 dark:text-sky-300 font-black drop-shadow-sm',
+      featherIcon: 'text-sky-700 dark:text-sky-300',
+      scrim: 'bg-gradient-to-t from-white/55 via-white/20 to-transparent dark:from-black/60 dark:via-black/25 dark:to-transparent',
+    };
+  }
+
+  const tone = getBackgroundTextTone(backgroundName);
+  if (tone === 'on-light') {
+    return {
+      tone,
+      name: 'text-slate-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.65)]',
+      meta: 'text-slate-800 font-extrabold drop-shadow-sm',
+      divider: 'text-slate-600/70',
+      score: 'text-emerald-800 font-black drop-shadow-sm',
+      feathers: 'text-sky-900 font-black drop-shadow-sm',
+      featherIcon: 'text-sky-800',
+      scrim: 'bg-gradient-to-t from-white/70 via-white/25 to-transparent',
+    };
+  }
+  if (tone === 'on-dark') {
+    return {
+      tone,
+      name: 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]',
+      meta: 'text-slate-100 font-extrabold drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]',
+      divider: 'text-white/45',
+      score: 'text-emerald-300 font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]',
+      feathers: 'text-sky-200 font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]',
+      featherIcon: 'text-sky-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]',
+      scrim: 'bg-gradient-to-t from-black/65 via-black/30 to-transparent',
+    };
+  }
+
+  return {
+    tone: 'default',
+    name: 'text-slate-900 dark:text-slate-100',
+    meta: 'text-slate-600 dark:text-slate-300 font-bold',
+    divider: 'text-slate-300 dark:text-slate-600',
+    score: 'text-emerald-700 dark:text-emerald-400 font-black',
+    feathers: 'text-sky-700 dark:text-sky-300 font-black',
+    featherIcon: 'text-sky-600 dark:text-sky-400',
+    scrim: '',
+  };
+}

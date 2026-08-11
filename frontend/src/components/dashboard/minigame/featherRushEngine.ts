@@ -220,20 +220,25 @@ export function generateGatePair(phaseIndex: number, feathers: number): GatePair
   return { left, right, category };
 }
 
-const FREE_GOOD = () => [
-  makeOp('add', 20),
-  makeOp('add', 30),
-  makeOp('add', 50),
-  makeOp('mul', 1.2),
-  makeOp('mul', 1.5),
-];
-const FREE_BAD = () => [
-  makeOp('sub', 10),
-  makeOp('sub', 20),
-];
+/** Free-X gates: 1–2 ops at random X; feathers<30 forces a +30 recovery.
+ *  Stage only changes the pool — does not reset the 60s clock. */
+export function generateFreeGates(feathers: number, stageIndex = 0): { ops: GateOperation[]; xs: number[] } {
+  const stage = Math.min(3, Math.max(0, stageIndex));
+  const goodPools: GateOperation[][] = [
+    [makeOp('add', 20), makeOp('add', 30), makeOp('add', 50)],
+    [makeOp('add', 20), makeOp('add', 30), makeOp('mul', 1.2)],
+    [makeOp('add', 50), makeOp('mul', 1.5), makeOp('add', 30)],
+    [makeOp('add', 60), makeOp('mul', 2), makeOp('add', 40)],
+  ];
+  const badPools: GateOperation[][] = [
+    [makeOp('sub', 10)],
+    [makeOp('sub', 10), makeOp('sub', 20)],
+    [makeOp('sub', 20), makeOp('sub', 10)],
+    [makeOp('sub', 30), makeOp('sub', 20)],
+  ];
+  const goodPool = goodPools[stage];
+  const badPool = badPools[stage];
 
-/** Free-X gates: 1–2 ops at random X; feathers<30 forces a +30 recovery */
-export function generateFreeGates(feathers: number): { ops: GateOperation[]; xs: number[] } {
   const recovery = makeOp('add', 30, { isRecovery: true });
   const forceRecovery = feathers < BALANCE.recoveryFeatherThreshold;
   const count = forceRecovery || Math.random() < 0.55 ? 2 : 1;
@@ -241,13 +246,13 @@ export function generateFreeGates(feathers: number): { ops: GateOperation[]; xs:
   const xs: number[] = [];
 
   if (count === 1) {
-    ops.push(forceRecovery ? recovery : pickRandom([...FREE_GOOD(), ...FREE_BAD()]));
+    ops.push(forceRecovery ? recovery : pickRandom([...goodPool, ...badPool]));
     xs.push(28 + Math.random() * 44);
   } else {
-    const left = forceRecovery ? recovery : pickRandom(FREE_GOOD());
-    const right = pickRandom(FREE_BAD());
+    const left = forceRecovery ? recovery : pickRandom(goodPool);
+    const right = pickRandom(badPool);
     if (Math.random() > 0.5 && !forceRecovery) {
-      ops.push(pickRandom(FREE_BAD()), pickRandom(FREE_GOOD()));
+      ops.push(pickRandom(badPool), pickRandom(goodPool));
     } else {
       ops.push(left, right);
     }
@@ -256,10 +261,32 @@ export function generateFreeGates(feathers: number): { ops: GateOperation[]; xs:
   return { ops, xs };
 }
 
-/** @deprecated kept for simulation helpers */
+/** Each projectile hit nudges the gate value (add↓, sub→0, mul↓). */
+export function degradeGateOnHit(op: GateOperation): GateOperation {
+  const next = { ...op };
+  switch (op.type) {
+    case 'add':
+      next.value = Math.max(5, op.value - 5);
+      break;
+    case 'sub':
+      next.value = Math.max(0, op.value - 5);
+      break;
+    case 'mul':
+      next.value = Math.max(1, Number((op.value - 0.2).toFixed(2)));
+      break;
+    case 'div':
+      next.value = Math.min(4, Number((op.value + 0.2).toFixed(2)));
+      break;
+    default:
+      break;
+  }
+  next.label = formatGateLabel(next);
+  return next;
+}
+
 export function generateGateTriplet(_phaseIndex: number, feathers: number): GateTriplet {
-  const { ops } = generateFreeGates(feathers);
-  while (ops.length < 3) ops.push(pickRandom(FREE_GOOD()));
+  const { ops } = generateFreeGates(feathers, _phaseIndex);
+  while (ops.length < 3) ops.push(makeOp('add', 20));
   return {
     ops: [ops[0], ops[1], ops[2]],
     category: feathers < BALANCE.recoveryFeatherThreshold ? 'recovery' : 'mixed',

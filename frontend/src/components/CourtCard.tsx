@@ -16,7 +16,8 @@ import {
   getFlowingGradient,
   renderFrameOverlay,
   renderBackgroundEffects,
-  getTitleStyle
+  getTitleStyle,
+  getCardForegroundClasses,
 } from "../lib/itemEffects";
 
 interface CourtCardProps {
@@ -99,6 +100,9 @@ const PlayerSlot = React.memo(({
 
   const isFlowing = isFlowingFrame(activeFrame);
   const flowingGradient = getFlowingGradient(activeFrame);
+  const isFallingFeathers = activeBackground === "終極：飄零羽落";
+  const fg = getCardForegroundClasses(activeBackground, { isFallingFeathers });
+  const hasCosmeticBg = !!activeBackground;
 
   return (
     <div 
@@ -224,6 +228,10 @@ const PlayerSlot = React.memo(({
             {/* 邊框覆蓋層 */}
             {renderFrameOverlay(activeFrame, "court")}
 
+            {hasCosmeticBg && fg.scrim && (
+              <div className={cn("absolute inset-x-0 bottom-0 h-[50%] z-[8] pointer-events-none rounded-b-xl", fg.scrim)} />
+            )}
+
             {/* 右上角未上場角標 (移至最外層 button 內以利 overflow-hidden 裁切角緣) */}
             <RestStreakCornerBadge count={restStreakCount} cardCorner="xl" />
           </>
@@ -284,23 +292,23 @@ const PlayerSlot = React.memo(({
               
               <div className="flex flex-col items-center w-full min-w-0 mb-0.5 md:mb-1 z-10">
                 <div className={cn(
-                  "font-black text-[11px] md:text-[13px] tracking-tighter truncate w-full text-center px-0.5 md:px-1 leading-none drop-shadow-sm transition-colors",
-                  activeBackground || isFlowing ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-100"
+                  "font-black text-[11px] md:text-[13px] tracking-tighter truncate w-full text-center px-0.5 md:px-1 leading-none transition-colors",
+                  fg.name
                 )}>
                   {player.name}
                 </div>
               </div>
               <div className="flex items-center gap-1 mt-0.5 md:mt-1 z-10">
                  <span className={cn(
-                   "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                   activeBackground || isFlowing ? "text-slate-600 dark:text-slate-400" : "text-slate-500 dark:text-slate-400"
+                   "text-[9px] md:text-[10px] tabular-nums leading-none transition-colors",
+                   fg.meta
                  )}>
                    {player.matchCount || 0}場
                  </span>
-                 <span className="text-[8px] font-bold text-slate-300 dark:text-slate-700">|</span>
+                 <span className={cn("text-[8px] font-bold", fg.divider)}>|</span>
                  <span className={cn(
-                   "text-[9px] md:text-[10px] font-black tabular-nums leading-none transition-colors",
-                   activeBackground || isFlowing ? "text-emerald-700" : "text-emerald-600 dark:text-emerald-400"
+                   "text-[9px] md:text-[10px] tabular-nums leading-none transition-colors",
+                   fg.score
                  )}>
                    {Math.round((player.mu || 0) * 10)}
                    {useCareerWeight && ` (${Math.round(calculateWeightedMu(player.mu || 0, player.mu || 0) * 10)})`}

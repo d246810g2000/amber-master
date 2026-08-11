@@ -135,18 +135,18 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
               <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-black">限週三 · 每週一次</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {claimOptions.map((opt) => {
                 const scoreVal = weeklyClaimStatus.highestScores[opt.key] ?? 0;
                 const disabled = !weeklyClaimStatus.isWednesday || scoreVal <= 0 || isClaiming;
                 return (
-                  <div key={opt.key} className="bg-slate-950/80 border border-slate-800/80 p-2 rounded-lg flex flex-col items-center text-center gap-1.5">
-                    <div className="text-[9px] font-black text-slate-400">{opt.label}</div>
-                    <div className={`text-base font-black ${opt.color}`}>{scoreVal}<span className="text-[9px] font-normal text-slate-500"> 分</span></div>
+                  <div key={opt.key} className="bg-slate-950/80 border border-slate-800/80 p-1.5 sm:p-2 rounded-lg flex flex-col items-center text-center gap-1 min-w-0">
+                    <div className="text-[8px] sm:text-[9px] font-black text-slate-400 truncate w-full">{opt.label}</div>
+                    <div className={`text-sm sm:text-base font-black tabular-nums leading-none ${opt.color}`}>{scoreVal}<span className="text-[8px] font-normal text-slate-500"> 分</span></div>
                     <button
                       disabled={disabled}
                       onClick={() => onClaimWeeklyScore?.(opt.key)}
-                      className={`w-full disabled:opacity-40 font-extrabold py-1 rounded-md text-[9px] transition-all border active:scale-95 flex items-center justify-center gap-1 ${opt.btn}`}
+                      className={`w-full disabled:opacity-40 font-extrabold py-1 rounded-md text-[8px] sm:text-[9px] transition-all border active:scale-95 flex items-center justify-center gap-0.5 ${opt.btn}`}
                     >
                       {isClaiming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                       {!weeklyClaimStatus.isWednesday ? '限週三' : scoreVal <= 0 ? '無得分' : '兌換'}

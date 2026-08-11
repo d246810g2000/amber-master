@@ -15,7 +15,8 @@ import {
   getFlowingGradient, 
   renderFrameOverlay, 
   renderBackgroundEffects,
-  getTitleStyle
+  getTitleStyle,
+  getCardForegroundClasses,
 } from "../lib/itemEffects";
 import { RestStreakCornerBadge } from "./RestStreakCornerBadge";
 import { PetRenderer } from "./PetRenderer";
@@ -64,6 +65,8 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
   const isFlowing = isFlowingFrame(activeFrame);
   const isFallingFeathers = activeBackground === "終極：飄零羽落";
   const flowingGradient = getFlowingGradient(activeFrame);
+  const fg = getCardForegroundClasses(activeBackground, { isFallingFeathers });
+  const hasCosmeticBg = !!activeBackground;
 
   return (
     <div className={cn(
@@ -199,6 +202,12 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
 
         {/* 邊框覆蓋層 */}
         {renderFrameOverlay(activeFrame, "pill")}
+
+        {/* 文字區底部漸層，避免背景色吃掉姓名／戰力 */}
+        {hasCosmeticBg && fg.scrim && (
+          <div className={cn("absolute inset-x-0 bottom-0 h-[46%] z-[15] pointer-events-none", fg.scrim)} />
+        )}
+
         {status === "finishing" && (
           <div className="absolute inset-0 bg-amber-400/10 dark:bg-amber-400/20 flex items-center justify-center pointer-events-none rounded-[calc(1rem-2px)]">
             <div className={cn(
@@ -304,31 +313,31 @@ export const PlayerPill: React.FC<PlayerPillProps> = React.memo(({
         <div className="flex flex-col items-center w-full min-w-0 z-20">
           <span className={cn(
             "text-[10px] md:text-[11px] font-black truncate w-full text-center leading-tight transition-colors",
-            isFallingFeathers ? "text-slate-900 dark:text-white" : "text-slate-900 dark:text-slate-200"
+            fg.name
           )}>
             {player.name}
           </span>
         </div>
         <div className="flex items-center gap-0.5 mt-0.5 z-20">
           <span className={cn(
-            "text-[8px] font-bold opacity-60 transition-colors",
-            isFallingFeathers ? "text-slate-700 dark:text-slate-400" : "dark:text-slate-400"
+            "text-[8px] transition-colors",
+            fg.meta
           )}>
             {player.matchCount || 0}場
           </span>
-          <span className="text-[8px] font-black text-slate-300 dark:text-slate-700">|</span>
+          <span className={cn("text-[8px] font-black", fg.divider)}>|</span>
           <span className={cn(
-            "text-[8px] font-bold transition-colors",
-            isFallingFeathers ? "text-emerald-600" : "text-emerald-600/70 dark:text-emerald-400/70"
+            "text-[8px] transition-colors",
+            fg.score
           )}>
             {Math.round((player.mu || 25) * 10)}
           </span>
         </div>
         <div className="flex items-center gap-0.5 mt-0.5 z-20">
-          <Feather size={8} className="text-sky-500 shrink-0" />
+          <Feather size={8} className={cn("shrink-0", fg.featherIcon)} />
           <span className={cn(
-            "text-[8px] font-black tabular-nums transition-colors",
-            isFallingFeathers ? "text-sky-600" : "text-sky-600 dark:text-sky-400"
+            "text-[8px] tabular-nums transition-colors",
+            fg.feathers
           )}>
             {player.feathers ?? 0}
           </span>

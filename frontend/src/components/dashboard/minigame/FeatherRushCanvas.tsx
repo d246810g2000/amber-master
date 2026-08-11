@@ -5,7 +5,8 @@ import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
 import { cn, getAvatarUrl } from '../../../lib/utils';
 import { BALANCE, BOSSES, ShotGrade, GateOperation, gradeShot } from './featherRushTypes';
 import {
-  applyGate, computeFinalScore, generateFreeGates, isGoodOp, isBadOp, shotDamage,
+  applyGate, computeFinalScore, generateFreeGates, degradeGateOnHit,
+  isGoodOp, isBadOp, shotDamage,
 } from './featherRushEngine';
 import { PETS_CATALOG, PetCatalogEntry } from '../../../lib/petCatalog';
 import { PetRenderer } from '../../PetRenderer';
@@ -24,8 +25,11 @@ interface MathGate {
   z: number;
   x: number;
   op: GateOperation;
+  hp: number;
+  maxHp: number;
   resolved: boolean;
   fade?: number;
+  hitFlash?: number;
 }
 
 interface Enemy {
@@ -71,6 +75,7 @@ interface ScreenPos {
 const PLAYER_Y_RATIO = 0.80;
 const HORIZON_Y_RATIO = 0.22;
 const VIEW_DEPTH = 420;
+const GATE_MAX_HP = 3;
 const GATE_PASS_DEPTH = -12;
 const COMBAT_RANGE = Math.round(VIEW_DEPTH * 0.5);
 const SCROLL_SPEED = 3.0;
@@ -124,13 +129,14 @@ function stageIndexFromElapsed(elapsed: number): number {
   return 4;
 }
 
-/** Fixed spawn cadence by stage; after boss appear → stop normal spawns */
-function spawnIntervals(elapsed: number): { enemyMs: number; gateMs: number | null } | null {
+/** Fixed spawn cadence by stage; after boss appear → stop normal spawns.
+ *  Gates spawn from Stage 1 — they are core loop, not late content. */
+function spawnIntervals(elapsed: number): { enemyMs: number; gateMs: number } | null {
   if (elapsed >= BALANCE.bossAppearElapsedSec) return null;
-  if (elapsed < 10) return { enemyMs: 2800, gateMs: null };
-  if (elapsed < 25) return { enemyMs: 2000, gateMs: null };
-  if (elapsed < 40) return { enemyMs: 1700, gateMs: 3800 };
-  return { enemyMs: 1300, gateMs: 3200 };
+  if (elapsed < 10) return { enemyMs: 2800, gateMs: 4500 };
+  if (elapsed < 25) return { enemyMs: 2000, gateMs: 4000 };
+  if (elapsed < 40) return { enemyMs: 1700, gateMs: 3500 };
+  return { enemyMs: 1300, gateMs: 3000 };
 }
 
 function worldToScreen(xPct: number, dist: number, w: number, h: number): ScreenPos | null {
@@ -443,10 +449,14 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     bossHpRef.current = 0;
     bossMaxHpRef.current = BOSSES[0].hp;
     enemySpawnTimerRef.current = 1800;
-    gateSpawnTimerRef.current = 3500;
+    // First gate early in Stage 1 — continuous 60s clock is set only once below
+    gateSpawnTimerRef.current = 1800;
     autoFireTimerRef.current = BALANCE.autoFireMs * 0.4;
     lastHitTimeRef.current = performance.now();
-    gameStartMsRef.current = performance.now();
+    // ONLY set once at true game start — stage/boss transitions must NEVER reset this
+    if (!gameStartMsRef.current) {
+      gameStartMsRef.current = performance.now();
+    }
     setBossHp(0);
     setPhaseLabel(STAGE_NAMES[0]);
     setBossBanner(null);
@@ -552,6 +562,58 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
     }
   };
 
+  const settleGate = (
+    gate: MathGate,
+    px: number,
+    playerY: number,
+    apply: boolean,
+  ) => {
+    gate.resolved = true;
+    gate.fade = 1;
+    if (!apply) return;
+    const op = gate.op;
+    // Skip no-op gates (e.g. -0 after fully degraded)
+    if (op.type === 'sub' && op.value <= 0) {
+      addFloatText('閃過!', px, playerY - 32, '#7dd3fc');
+      return;
+    }
+    if (op.type === 'mul' && op.value <= 1) {
+      addFloatText('無效門', px, playerY - 32, '#94a3b8');
+      return;
+    }
+    feathersRef.current = applyGate(feathersRef.current, op);
+    setFeathers(feathersRef.current);
+    const good = isGoodOp(op);
+    const bad = isBadOp(op);
+    if (good) incrementCombo();
+    else if (bad) resetCombo();
+    addFloatText(good ? '通過!' : bad ? '撞網!' : op.label, px, playerY - 32, bad ? '#f87171' : '#7dd3fc');
+    addFloatText(op.label, px, playerY - 50, bad ? '#fca5a5' : '#fde68a');
+    addParticles(px, playerY, bad ? '#ef4444' : '#38bdf8', bad ? 24 : 14);
+    if (bad) { triggerImpact('fail'); showToast(`選錯門 ${op.label}`); }
+    else if (good) triggerImpact('soft');
+    if (feathersRef.current <= 0) finishGame();
+  };
+
+  const applyHitToGate = (gate: MathGate, w: number, h: number, cam: number) => {
+    const before = gate.op.label;
+    gate.op = degradeGateOnHit(gate.op);
+    gate.hp = Math.max(0, gate.hp - 1);
+    gate.hitFlash = 6;
+    const dist = gate.z - cam;
+    const screen = worldToScreen(gate.x, dist, w, h);
+    if (screen) {
+      addFloatText(`${before}→${gate.op.label}`, screen.x, screen.y - 22, '#fde68a');
+      addParticles(screen.x, screen.y, '#38bdf8', 8);
+    }
+    if (gate.hp <= 0) {
+      const px = worldToScreen(playerXRef.current, 0, w, h)?.x ?? w * 0.5;
+      const playerY = h * PLAYER_Y_RATIO;
+      const aligned = Math.abs(playerXRef.current - gate.x) < GATE_HIT_WIDTH;
+      settleGate(gate, px, playerY, aligned);
+    }
+  };
+
   const resolveProjectileHits = (w: number, h: number, frame: number) => {
     const cam = scrollRef.current;
     const feverActive = isFeverActive();
@@ -580,6 +642,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         }
       }
 
+      let hitSomething = false;
       for (const e of enemiesRef.current) {
         if (e.hp <= 0) continue;
         const dist = e.z - cam;
@@ -591,7 +654,22 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         proj.grade = grade;
         proj.damage = dmg;
         applyHitToEnemy(e, grade, dmg, w, h, cam);
+        hitSomething = true;
         break;
+      }
+      if (hitSomething) return;
+
+      // Projectiles also reshape math gates
+      if (subPhaseRef.current === 'run') {
+        for (const gate of mathGatesRef.current) {
+          if (gate.resolved || gate.hp <= 0) continue;
+          const dist = gate.z - cam;
+          if (Math.abs(pDist - dist) > PROJ_HIT_Z) continue;
+          if (Math.abs(proj.x - gate.x) >= GATE_HIT_WIDTH) continue;
+          proj.active = false;
+          applyHitToGate(gate, w, h, cam);
+          break;
+        }
       }
     });
   };
@@ -747,10 +825,10 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           });
           enemySpawnTimerRef.current = spawnCfg.enemyMs;
         }
-        if (spawnCfg.gateMs != null) {
+        if (spawnCfg.gateMs) {
           gateSpawnTimerRef.current -= delta;
           if (gateSpawnTimerRef.current <= 0) {
-            const { ops, xs } = generateFreeGates(feathersRef.current);
+            const { ops, xs } = generateFreeGates(feathersRef.current, stageIdx);
             const baseZ = cam + VIEW_DEPTH + 60;
             ops.forEach((op, i) => {
               mathGatesRef.current.push({
@@ -758,6 +836,8 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
                 z: baseZ,
                 x: xs[i] ?? 50,
                 op,
+                hp: GATE_MAX_HP,
+                maxHp: GATE_MAX_HP,
                 resolved: false,
               });
             });
@@ -806,7 +886,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
         enemiesRef.current = enemiesRef.current.filter((e) => e.hp > 0);
       }
 
-      // Gates (free X)
+      // Gates (free X) — approach with scroll; settle when passing player
       if (subPhaseRef.current === 'run') {
         mathGatesRef.current.forEach((gate) => {
           if (gate.resolved) {
@@ -815,23 +895,8 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           }
           const dist = gate.z - cam;
           if (dist <= GATE_PASS_DEPTH) {
-            gate.resolved = true;
-            gate.fade = 1;
-            if (Math.abs(playerXRef.current - gate.x) < GATE_HIT_WIDTH) {
-              const op = gate.op;
-              feathersRef.current = applyGate(feathersRef.current, op);
-              setFeathers(feathersRef.current);
-              const good = isGoodOp(op);
-              const bad = isBadOp(op);
-              if (good) incrementCombo();
-              else if (bad) resetCombo();
-              addFloatText(good ? '通過!' : bad ? '撞網!' : op.label, px, playerY - 32, bad ? '#f87171' : '#7dd3fc');
-              addFloatText(op.label, px, playerY - 50, bad ? '#fca5a5' : '#fde68a');
-              addParticles(px, playerY, bad ? '#ef4444' : '#38bdf8', bad ? 24 : 14);
-              if (bad) { triggerImpact('fail'); showToast(`選錯門 ${op.label}`); }
-              else if (good) triggerImpact('soft');
-              if (feathersRef.current <= 0) finishGame();
-            }
+            const aligned = Math.abs(playerXRef.current - gate.x) < GATE_HIT_WIDTH;
+            settleGate(gate, px, playerY, aligned);
           }
         });
         mathGatesRef.current = mathGatesRef.current.filter((g) => !g.resolved || (g.fade != null && g.fade > 0.02));
@@ -1001,8 +1066,14 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
             && dist < 130;
           ctx.save();
           ctx.globalAlpha = Math.min(0.95, 0.48 + screen.progress * 0.5) * fadeMul;
+          if (gate.hitFlash && gate.hitFlash > 0) {
+            ctx.translate(screen.x, screen.y);
+            ctx.scale(1.08, 1.08);
+            ctx.translate(-screen.x, -screen.y);
+            gate.hitFlash -= 1;
+          }
           const rw = 88 * screen.scale;
-          const rh = 72 * screen.scale;
+          const rh = 78 * screen.scale;
           const rx = screen.x - rw / 2 + shakeX;
           const ry = screen.y - rh * 0.55;
           ctx.fillStyle = bad
@@ -1025,7 +1096,21 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
           ctx.font = `bold ${Math.max(12, Math.floor(22 * screen.scale))}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(op.label, screen.x + shakeX, screen.y);
+          ctx.fillText(op.label, screen.x + shakeX, screen.y - 6 * screen.scale);
+          // HP pips
+          if (!gate.resolved && gate.maxHp > 0) {
+            const pip = Math.max(4, 6 * screen.scale);
+            const gap = pip + 3;
+            const totalW = gate.maxHp * gap - 3;
+            let sx = screen.x - totalW / 2 + shakeX;
+            for (let i = 0; i < gate.maxHp; i++) {
+              ctx.fillStyle = i < gate.hp ? '#f87171' : 'rgba(15,23,42,0.7)';
+              ctx.beginPath();
+              ctx.arc(sx + pip / 2, screen.y + 16 * screen.scale, pip / 2, 0, Math.PI * 2);
+              ctx.fill();
+              sx += gap;
+            }
+          }
           ctx.restore();
         } else if (item.kind === 'enemy' && item.enemy) {
           const { enemy, dist } = item;
@@ -1360,7 +1445,7 @@ export const FeatherRushCanvas: React.FC<FeatherRushCanvasProps> = ({
       {showTip && (
         <div className="absolute top-[76px] inset-x-0 z-10 flex justify-center pointer-events-none">
           <span className="text-[9px] font-bold text-slate-400 bg-slate-950/70 px-2.5 py-1 rounded-full border border-slate-700/50">
-            左右移動 · 羽球自動射擊
+            左右移動 · 自動射擊敵人／數字門
           </span>
         </div>
       )}

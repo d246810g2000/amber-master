@@ -75,10 +75,10 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
               <div>⏱️ 固定 60 秒一場</div>
               <div>⬅️➡️ 自由左右移動</div>
               <div>🏸 羽球自動向前射擊</div>
-              <div>🚪 移動選數字門</div>
+              <div>🚪 射門改數字／移動通過</div>
               <div>🔥 連擊 10 觸發 FEVER</div>
               <div className="col-span-2 border-t border-slate-800/50 pt-1.5 mt-0.5 text-sky-300">
-                敵人由遠逼近 → 左右對準／閃避 → 自動擊球 → 50 秒 Boss。分數＝剩餘羽毛
+                敵人與數字門由遠逼近 → 左右對準自動射擊 → 射門改變數值 → 通過結算 → 50 秒 Boss。分數＝剩餘羽毛
               </div>
             </div>
           </div>
