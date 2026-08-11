@@ -15,7 +15,7 @@ export interface GatePair {
   category: 'mixed' | 'both_good' | 'both_bad' | 'trap' | 'recovery';
 }
 
-/** Triple gate aligned to LEFT / CENTER / RIGHT lanes */
+/** @deprecated lane triplets — free-X gates use GateOperation[] */
 export interface GateTriplet {
   ops: [GateOperation, GateOperation, GateOperation];
   category: GatePair['category'];
@@ -81,30 +81,40 @@ export const BALANCE = {
     skilled: { min: 750, max: 1100 },
     strong: { min: 1150, max: 1500 },
   } as Record<SkillLevel, { min: number; max: number }>,
-  /** v0.1 fixed grade damage (before fever) */
-  gradeDamage: { perfect: 3, great: 2, good: 1, miss: 0 } as Record<ShotGrade, number>,
+  /** Auto-shoot base damage by hit quality (before fever) */
+  gradeDamage: { perfect: 2, great: 1, good: 1, miss: 0 } as Record<ShotGrade, number>,
   feverDamageMult: 1.35,
   feverComboThreshold: 10,
   feverDurationMs: 6000,
+  feverFireMult: 0.85,
   recoveryFeatherThreshold: 30,
   enemyHp: 3,
   enemyReward: 5,
   collisionLoss: 5,
-  bossAppearElapsedSec: 57,
+  bossAppearElapsedSec: 50,
+  bossCollisionLoss: 10,
+  autoFireMs: 420,
+  playerMoveSpeed: 0.85,
+  playerXMin: 5,
+  playerXMax: 95,
+  projectileHitWidth: 10,
+  playerHitWidth: 12,
+  attackDistance: 36,
+  comboTimeoutMs: 3200,
 };
 
-/** v0.1: single simple boss at ~57s */
+/** v0.1: single boss at 50s, free X-axis */
 export const BOSSES: BossConfig[] = [
   {
     tier: 'classic',
     name: '決勝對手',
     title: '決勝對手',
-    hp: 30,
+    hp: 15,
     reward: 30,
     emoji: '🧱',
     color: '#38bdf8',
     behavior: 'sidestep',
-    taunt: '最後三秒——用力殺！',
+    taunt: '最後十秒——跟上對手！',
   },
 ];
 
@@ -120,10 +130,10 @@ export function bossPhaseFromHp(hp: number, maxHp: number): BossPhase {
   return 4;
 }
 
+/** Hit quality from enemy distance (auto-shoot; no Miss button) */
 export function gradeShot(dist: number, combatRange: number): ShotGrade {
-  const t = dist / combatRange;
+  const t = dist / Math.max(1, combatRange);
   if (t <= 0.22) return 'perfect';
-  if (t <= 0.4) return 'great';
-  if (t <= 0.7) return 'good';
-  return 'miss';
+  if (t <= 0.45) return 'great';
+  return 'good';
 }

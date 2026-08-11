@@ -34,8 +34,8 @@ MINIGAME_SUBMIT_DEDUP_SECONDS = 8
 # In-memory minigame sessions (minimal session validation for v0.1)
 _MINIGAME_SESSIONS: Dict[str, Dict[str, Any]] = {}
 MINIGAME_SESSION_TTL_SECONDS = 600
-MINIGAME_SESSION_MIN_DURATION_SEC = 50
-MINIGAME_SESSION_MAX_DURATION_SEC = 90
+MINIGAME_SESSION_MIN_DURATION_SEC = 5
+MINIGAME_SESSION_MAX_DURATION_SEC = 65
 # Games that require a started session on submit
 MINIGAME_SESSION_REQUIRED_TYPES = frozenset({"feather_rush"})
 

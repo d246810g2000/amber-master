@@ -7,6 +7,7 @@ interface FeatherRushMenuProps {
   playerName: string;
   eligibility: any;
   onStartGame: () => void;
+  startError?: string | null;
 }
 
 export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
@@ -14,6 +15,7 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
   playerName,
   eligibility,
   onStartGame,
+  startError,
 }) => {
   const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'allTime'>('weekly');
   const [activeMainTab, setActiveMainTab] = useState<'rules' | 'leaderboard'>('rules');
@@ -61,22 +63,22 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
                 <span className="text-2xl">🏸</span>
               </div>
               <div>
-                <h4 className="text-base font-extrabold mb-1">飛羽衝鋒 · 球場殺球跑酷</h4>
+                <h4 className="text-base font-extrabold mb-1">飛羽衝鋒 · 左右走位殺球</h4>
                 <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-                  你沿著球場往前衝，對手站在底線等你。穿訓練門、閃防守者、自動殺球，連過四位球場強敵！
+                  沿用接羽毛的左右移動，羽球會自動向前射。對準敵人、閃避撞擊、穿數字門，50 秒迎戰 Boss！
                 </p>
               </div>
             </div>
 
             <div className="w-full grid grid-cols-2 gap-2 text-left bg-slate-900 border border-slate-800/60 p-3 rounded-xl text-[10px] font-semibold text-slate-300">
-              <div>🪶 開局 80 羽毛（戰力）</div>
-              <div>⏱️ 約 60 秒一場</div>
-              <div>⬅️➡️ 三線道切換／滑動</div>
-              <div>🏸 時機殺球 Perfect～Miss</div>
-              <div>🚪 三線數字門策略選擇</div>
+              <div>🪶 開局 80 羽毛</div>
+              <div>⏱️ 固定 60 秒一場</div>
+              <div>⬅️➡️ 自由左右移動</div>
+              <div>🏸 羽球自動向前射擊</div>
+              <div>🚪 移動選數字門</div>
               <div>🔥 連擊 10 觸發 FEVER</div>
               <div className="col-span-2 border-t border-slate-800/50 pt-1.5 mt-0.5 text-sky-300">
-                敵人由遠逼近 → 換道閃避 → 擊球連擊 → 底線 Boss 壓上。分數＝剩餘羽毛（期望約 500～1500）
+                敵人由遠逼近 → 左右對準／閃避 → 自動擊球 → 50 秒 Boss。分數＝剩餘羽毛
               </div>
             </div>
           </div>
@@ -162,6 +164,11 @@ export const FeatherRushMenu: React.FC<FeatherRushMenuProps> = ({
         <p className="text-[9px] text-center text-slate-500 font-semibold leading-relaxed">
           {getResetMessage(eligibility?.nextReset)}
         </p>
+        {startError && (
+          <p className="text-[10px] text-center text-rose-400 font-bold leading-relaxed px-1">
+            {startError}
+          </p>
+        )}
         <button
           onClick={onStartGame}
           className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-violet-600 hover:from-sky-500 hover:to-violet-500 text-white font-black py-3 rounded-2xl shadow-lg shadow-sky-500/20 active:scale-98 transition-all"

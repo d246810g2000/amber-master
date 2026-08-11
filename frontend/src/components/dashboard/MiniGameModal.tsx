@@ -102,6 +102,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
   // Trivia States
   const [triviaQuestions, setTriviaQuestions] = useState<any[]>([]);
   const [minigameSessionId, setMinigameSessionId] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Reset states when modal opens/closes
   useEffect(() => {
@@ -120,6 +121,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
       setTriviaQuestions([]);
       setClaimResult(null);
       setMinigameSessionId(null);
+      setStartError(null);
     }
   }, [isOpen]);
 
@@ -128,15 +130,23 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
     maxComboRef.current = 0;
     setSubmitResult(null);
     setMinigameSessionId(null);
-    try {
-      if (currentUser?.email) {
-        const res = await gasApi.startMiniGameSession(currentUser.email, 'feather_rush');
-        if (res?.sessionId) setMinigameSessionId(res.sessionId);
-      }
-    } catch (err) {
-      console.error('Failed to start feather rush session', err);
+    setStartError(null);
+    if (!currentUser?.email) {
+      setStartError('請先登入後再開始飛羽衝鋒');
+      return;
     }
-    setGameState('playing');
+    try {
+      const res = await gasApi.startMiniGameSession(currentUser.email, 'feather_rush');
+      if (!res?.sessionId) {
+        setStartError('無法建立遊戲 session，請稍後再試');
+        return;
+      }
+      setMinigameSessionId(res.sessionId);
+      setGameState('playing');
+    } catch (err: any) {
+      console.error('Failed to start feather rush session', err);
+      setStartError(err?.message || '無法開始遊戲，請稍後再試');
+    }
   };
 
   const startGame = () => {
@@ -425,6 +435,7 @@ export const MiniGameModal: React.FC<MiniGameModalProps> = ({
                       playerName={playerName}
                       eligibility={eligibility}
                       onStartGame={startFeatherRushGame}
+                      startError={startError}
                     />
                   )}
                 </>

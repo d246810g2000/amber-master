@@ -220,41 +220,49 @@ export function generateGatePair(phaseIndex: number, feathers: number): GatePair
   return { left, right, category };
 }
 
-/** v0.1: only +N / -N / ×1.2 / ÷2；feathers<30 強制含 +30 */
-export function generateGateTriplet(_phaseIndex: number, feathers: number): GateTriplet {
-  const goodPool = [
-    makeOp('add', 20),
-    makeOp('add', 30),
-    makeOp('add', 40),
-    makeOp('mul', 1.2),
-  ];
-  const badPool = [
-    makeOp('sub', 10),
-    makeOp('sub', 15),
-    makeOp('sub', 20),
-    makeOp('div', 2),
-  ];
+const FREE_GOOD = () => [
+  makeOp('add', 20),
+  makeOp('add', 30),
+  makeOp('add', 50),
+  makeOp('mul', 1.2),
+  makeOp('mul', 1.5),
+];
+const FREE_BAD = () => [
+  makeOp('sub', 10),
+  makeOp('sub', 20),
+];
+
+/** Free-X gates: 1–2 ops at random X; feathers<30 forces a +30 recovery */
+export function generateFreeGates(feathers: number): { ops: GateOperation[]; xs: number[] } {
   const recovery = makeOp('add', 30, { isRecovery: true });
   const forceRecovery = feathers < BALANCE.recoveryFeatherThreshold;
+  const count = forceRecovery || Math.random() < 0.55 ? 2 : 1;
+  const ops: GateOperation[] = [];
+  const xs: number[] = [];
 
-  const ops: GateOperation[] = [
-    pickRandom(goodPool),
-    pickRandom(badPool),
-    forceRecovery ? recovery : pickRandom(goodPool),
-  ];
-
-  for (let i = ops.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ops[i], ops[j]] = [ops[j], ops[i]];
+  if (count === 1) {
+    ops.push(forceRecovery ? recovery : pickRandom([...FREE_GOOD(), ...FREE_BAD()]));
+    xs.push(28 + Math.random() * 44);
+  } else {
+    const left = forceRecovery ? recovery : pickRandom(FREE_GOOD());
+    const right = pickRandom(FREE_BAD());
+    if (Math.random() > 0.5 && !forceRecovery) {
+      ops.push(pickRandom(FREE_BAD()), pickRandom(FREE_GOOD()));
+    } else {
+      ops.push(left, right);
+    }
+    xs.push(22 + Math.random() * 18, 58 + Math.random() * 20);
   }
+  return { ops, xs };
+}
 
-  if (forceRecovery && !ops.some((o) => o.isRecovery || (o.type === 'add' && o.value === 30))) {
-    ops[1] = recovery;
-  }
-
+/** @deprecated kept for simulation helpers */
+export function generateGateTriplet(_phaseIndex: number, feathers: number): GateTriplet {
+  const { ops } = generateFreeGates(feathers);
+  while (ops.length < 3) ops.push(pickRandom(FREE_GOOD()));
   return {
     ops: [ops[0], ops[1], ops[2]],
-    category: forceRecovery ? 'recovery' : 'mixed',
+    category: feathers < BALANCE.recoveryFeatherThreshold ? 'recovery' : 'mixed',
   };
 }
 
